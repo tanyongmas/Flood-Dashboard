@@ -375,7 +375,7 @@ let dashLayerStates = {
                         success: true,
                         isFromSupabase: true,
                         periods: ['2569', '2568'],
-                        waterPoints: (typeof DEFAULT_WATER_POINTS !== 'undefined' ? DEFAULT_WATER_POINTS : []),
+                        waterPoints: [],
                         waterLevels: [],
                         evacuees: [],
                         addresses: [],
@@ -431,7 +431,23 @@ let dashLayerStates = {
                 if (store.waterPoints) {
                     const pOpts = store.waterPoints.map(v => `<option value="${v}">${v}</option>`).join('');
                     const waterLocEl = document.getElementById('water_loc');
-                    if (waterLocEl) waterLocEl.innerHTML = pOpts;
+                    if (waterLocEl) {
+                        waterLocEl.innerHTML = pOpts;
+                        // อัปเดตพิกัดอัตโนมัติให้ตรงกับจุดวัดเริ่มต้น
+                        const coordsEl = document.getElementById('water_coords');
+                        if (coordsEl && window.waterPointsMap && window.waterPointsMap[waterLocEl.value]) {
+                            coordsEl.value = window.waterPointsMap[waterLocEl.value];
+                        }
+                        if (!waterLocEl._hasCoordsBinding) {
+                            waterLocEl._hasCoordsBinding = true;
+                            waterLocEl.addEventListener('change', function () {
+                                const cEl = document.getElementById('water_coords');
+                                if (cEl && window.waterPointsMap && window.waterPointsMap[this.value]) {
+                                    cEl.value = window.waterPointsMap[this.value];
+                                }
+                            });
+                        }
+                    }
 
                     // กรองเฉพาะพื้นที่ที่มีข้อมูลรายงานน้ำแล้วมาทำเป็น Filter
                     const activeWaterAreas = [...new Set(store.waterLevels.map(r => r[1]))].sort();
@@ -2318,7 +2334,10 @@ let dashLayerStates = {
                     const name = r[1];
                     const level = parseFloat(r[2] || 0);
                     const trend = r[4] || 'คงตัว';
-                    const coordsStr = String(r[5] || '').trim();
+                    let coordsStr = String(r[5] || '').trim();
+                    if (!coordsStr && window.waterPointsMap && window.waterPointsMap[name]) {
+                        coordsStr = window.waterPointsMap[name];
+                    }
 
                     let statusText = 'ปกติ', statusBg = 'bg-emerald-500';
                     if (level >= 81) { statusText = 'วิกฤต'; statusBg = 'bg-red-600'; }
@@ -2894,7 +2913,10 @@ let dashLayerStates = {
                 const r = item.data;
                 const name = r[1];
                 const level = parseFloat(r[2] || 0);
-                const coordinateStr = String(r[5] || '').trim();
+                let coordinateStr = String(r[5] || '').trim();
+                if (!coordinateStr && window.waterPointsMap && window.waterPointsMap[name]) {
+                    coordinateStr = window.waterPointsMap[name];
+                }
 
                 // กำหนดสีและข้อความสถานะสำหรับ Popup
                 let statusText = 'ปกติ', statusColor = 'bg-green-100 text-green-600';
@@ -4288,7 +4310,10 @@ let dashLayerStates = {
                 const r = item.data;
                 const name = r[1];
                 const level = parseFloat(r[2] || 0);
-                const coordinateStr = String(r[5] || '').trim();
+                let coordinateStr = String(r[5] || '').trim();
+                if (!coordinateStr && window.waterPointsMap && window.waterPointsMap[name]) {
+                    coordinateStr = window.waterPointsMap[name];
+                }
 
                 let statusText = 'ปกติ', statusColor = 'bg-green-100 text-green-600';
                 if (level >= 1 && level <= 30) { statusText = 'เฝ้าระวัง'; statusColor = 'bg-yellow-100 text-yellow-700'; }

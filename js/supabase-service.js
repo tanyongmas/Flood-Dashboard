@@ -6,15 +6,7 @@
 
 let sbClient = null;
 
-// จุดวัดน้ำเริ่มต้นในเขตเทศบาลตำบลตันหยงมัส (กรณีตาราง water_points ใน Supabase ยังว่างเปล่า)
-const DEFAULT_WATER_POINTS = [
-    'สะพานเทศบาลตำบลตันหยงมัส',
-    'จุดวัดน้ำสะพานลานไทร ซอย 1',
-    'จุดวัดน้ำสะพานระแงะมรรคา',
-    'จุดวัดน้ำถนนประชาสามัคคี',
-    'สถานี X.73 คลองตันหยงมัส (บ้านตันหยงมัส)',
-    'สถานี X.73A คลองตันหยงมัส (บ้านบองอ)'
-];
+
 
 // เริ่มต้นสร้าง Supabase Client
 function initSupabase() {
@@ -87,7 +79,7 @@ async function sbFetchInitialData(targetPeriod = '2569') {
         const [
             wpRes, wlRes, evacRes, addrEvacRes, addrTableRes, relRes, stockRes, polyRes, repRes, userRes
         ] = await Promise.all([
-            sbClient.from('water_points').select('location_name, coords').order('id', { ascending: true }),
+            sbClient.from('water_points').select('*'),
             sbClient.from('water_levels').select('*').eq('period', period).order('recorded_at', { ascending: false }),
             sbClient.from('evacuees').select('*').eq('period', period).order('registered_at', { ascending: false }),
             sbClient.from('address_evacuation').select('*'),
@@ -127,11 +119,20 @@ async function sbFetchInitialData(targetPeriod = '2569') {
 
         console.log(`⚡ [Supabase 100%] โหลดข้อมูลสำเร็จ (${durationMs} ms): พบที่อยู่พร้อมพิกัด ${addressEvac.length} จุด, รายชื่อที่อยู่ ${addresses.length} รายการ`);
 
-        // 3. รวบรวมรายชื่อจุดวัดน้ำ
-        let waterPoints = (wpRes.data || []).map(r => r.location_name).filter(Boolean);
-        if (waterPoints.length === 0) {
-            waterPoints = [...DEFAULT_WATER_POINTS];
-        }
+        // 3. รวบรวมรายชื่อจุดวัดน้ำและพิกัดจริงจากตาราง water_points ใน Supabase (ข้อมูลจริง 100% ไม่มี mock data)
+        let waterPoints = [];
+        let waterPointsMap = {};
+        const rawWp = (wpRes && wpRes.data) ? wpRes.data : [];
+        rawWp.forEach(r => {
+            const name = (r['จุดวัดระดับน้ำ'] || r.location_name || r.name || '').toString().trim();
+            const coords = (r['พิกัด'] || r.coords || '').toString().trim();
+            if (name) {
+                waterPoints.push(name);
+                if (coords) waterPointsMap[name] = coords;
+            }
+        });
+        window.waterPointsMap = waterPointsMap;
+        console.log(`⚡ [Supabase 100%] โหลดจุดวัดระดับน้ำสำเร็จ: พบ ${waterPoints.length} จุดวัดพร้อมพิกัด`);
 
         // 4. ดึงข้อมูลรายงานน้ำท่วม (Flood_DATA ประจำปี เช่น Flood_DATA_2568, Flood_DATA_2569)
         let floodDataRows = [];
@@ -190,6 +191,7 @@ async function sbFetchInitialData(targetPeriod = '2569') {
             isFromSupabase: true,
             periods: dynamicPeriods,
             waterPoints: waterPoints,
+            waterPointsMap: waterPointsMap,
             waterLevels: (wlRes.data || []).map(r => [
                 r.recorded_at,
                 r.location,
@@ -263,7 +265,8 @@ async function sbFetchInitialData(targetPeriod = '2569') {
             success: true,
             isFromSupabase: true,
             periods: ['2569', '2568'],
-            waterPoints: [...DEFAULT_WATER_POINTS],
+            waterPoints: [],
+            waterPointsMap: {},
             waterLevels: [],
             evacuees: [],
             addresses: [],
@@ -287,10 +290,14 @@ async function sbSaveWater(payload) {
     
     let coords = payload.coords || '';
     if (!coords && payload.location) {
-        try {
-            const { data } = await sbClient.from('water_points').select('coords').eq('location_name', payload.location.trim()).maybeSingle();
-            if (data && data.coords) coords = data.coords;
-        } catch (e) { /* ignore */ }
+        if (window.waterPointsMap && window.waterPointsMap[payload.location]) {
+            coords = window.waterPointsMap[payload.location];
+        } else {
+            try {
+                const { data } = await sbClient.from('water_points').select('*').eq('จุดวัดระดับน้ำ', payload.location.trim()).maybeSingle();
+                if (data && data['พิกัด']) coords = data['พิกัด'];
+            } catch (e) { /* ignore */ }
+        }
     }
 
     const { error } = await sbClient.from('water_levels').insert([{
