@@ -48,7 +48,8 @@ Dashboard_Flood-main/
 │   ├── main.css                # สไตล์หลักของหน้า index.html และ Leaflet map fix
 │   └── rainfall.css            # สไตล์ของหน้า Rainfall.html และ Animations
 ├── js/
-│   ├── config.js               # การตั้งค่าระบบ, API Endpoints, Global Constants
+│   ├── config.js               # การตั้งค่าระบบ, API Endpoints, Supabase Credentials
+│   ├── supabase-service.js     # เลเยอร์เชื่อมต่อฐานข้อมูล Supabase PostgreSQL (100% Mode)
 │   ├── utils.js                # ฟังก์ชั่นยูทิลิตี้ (การแปลงวันที่, SweetAlert, Password check)
 │   ├── map.js                  # ระบบจัดการแผนที่ Leaflet, Marker Layers, Drawing tools
 │   ├── dashboard.js            # ระบบจัดการข้อมูลน้ำท่วม, Autocomplete ที่อยู่, ดึงข้อมูล API, ตารางสถานการณ์
@@ -56,6 +57,8 @@ Dashboard_Flood-main/
 ├── Code.gs                     # Google Apps Script REST API Backend, LINE Webhook, Flex Messages & OCR
 ├── index.html                  # หน้าแดชบอร์ดหลัก (Flood Situation Dashboard & Public Report Mode)
 ├── Rainfall.html               # หน้าแดชบอร์ดติดตามปริมาณน้ำฝน (Rainfall Dashboard)
+├── server.js                   # Local Web Server สำหรับทดสอบในเครื่อง (Zero-dependency)
+├── start_server.bat            # ตัวรัน Local Server แบบ 1-Click
 ├── .gitignore                  # ละเว้นไฟล์ขยะระบบปฏิบัติการและ IDE
 └── README.md                   # เอกสารอธิบายโปรเจกต์
 ```
@@ -86,8 +89,9 @@ Dashboard_Flood-main/
 * **Mapping Engine**: Leaflet.js 1.9.4, Leaflet Draw
 * **Charts Library**: Chart.js, ApexCharts
 * **Icons & UI Effects**: FontAwesome 6.4, SweetAlert2, Glassmorphism & Micro-animations
-* **Backend API**: Google Apps Script (Web App Endpoint REST API)
-* **Database**: Google Sheets Engine
+* **Backend API**: Google Apps Script (Web App Endpoint REST API) & LINE Webhook
+* **Primary Database**: Supabase Cloud (PostgreSQL 15+ ความเร็วสูงแบบ Realtime)
+* **Secondary / Historical Database**: Google Sheets Engine
 * **Messaging API**: LINE Messaging API (Flex Messages, Webhook Events, Rich Menu)
 * **Hydroinformatics API**: Thaiwater API v3 (สสน.) / RID Tele-monitoring (ชป.17) / Open-Meteo API
 * **AI OCR Engine**: Typhoon OCR (Opentyphoon) / Akson OCR สำหรับสแกนบัตรประชาชน

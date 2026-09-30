@@ -6,6 +6,12 @@
 // Google Apps Script API Web App URL สำหรับระบบแดชบอร์ดหลัก (Flood Dashboard)
 const API_URL = "https://script.google.com/macros/s/AKfycbwahktsrfbMuVu4oIP2ChrGVsjiGhuGFQWBdnfTitRRRQy5P_ONiRYUUVpsbzh57bFy/exec";
 
+// ⚡ Supabase Configuration (PostgreSQL Database ความเร็วสูง - โหมด Supabase 100%)
+const SUPABASE_URL = "https://wixjaufsizqurdiovjdf.supabase.co";
+const SUPABASE_KEY = "sb_publishable_cGgfJgxM5zQ1tqmvH9i2qQ_RgI9pING";
+const USE_SUPABASE = true;         // ใช้งาน Supabase เป็นฐานข้อมูล 100%
+const DUAL_WRITE_MODE = false;     // ปิดการบันทึกเข้า Google Sheets (บันทึกตรงเข้า Supabase เท่านั้น)
+
 // Looker Studio Reporting Embed URL
 const LOOKER_URL = "https://lookerstudio.google.com/embed/reporting/e87384f5-54c2-4bb3-b838-b9927c696f34/page/p_nqf5i1oswd";
 

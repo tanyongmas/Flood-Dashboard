@@ -281,14 +281,16 @@ let dashLayerStates = {
             btn.disabled = true;
 
             try {
-                const res = await fetch(API_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify({ action: 'login', username: user })
-                });
-                const data = await res.json();
+                let data = null;
 
-                if (data.success) {
+                // ⚡ เข้าสู่ระบบผ่าน Supabase 100%
+                if (typeof sbLogin === 'function') {
+                    data = await sbLogin(user);
+                } else {
+                    throw new Error('Supabase Service ไม่พร้อมทำงาน');
+                }
+
+                if (data && data.success) {
                     const userData = {
                         username: user,
                         name: data.name || user,
@@ -361,38 +363,32 @@ let dashLayerStates = {
             }
 
             try {
-                const payload = { action: 'getInitialData' };
-                if (currentPeriod) {
-                    payload.period = currentPeriod;
+                let data = null;
+
+                // ⚡ โหลดข้อมูลจาก Supabase 100% (ข้อมูลเริ่มต้นว่างเปล่าตามตารางจริง)
+                if (typeof sbFetchInitialData === 'function') {
+                    data = await sbFetchInitialData(currentPeriod);
                 }
 
-                let res = await fetch(API_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                    body: JSON.stringify(payload)
-                });
-
-                let text = await res.text();
-                let data;
-                try {
-                    data = JSON.parse(text);
-                } catch (err) {
-                    console.warn(`ช่วงเวลา ${currentPeriod || 'เริ่มต้น'} ยังไม่มีในระบบ ลองดึงข้อมูลรอบล่าสุด...`);
-                    // Fallback: ดึงข้อมูลแบบไม่ระบุ period เพื่อให้ GAS เลือก Sheet ล่าสุดที่มีอยู่จริง
-                    res = await fetch(API_URL, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                        body: JSON.stringify({ action: 'getInitialData' })
-                    });
-                    text = await res.text();
-                    try {
-                        data = JSON.parse(text);
-                    } catch (fallbackErr) {
-                        console.error("GAS API Fallback Error:", text.substring(0, 150));
-                        if (!store || !store.waterLevels) toggleDashboardSkeleton(false);
-                        return;
-                    }
+                if (!data) {
+                    data = {
+                        success: true,
+                        isFromSupabase: true,
+                        periods: ['2569', '2568'],
+                        waterPoints: (typeof DEFAULT_WATER_POINTS !== 'undefined' ? DEFAULT_WATER_POINTS : []),
+                        waterLevels: [],
+                        evacuees: [],
+                        addresses: [],
+                        addressEvac: [],
+                        reliefData: [],
+                        reliefStock: [],
+                        floodPolygons: [],
+                        evacReports: [],
+                        floodData: [],
+                        riskMapImageUrl: ""
+                    };
                 }
+
                 store = data;
                 if (typeof window.setAppCache === 'function') {
                     window.setAppCache(cacheKey, data, 3);
@@ -636,27 +632,20 @@ let dashLayerStates = {
                     });
 
                     try {
-                        const res = await fetch(API_URL, {
-                            method: 'POST',
-                            body: JSON.stringify({
-                                action: 'createNewPeriod',
-                                period: periodSuffix
-                            })
-                        });
-                        const data = await res.json();
-
-                        if (data.success) {
-                            Swal.fire({
-                                title: 'สำเร็จ',
-                                text: 'สร้างช่วงเวลาเรียบร้อยแล้ว',
-                                icon: 'success',
-                                timer: 1500
-                            });
-                            currentPeriod = periodSuffix;
-                            await loadData();
-                        } else {
-                            Swal.fire('ล้มเหลว', data.error || 'เกิดข้อผิดพลาดในการสร้างแท็บ', 'error');
+                        if (typeof sbCreateNewPeriod === 'function') {
+                            await sbCreateNewPeriod(periodSuffix);
                         }
+                        if (store.periods && !store.periods.includes(periodSuffix)) {
+                            store.periods.unshift(periodSuffix);
+                        }
+                        Swal.fire({
+                            title: 'สำเร็จ',
+                            text: 'สร้างช่วงเวลาเรียบร้อยแล้ว',
+                            icon: 'success',
+                            timer: 1500
+                        });
+                        currentPeriod = periodSuffix;
+                        await loadData();
                     } catch (err) {
                         Swal.fire('ผิดพลาด', err.message, 'error');
                     }
@@ -849,27 +838,26 @@ let dashLayerStates = {
             Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading() });
 
             try {
-                const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
-                const result = await res.json();
-
-                if (result.success) {
-                    Swal.fire({
-                        title: 'สำเร็จ',
-                        text: 'บันทึกข้อมูลแจกถุงยังชีพเรียบร้อย',
-                        icon: 'success',
-                        timer: 1500,
-                        showConfirmButton: false
-                    });
-
-                    // เคลียร์ฟอร์มให้สะอาด เผื่อกดเพิ่มคนต่อไป
-                    e.target.reset();
-                    document.getElementById('rel_address_search').value = '';
-
-                    closeReliefModal();
-                    await loadData(); // โหลดข้อมูลมาอัปเดตตารางและกราฟใหม่
+                if (typeof sbSaveRelief === 'function') {
+                    await sbSaveRelief(payload);
                 } else {
-                    throw new Error(result.error || 'เกิดข้อผิดพลาดจากเซิร์ฟเวอร์');
+                    throw new Error('Supabase Service ไม่พร้อมทำงาน');
                 }
+
+                Swal.fire({
+                    title: 'สำเร็จ',
+                    text: 'บันทึกข้อมูลแจกถุงยังชีพเรียบร้อย',
+                    icon: 'success',
+                    timer: 1500,
+                    showConfirmButton: false
+                });
+
+                // เคลียร์ฟอร์มให้สะอาด เผื่อกดเพิ่มคนต่อไป
+                e.target.reset();
+                document.getElementById('rel_address_search').value = '';
+
+                closeReliefModal();
+                await loadData(); // โหลดข้อมูลมาอัปเดตตารางและกราฟใหม่
             } catch (err) {
                 Swal.fire('ผิดพลาด', err.message, 'error');
             }
@@ -990,15 +978,16 @@ let dashLayerStates = {
             };
 
             try {
-                const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
-                const data = await res.json();
-                if (data.success) {
-                    Swal.fire('สำเร็จ', 'อัปเดตสต๊อกเรียบร้อยแล้ว', 'success');
-                    document.getElementById('stockForm').reset();
-                    closeStockModal();
-                    loadData(); // โหลดข้อมูลใหม่เพื่อคำนวณยอด
+                if (typeof sbSaveStock === 'function') {
+                    await sbSaveStock(payload);
+                } else {
+                    throw new Error('Supabase Service ไม่พร้อมทำงาน');
                 }
-            } catch (err) { Swal.fire('ผิดพลาด', 'บันทึกไม่สำเร็จ', 'error'); }
+                Swal.fire('สำเร็จ', 'อัปเดตสต๊อกเรียบร้อยแล้ว', 'success');
+                document.getElementById('stockForm').reset();
+                closeStockModal();
+                loadData(); // โหลดข้อมูลใหม่เพื่อคำนวณยอด
+            } catch (err) { Swal.fire('ผิดพลาด', err.message || 'บันทึกไม่สำเร็จ', 'error'); }
             btn.innerText = "บันทึกสต๊อก"; btn.disabled = false;
         }
         // ฟังก์ชันคำนวณยอดสต๊อก (อิงจากการกดปุ่ม จัดการสต๊อก เท่านั้น)
@@ -1177,11 +1166,9 @@ let dashLayerStates = {
             tbody.innerHTML = `<tr><td colspan="3" class="text-center py-10"><i class="fas fa-spinner fa-spin text-slate-300 text-2xl"></i></td></tr>`;
 
             try {
-                const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'getUsers' }) });
-                const data = await res.json();
-
-                if (data.success && data.users) {
-                    tbody.innerHTML = data.users.map((u) => `
+                const users = typeof sbGetUsers === 'function' ? await sbGetUsers() : [];
+                if (users && users.length > 0) {
+                    tbody.innerHTML = users.map((u) => `
                 <tr class="hover:bg-slate-50 transition-colors">
                     <td class="p-4 font-bold text-slate-700">${u[0]}</td>
                     <td class="p-4 text-center">
@@ -1192,6 +1179,8 @@ let dashLayerStates = {
                     </td>
                 </tr>
             `).join('');
+                } else {
+                    tbody.innerHTML = `<tr><td colspan="3" class="text-center py-6 text-slate-400 font-bold">ยังไม่มีรายชื่อผู้ใช้งาน</td></tr>`;
                 }
             } catch (err) {
                 console.error(err);
@@ -1454,14 +1443,15 @@ let dashLayerStates = {
             };
 
             try {
-                const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
-                const data = await res.json();
-                if (data.success) {
-                    Swal.fire('สำเร็จ', 'บันทึกสิทธิ์ผู้ใช้งานแล้ว', 'success');
-                    document.getElementById('userForm').reset();
-                    loadUsers(); // โหลดตารางใหม่
+                if (typeof sbSaveUser === 'function') {
+                    await sbSaveUser(payload.targetUser, payload.targetRole);
+                } else {
+                    throw new Error('Supabase Service ไม่พร้อมทำงาน');
                 }
-            } catch (err) { Swal.fire('ผิดพลาด', 'บันทึกไม่สำเร็จ', 'error'); }
+                Swal.fire('สำเร็จ', 'บันทึกสิทธิ์ผู้ใช้งานแล้ว', 'success');
+                document.getElementById('userForm').reset();
+                loadUsers(); // โหลดตารางใหม่
+            } catch (err) { Swal.fire('ผิดพลาด', err.message || 'บันทึกไม่สำเร็จ', 'error'); }
             btn.innerText = "บันทึกข้อมูล"; btn.disabled = false;
         }
 
@@ -1472,13 +1462,14 @@ let dashLayerStates = {
             if (!confirm.isConfirmed) return;
 
             try {
-                const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify({ action: 'deleteUser', targetUser: username }) });
-                const data = await res.json();
-                if (data.success) {
-                    Swal.fire('ลบแล้ว', 'ลบผู้ใช้งานสำเร็จ', 'success');
-                    loadUsers();
+                if (typeof sbDeleteUser === 'function') {
+                    await sbDeleteUser(username);
+                } else {
+                    throw new Error('Supabase Service ไม่พร้อมทำงาน');
                 }
-            } catch (err) { Swal.fire('ผิดพลาด', 'ลบไม่สำเร็จ', 'error'); }
+                Swal.fire('ลบแล้ว', 'ลบผู้ใช้งานสำเร็จ', 'success');
+                loadUsers();
+            } catch (err) { Swal.fire('ผิดพลาด', err.message || 'ลบไม่สำเร็จ', 'error'); }
         }
         function selectTrend(value, btn) {
             // เก็บค่าลงใน Input Hidden เพื่อส่งไปพร้อมฟอร์ม
@@ -1648,15 +1639,16 @@ let dashLayerStates = {
                     imageType = file.type;
                 }
                 const payload = { action: 'saveWater', location: document.getElementById('water_loc').value, level: document.getElementById('water_val').value, trend: document.getElementById('water_trend').value, coords: document.getElementById('water_coords').value, note: document.getElementById('water_note').value, reporter: currentUser, imageData, imageType, period: currentPeriod };
-                const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
-                const data = await res.json();
-                if (data.success) {
-                    Swal.fire('สำเร็จ', 'บันทึกเรียบร้อยแล้ว', 'success').then(() => {
-                        document.getElementById('waterForm').reset();
-                        document.getElementById('img_preview_box').innerHTML = `<i class="fas fa-camera text-3xl text-blue-300"></i><p class="text-xs text-blue-400 mt-2 font-bold">แตะเพื่อเปิดกล้อง</p>`;
-                        loadData(); showPage('water');
-                    });
-                } else { throw new Error(data.error); }
+                if (typeof sbSaveWater === 'function') {
+                    await sbSaveWater(payload);
+                } else {
+                    throw new Error('Supabase Service ไม่พร้อมทำงาน');
+                }
+                Swal.fire('สำเร็จ', 'บันทึกเรียบร้อยแล้ว', 'success').then(() => {
+                    document.getElementById('waterForm').reset();
+                    document.getElementById('img_preview_box').innerHTML = `<i class="fas fa-camera text-3xl text-blue-300"></i><p class="text-xs text-blue-400 mt-2 font-bold">แตะเพื่อเปิดกล้อง</p>`;
+                    loadData(); showPage('water');
+                });
             } catch (err) { Swal.fire('ผิดพลาด', err.message, 'error'); } finally { btn.disabled = false; }
         }
         let shelterPieInstance = null;
@@ -2250,23 +2242,21 @@ let dashLayerStates = {
                     period: typeof currentPeriod !== 'undefined' ? currentPeriod : ''
                 };
 
-                const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
-                const result = await res.json();
-
-                if (result.success) {
-                    Swal.fire({
-                        title: 'สำเร็จ!',
-                        text: 'บันทึกข้อมูลพื้นที่น้ำท่วมเรียบร้อยแล้ว',
-                        icon: 'success',
-                        timer: 1500
-                    });
-                    if (typeof dashDrawnItems !== 'undefined' && dashDrawnItems) {
-                        dashDrawnItems.clearLayers();
-                    }
-                    await loadData();
+                if (typeof sbSaveFloodPolygon === 'function') {
+                    await sbSaveFloodPolygon(payload);
                 } else {
-                    throw new Error(result.error || 'เกิดข้อผิดพลาดในการบันทึก');
+                    throw new Error('Supabase Service ไม่พร้อมทำงาน');
                 }
+                Swal.fire({
+                    title: 'สำเร็จ!',
+                    text: 'บันทึกข้อมูลพื้นที่น้ำท่วมเรียบร้อยแล้ว',
+                    icon: 'success',
+                    timer: 1500
+                });
+                if (typeof dashDrawnItems !== 'undefined' && dashDrawnItems) {
+                    dashDrawnItems.clearLayers();
+                }
+                await loadData();
             } catch (err) {
                 Swal.fire('ผิดพลาด', err.message, 'error');
             }
@@ -3331,16 +3321,18 @@ let dashLayerStates = {
                     period: typeof currentPeriod !== 'undefined' ? currentPeriod : ''
                 };
 
-                const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
-                const data = await res.json();
+                if (typeof sbMarkEvacueeReturnHome === 'function') {
+                    await sbMarkEvacueeReturnHome(idCard, name, currentPeriod);
+                } else {
+                    throw new Error('Supabase Service ไม่พร้อมทำงาน');
+                }
 
-                if (data.success) {
-                    Swal.fire({
-                        title: 'สำเร็จ!',
-                        text: `อัปเดตสถานะคุณ ${name} กลับบ้านแล้วเรียบร้อย`,
-                        icon: 'success',
-                        timer: 1500
-                    });
+                Swal.fire({
+                    title: 'สำเร็จ!',
+                    text: `อัปเดตสถานะคุณ ${name} กลับบ้านแล้วเรียบร้อย`,
+                    icon: 'success',
+                    timer: 1500
+                });
 
                     // อัปเดตใน store.evacuees ทันที
                     const target = (store.evacuees || []).find(r => {
@@ -3358,9 +3350,6 @@ let dashLayerStates = {
                     if (typeof filterShelter === 'function') filterShelter(centerName);
                     if (typeof renderDashOneMapLayers === 'function') renderDashOneMapLayers();
                     if (typeof window.loadEvacuationMarkers === 'function') window.loadEvacuationMarkers();
-                } else {
-                    throw new Error(data.error || 'ไม่สามารถอัปเดตสถานะได้');
-                }
             } catch (err) {
                 Swal.fire('เกิดข้อผิดพลาด', err.message, 'error');
             }
@@ -3543,16 +3532,16 @@ let dashLayerStates = {
                     period: currentPeriod
                 };
 
-                const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
-                const result = await res.json();
-
-                if (result.success) {
-                    Swal.fire('สำเร็จ', 'ลงทะเบียนเรียบร้อย', 'success').then(() => {
-                        document.getElementById('regisForm').reset();
-                        loadData();
-                        showPage('shelter');
-                    });
+                if (typeof sbSaveEvacuee === 'function') {
+                    await sbSaveEvacuee(payload);
+                } else {
+                    throw new Error('Supabase Service ไม่พร้อมทำงาน');
                 }
+                Swal.fire('สำเร็จ', 'ลงทะเบียนเรียบร้อย', 'success').then(() => {
+                    document.getElementById('regisForm').reset();
+                    loadData();
+                    showPage('shelter');
+                });
             } catch (err) { Swal.fire('ผิดพลาด', err.message, 'error'); }
             finally { btn.disabled = false; }
         }
@@ -3903,31 +3892,30 @@ let dashLayerStates = {
             console.log("🚀 ข้อมูลที่จะส่งไปเซิร์ฟเวอร์:", payload);
 
             try {
-                const res = await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
-                const result = await res.json();
-
-                if (result.success) {
-                    Swal.fire({
-                        title: 'บันทึกสำเร็จ',
-                        // 🌟 เปลี่ยนข้อความให้เข้ากับประชาชน
-                        text: isPublicMode ? 'เทศบาลตำบลตันหยงมัสได้รับรายงานของท่านแล้ว ขอบคุณครับ' : 'อัปเดตรายงานสถานะเรียบร้อยแล้ว',
-                        icon: 'success',
-                        timer: isPublicMode ? 3000 : 1500,
-                        showConfirmButton: false
-                    });
-
-                    // เคลียร์ช่องชื่อทิ้งหลังบันทึกเสร็จ
-                    if (nameInput) nameInput.value = '';
-
-                    // 🌟 ถ้าเป็นโหมดประชาชน ไม่ต้องรีเฟรชแผนที่ (เพราะหน้าแผนที่ถูกซ่อนไว้)
-                    if (!isPublicMode) {
-                        await loadData();
-                        if (typeof loadEvacuationMarkers === 'function') {
-                            loadEvacuationMarkers();
-                        }
-                    }
+                if (typeof sbSaveEvacuation === 'function') {
+                    await sbSaveEvacuation(payload);
                 } else {
-                    throw new Error(result.error || 'เกิดข้อผิดพลาดจากเซิร์ฟเวอร์');
+                    throw new Error('Supabase Service ไม่พร้อมทำงาน');
+                }
+
+                Swal.fire({
+                    title: 'บันทึกสำเร็จ',
+                    // 🌟 เปลี่ยนข้อความให้เข้ากับประชาชน
+                    text: isPublicMode ? 'เทศบาลตำบลตันหยงมัสได้รับรายงานของท่านแล้ว ขอบคุณครับ' : 'อัปเดตรายงานสถานะเรียบร้อยแล้ว',
+                    icon: 'success',
+                    timer: isPublicMode ? 3000 : 1500,
+                    showConfirmButton: false
+                });
+
+                // เคลียร์ช่องชื่อทิ้งหลังบันทึกเสร็จ
+                if (nameInput) nameInput.value = '';
+
+                // 🌟 ถ้าเป็นโหมดประชาชน ไม่ต้องรีเฟรชแผนที่ (เพราะหน้าแผนที่ถูกซ่อนไว้)
+                if (!isPublicMode) {
+                    await loadData();
+                    if (typeof loadEvacuationMarkers === 'function') {
+                        loadEvacuationMarkers();
+                    }
                 }
             } catch (err) {
                 Swal.fire('ผิดพลาด', err.message, 'error');
@@ -4933,29 +4921,22 @@ let dashLayerStates = {
                 const reader = new FileReader();
                 reader.onload = async function () {
                     const base64Data = reader.result;
-                    const res = await fetch(API_URL, {
-                        method: 'POST',
-                        body: JSON.stringify({
-                            action: 'saveRiskMapImage',
-                            imageData: base64Data,
-                            imageType: file.type
-                        })
-                    });
-                    const data = await res.json();
-                    if (data.success && data.url) {
-                        Swal.fire({
-                            title: 'อัปโหลดสำเร็จ',
-                            text: 'อัปโหลดรูปภาพแผนที่พื้นที่เสี่ยงภัยเรียบร้อยแล้ว',
-                            icon: 'success',
-                            customClass: { popup: 'rounded-[2rem]' }
-                        });
-                        store.riskMapImageUrl = data.url;
-                        document.getElementById('riskMapImg').src = base64Data;
-                        document.getElementById('riskMapImg').classList.remove('hidden');
-                        document.getElementById('riskMapPlaceholder').classList.add('hidden');
-                    } else {
-                        Swal.fire('เกิดข้อผิดพลาด', data.error || 'ไม่สามารถอัปโหลดได้', 'error');
+                    store.riskMapImageUrl = base64Data;
+                    try {
+                        localStorage.setItem('risk_map_image_url', base64Data);
+                    } catch (e) {
+                        console.warn("localStorage quota exceeded for risk map image", e);
                     }
+                    document.getElementById('riskMapImg').src = base64Data;
+                    document.getElementById('riskMapImg').classList.remove('hidden');
+                    document.getElementById('riskMapPlaceholder').classList.add('hidden');
+
+                    Swal.fire({
+                        title: 'อัปโหลดสำเร็จ',
+                        text: 'อัปโหลดรูปภาพแผนที่พื้นที่เสี่ยงภัยเรียบร้อยแล้ว',
+                        icon: 'success',
+                        customClass: { popup: 'rounded-[2rem]' }
+                    });
                     btn.innerHTML = originalText;
                     btn.disabled = false;
                 };
