@@ -114,6 +114,7 @@ let dashLayerStates = {
                     else if (userRole === 'water_staff') targetPage = 'addWater';
                     else if (userRole === 'relief') targetPage = 'relief';
                     else if (userRole === 'community') targetPage = 'water';
+                    else if (userRole === 'flood_report') targetPage = 'looker';
 
                     if (typeof showPage === 'function') showPage(targetPage);
                 } catch (e) {
@@ -144,7 +145,8 @@ let dashLayerStates = {
             'shelter': ['shelter', 'regis', 'looker'],
             'water_staff': ['water', 'addWater', 'looker'],
             'relief': ['relief', 'looker'],
-            'community': ['water', 'addWater', 'evacuation', 'looker']
+            'community': ['water', 'addWater', 'evacuation', 'looker'],
+            'flood_report': ['looker']
         };
         // --- Navigation Logic ---
         // --- Navigation Logic ---
@@ -199,7 +201,7 @@ let dashLayerStates = {
                 shelter: 'ข้อมูลศูนย์พักพิง',
                 regis: 'ลงทะเบียนผู้ประสบภัย',
                 relief: 'ข้อมูลผู้รับถุงยังชีพ',
-                looker: 'รายงานสรุปข้อมูล',
+                looker: 'รายงานข้อมูลน้ำท่วม',
                 evacuation: 'สถานะการอพยพและแผนที่',
                 userManagement: 'จัดการผู้ใช้งานระบบ'
             };
@@ -316,6 +318,7 @@ let dashLayerStates = {
                     else if (userRole === 'water_staff') firstPage = 'addWater';
                     else if (userRole === 'relief') firstPage = 'relief';
                     else if (userRole === 'community') firstPage = 'water';
+                    else if (userRole === 'flood_report') firstPage = 'looker';
 
                     if (typeof showPage === 'function') showPage(firstPage);
 
@@ -1188,7 +1191,7 @@ let dashLayerStates = {
                 <tr class="hover:bg-slate-50 transition-colors">
                     <td class="p-4 font-bold text-slate-700">${u[0]}</td>
                     <td class="p-4 text-center">
-                        <span class="px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${u[1] === 'admin' ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-100 text-slate-500'}">${u[1]}</span>
+                        <span class="px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${u[1] === 'admin' ? 'bg-indigo-50 text-indigo-600' : u[1] === 'flood_report' ? 'bg-blue-50 text-blue-600' : 'bg-slate-100 text-slate-500'}">${u[1]}</span>
                     </td>
                     <td class="p-4 text-center">
                         <button onclick="deleteUser('${u[0]}')" class="w-8 h-8 rounded-full bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-all shadow-sm"><i class="fas fa-trash-alt text-xs"></i></button>

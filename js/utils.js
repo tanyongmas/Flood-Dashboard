@@ -99,7 +99,17 @@ function setupUserInterface(user) {
     const roleDisplay = document.getElementById('displayUserRole');
 
     if (nameDisplay) nameDisplay.innerText = user.name;
-    if (roleDisplay) roleDisplay.innerText = user.role.toUpperCase();
+    if (roleDisplay) {
+        const roleLabels = {
+            'admin': 'ADMIN',
+            'shelter': 'SHELTER',
+            'water_staff': 'WATER STAFF',
+            'relief': 'RELIEF',
+            'community': 'COMMUNITY',
+            'flood_report': 'FLOOD REPORT'
+        };
+        roleDisplay.innerText = roleLabels[user.role] || user.role.toUpperCase();
+    }
 }
 
 function updateMenuByRole() {
