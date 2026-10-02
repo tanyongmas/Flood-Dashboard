@@ -2645,6 +2645,7 @@
                                     <div id="riskMapImageWrapper"
                                         class="relative rounded-2xl overflow-hidden border border-slate-100 bg-slate-50 aspect-video md:aspect-square flex items-center justify-center group/img">
                                         <img id="riskMapImg" src="" onclick="openFullscreenRiskMap()"
+                                            onerror="this.classList.add('hidden'); const p = document.getElementById('riskMapPlaceholder'); if(p) p.classList.remove('hidden');"
                                             class="hidden w-full h-full object-contain transition-transform duration-500 group-hover/img:scale-105 cursor-pointer hover:brightness-95"
                                             alt="แผนที่พื้นที่เสี่ยงภัย">
                                         <div id="riskMapPlaceholder"

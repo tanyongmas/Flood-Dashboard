@@ -388,7 +388,9 @@ let dashLayerStates = {
                         floodPolygons: [],
                         evacReports: [],
                         floodData: [],
-                        riskMapImageUrl: ""
+                        riskMapImageUrl: (function () {
+                            try { return localStorage.getItem('risk_map_image_url') || "https://lh3.googleusercontent.com/d/1tIGTXKoPI88Y_7-NSISSGPCuFy31Cfeh"; } catch (e) { return "https://lh3.googleusercontent.com/d/1tIGTXKoPI88Y_7-NSISSGPCuFy31Cfeh"; }
+                        })()
                     };
                 }
 
@@ -4815,6 +4817,14 @@ let dashLayerStates = {
             const img = document.getElementById('riskMapImg');
             const placeholder = document.getElementById('riskMapPlaceholder');
             let mapUrl = store.riskMapImageUrl || '';
+            if (!mapUrl) {
+                try {
+                    mapUrl = localStorage.getItem('risk_map_image_url') || '';
+                } catch (e) {}
+            }
+            if (!mapUrl) {
+                mapUrl = 'https://lh3.googleusercontent.com/d/1tIGTXKoPI88Y_7-NSISSGPCuFy31Cfeh';
+            }
             if (mapUrl.includes('drive.google.com/uc') || mapUrl.includes('docs.google.com/uc')) {
                 const match = mapUrl.match(/[?&]id=([^&]+)/);
                 if (match && match[1]) {
@@ -4822,13 +4832,13 @@ let dashLayerStates = {
                 }
             }
 
-            if (mapUrl) {
+            if (mapUrl && img) {
                 img.src = mapUrl;
                 img.classList.remove('hidden');
-                placeholder.classList.add('hidden');
-            } else {
+                if (placeholder) placeholder.classList.add('hidden');
+            } else if (img) {
                 img.classList.add('hidden');
-                placeholder.classList.remove('hidden');
+                if (placeholder) placeholder.classList.remove('hidden');
             }
 
             // Show uploader only to admin
@@ -4941,39 +4951,89 @@ let dashLayerStates = {
             if (!file) return;
 
             const btn = document.getElementById('uploadRiskMapBtn');
-            const originalText = btn.innerHTML;
-            btn.innerHTML = `<i class="fas fa-spinner animate-spin"></i> กำลังอัปโหลด...`;
-            btn.disabled = true;
+            const originalText = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.innerHTML = `<i class="fas fa-spinner animate-spin"></i> กำลังอัปโหลด...`;
+                btn.disabled = true;
+            }
 
             try {
                 const reader = new FileReader();
                 reader.onload = async function () {
                     const base64Data = reader.result;
-                    store.riskMapImageUrl = base64Data;
+                    let finalUrl = "";
+
+                    // 1. อัปโหลดภาพเข้า Google Drive (ผ่าน Google Apps Script API) เพื่อเก็บไฟล์ถาวร
                     try {
-                        localStorage.setItem('risk_map_image_url', base64Data);
-                    } catch (e) {
-                        console.warn("localStorage quota exceeded for risk map image", e);
+                        const resp = await fetch(API_URL, {
+                            method: 'POST',
+                            body: JSON.stringify({
+                                action: 'saveRiskMapImage',
+                                imageType: file.type || 'image/jpeg',
+                                imageData: base64Data
+                            })
+                        });
+                        const result = await resp.json();
+                        if (result && result.success && result.url) {
+                            finalUrl = result.url;
+                            console.log("⚡ [Google Drive] อัปโหลดภาพแผนที่สำเร็จ:", finalUrl);
+                        }
+                    } catch (driveErr) {
+                        console.warn("⚠️ [Google Drive] อัปโหลดเข้า Drive ขัดข้อง:", driveErr);
                     }
-                    document.getElementById('riskMapImg').src = base64Data;
-                    document.getElementById('riskMapImg').classList.remove('hidden');
-                    document.getElementById('riskMapPlaceholder').classList.add('hidden');
+
+                    // หากเชื่อมต่อ Drive ล้มเหลว ให้ใช้ base64Data เป็น Fallback
+                    if (!finalUrl) {
+                        finalUrl = base64Data;
+                    }
+
+                    // 2. บันทึก URL / ข้อมูลภาพเข้า Supabase เพื่อให้ทุกเครื่องที่ล็อกอินดึงไปแสดงผลได้ถาวร
+                    if (typeof sbSaveRiskMapUrl === 'function') {
+                        try {
+                            await sbSaveRiskMapUrl(finalUrl);
+                        } catch (sbErr) {
+                            console.warn("⚠️ [Supabase] บันทึก URL แผนที่ลงตารางขัดข้อง:", sbErr);
+                        }
+                    }
+
+                    // 3. บันทึกลง LocalStorage & Store เพื่อ Cache ไว้ทันที
+                    store.riskMapImageUrl = finalUrl;
+                    try {
+                        localStorage.setItem('risk_map_image_url', finalUrl);
+                    } catch (e) {
+                        console.warn("localStorage quota warning", e);
+                    }
+
+                    // 4. อัปเดตการแสดงผลบนหน้าจอทันที
+                    const img = document.getElementById('riskMapImg');
+                    const placeholder = document.getElementById('riskMapPlaceholder');
+                    if (img) {
+                        img.src = finalUrl;
+                        img.classList.remove('hidden');
+                    }
+                    if (placeholder) {
+                        placeholder.classList.add('hidden');
+                    }
 
                     Swal.fire({
                         title: 'อัปโหลดสำเร็จ',
-                        text: 'อัปโหลดรูปภาพแผนที่พื้นที่เสี่ยงภัยเรียบร้อยแล้ว',
+                        text: 'อัปโหลดและบันทึกรูปภาพแผนที่พื้นที่เสี่ยงภัยถาวรเรียบร้อยแล้ว',
                         icon: 'success',
                         customClass: { popup: 'rounded-[2rem]' }
                     });
-                    btn.innerHTML = originalText;
-                    btn.disabled = false;
+                    if (btn) {
+                        btn.innerHTML = originalText;
+                        btn.disabled = false;
+                    }
                 };
                 reader.readAsDataURL(file);
             } catch (err) {
                 console.error(err);
                 Swal.fire('เกิดข้อผิดพลาด', 'เกิดปัญหาขณะอัปโหลดไฟล์', 'error');
-                btn.innerHTML = originalText;
-                btn.disabled = false;
+                if (btn) {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }
             }
         };
         //-------------------------------------------//

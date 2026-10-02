@@ -233,15 +233,79 @@ async function sbFetchInitialData(targetPeriod = '2569') {
                 r.note,
                 r.user_name
             ]),
-            floodPolygons: (polyRes.data || []).map(r => [
-                r.created_at,
-                r.title,
-                r.detail,
-                r.risk_level,
-                typeof r.geojson === 'object' ? JSON.stringify(r.geojson) : (r.geojson || ''),
+        // 6. ดึงภาพแผนที่พื้นที่เสี่ยงภัย (ระบบเก็บไว้ใน Supabase หรือ Google Drive)
+        let riskMapImageUrl = "";
+        const riskMapConfig = (polyRes.data || []).find(r => r.risk_level === 'system_config' || r.title === '__SYSTEM_RISK_MAP__');
+        if (riskMapConfig && riskMapConfig.detail) {
+            riskMapImageUrl = riskMapConfig.detail;
+        }
+        if (!riskMapImageUrl) {
+            try {
+                riskMapImageUrl = localStorage.getItem('risk_map_image_url') || "";
+            } catch (e) {}
+        }
+        if (!riskMapImageUrl) {
+            riskMapImageUrl = "https://lh3.googleusercontent.com/d/1tIGTXKoPI88Y_7-NSISSGPCuFy31Cfeh";
+        }
+
+        return {
+            success: true,
+            isFromSupabase: true,
+            periods: dynamicPeriods,
+            waterPoints: waterPoints,
+            waterPointsMap: waterPointsMap,
+            waterLevels: (wlRes.data || []).map(r => [
+                r.recorded_at,
+                r.location,
+                r.level,
                 r.reporter,
-                r.period
+                r.trend,
+                r.coords,
+                r.file_url,
+                r.note
             ]),
+            evacuees: (evacRes.data || []).map(r => [
+                r.registered_at,
+                r.shelter,
+                r.address,
+                r.id_card,
+                r.name,
+                r.age,
+                r.gender,
+                r.phone,
+                r.health_type,
+                r.health_note,
+                r.status,
+                r.return_home_at
+            ]),
+            addresses: addresses,
+            addressEvac: addressEvac,
+            reliefData: (relRes.data || []).map(r => [
+                r.distributed_at,
+                r.name,
+                r.status,
+                r.members,
+                r.address,
+                r.regis_address
+            ]),
+            reliefStock: (stockRes.data || []).map(r => [
+                r.logged_at,
+                r.item_type,
+                r.amount,
+                r.note,
+                r.user_name
+            ]),
+            floodPolygons: (polyRes.data || [])
+                .filter(r => r.risk_level !== 'system_config' && r.title !== '__SYSTEM_RISK_MAP__')
+                .map(r => [
+                    r.created_at,
+                    r.title,
+                    r.detail,
+                    r.risk_level,
+                    typeof r.geojson === 'object' ? JSON.stringify(r.geojson) : (r.geojson || ''),
+                    r.reporter,
+                    r.period
+                ]),
             evacReports: (repRes.data || []).map(r => [
                 r.reported_at,
                 r.address,
@@ -256,11 +320,17 @@ async function sbFetchInitialData(targetPeriod = '2569') {
             ]),
             users: (userRes.data || []).map(u => [u.username, u.role]),
             floodData: floodDataRows,
-            riskMapImageUrl: ""
+            riskMapImageUrl: riskMapImageUrl
         };
 
     } catch (err) {
         console.error("❌ [Supabase] โหลดข้อมูลล้มเหลว:", err);
+        let fallbackRiskMap = "https://lh3.googleusercontent.com/d/1tIGTXKoPI88Y_7-NSISSGPCuFy31Cfeh";
+        try {
+            const cached = localStorage.getItem('risk_map_image_url');
+            if (cached) fallbackRiskMap = cached;
+        } catch (e) {}
+
         return {
             success: true,
             isFromSupabase: true,
@@ -276,7 +346,7 @@ async function sbFetchInitialData(targetPeriod = '2569') {
             floodPolygons: [],
             evacReports: [],
             floodData: [],
-            riskMapImageUrl: ""
+            riskMapImageUrl: fallbackRiskMap
         };
     }
 }
@@ -534,6 +604,30 @@ async function sbCreateNewPeriod(newPeriod) {
         return { success: true, period: newPeriod };
     } catch (err) {
         return { success: false, error: err.message };
+    }
+}
+
+// บันทึก URL รูปภาพแผนที่พื้นที่เสี่ยงภัยเข้า Supabase
+async function sbSaveRiskMapUrl(url) {
+    if (!isSupabaseReady() || !url) return false;
+    try {
+        await sbClient.from('flood_polygons').delete().eq('risk_level', 'system_config');
+        const { error } = await sbClient.from('flood_polygons').insert([{
+            title: '__SYSTEM_RISK_MAP__',
+            detail: url,
+            risk_level: 'system_config',
+            reporter: 'admin',
+            period: 'all'
+        }]);
+        if (error) {
+            console.warn("⚠️ [Supabase] sbSaveRiskMapUrl error:", error);
+            return false;
+        }
+        console.log("⚡ [Supabase 100%] บันทึก URL ภาพแผนที่พื้นที่เสี่ยงสำเร็จ:", url);
+        return true;
+    } catch (e) {
+        console.warn("⚠️ [Supabase] sbSaveRiskMapUrl exception:", e);
+        return false;
     }
 }
 
