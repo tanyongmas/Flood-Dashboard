@@ -285,11 +285,18 @@ let dashLayerStates = {
             try {
                 let data = null;
 
-                // ⚡ เข้าสู่ระบบผ่าน Supabase 100%
+                // ⚡ เข้าสู่ระบบผ่าน Supabase 100% (รอให้สคริปต์โหลดเสร็จสมบูรณ์)
+                if (typeof sbLogin !== 'function') {
+                    for (let i = 0; i < 20; i++) {
+                        await new Promise(r => setTimeout(r, 100));
+                        if (typeof sbLogin === 'function') break;
+                    }
+                }
+
                 if (typeof sbLogin === 'function') {
                     data = await sbLogin(user);
                 } else {
-                    throw new Error('Supabase Service ไม่พร้อมทำงาน');
+                    throw new Error('Supabase Service ไม่พร้อมทำงาน กรุณารีเฟรชหน้าเว็บอีกครั้ง');
                 }
 
                 if (data && data.success) {

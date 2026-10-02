@@ -185,54 +185,6 @@ async function sbFetchInitialData(targetPeriod = '2569') {
         } catch (e) {}
         dynamicPeriods = [...new Set(dynamicPeriods)].sort((a, b) => b.localeCompare(a));
 
-        // แปลงข้อมูลให้อยู่ในโครงสร้าง Array 2 มิติที่ระบบ Dashboard รองรับ 100%
-        return {
-            success: true,
-            isFromSupabase: true,
-            periods: dynamicPeriods,
-            waterPoints: waterPoints,
-            waterPointsMap: waterPointsMap,
-            waterLevels: (wlRes.data || []).map(r => [
-                r.recorded_at,
-                r.location,
-                r.level,
-                r.reporter,
-                r.trend,
-                r.coords,
-                r.file_url,
-                r.note
-            ]),
-            evacuees: (evacRes.data || []).map(r => [
-                r.registered_at,
-                r.shelter,
-                r.address,
-                r.id_card,
-                r.name,
-                r.age,
-                r.gender,
-                r.phone,
-                r.health_type,
-                r.health_note,
-                r.status,
-                r.return_home_at
-            ]),
-            addresses: addresses,
-            addressEvac: addressEvac,
-            reliefData: (relRes.data || []).map(r => [
-                r.distributed_at,
-                r.name,
-                r.status,
-                r.members,
-                r.address,
-                r.regis_address
-            ]),
-            reliefStock: (stockRes.data || []).map(r => [
-                r.logged_at,
-                r.item_type,
-                r.amount,
-                r.note,
-                r.user_name
-            ]),
         // 6. ดึงภาพแผนที่พื้นที่เสี่ยงภัย (ระบบเก็บไว้ใน Supabase หรือ Google Drive)
         let riskMapImageUrl = "";
         const riskMapConfig = (polyRes.data || []).find(r => r.risk_level === 'system_config' || r.title === '__SYSTEM_RISK_MAP__');
@@ -248,6 +200,7 @@ async function sbFetchInitialData(targetPeriod = '2569') {
             riskMapImageUrl = "https://lh3.googleusercontent.com/d/1tIGTXKoPI88Y_7-NSISSGPCuFy31Cfeh";
         }
 
+        // แปลงข้อมูลให้อยู่ในโครงสร้าง Array 2 มิติที่ระบบ Dashboard รองรับ 100%
         return {
             success: true,
             isFromSupabase: true,
