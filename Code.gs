@@ -3,13 +3,27 @@
  * ปรับปรุงล่าสุด: รองรับกลุ่มเปราะบาง, ตัดสต๊อกอัตโนมัติ, แผนที่อพยพ และดึงพิกัดน้ำอัตโนมัติ
  */
 
-const SS_ID = '1ywMEkC2lYT4sStp0iTXJ0Nh92Xzl4X9b9em1wIfGveM';
-const DRIVE_FOLDER_ID = '1imp0fNSgs_jN6cENp_nOrhcTbZpLqta2';
-const TMD_UID = ''; // กรมอุตุนิยมวิทยา User ID (ถ้ามี)
-const TMD_UKEY = ''; // กรมอุตุนิยมวิทยา API Key (ถ้ามี)
+// ==========================================
+// 🔐 ระบบจัดการคอนฟิกและความปลอดภัย (Script Properties)
+// ==========================================
+function getScriptProperty(key, fallback) {
+  try {
+    var val = PropertiesService.getScriptProperties().getProperty(key);
+    if (val !== null && val !== undefined && val !== '') {
+      return val;
+    }
+  } catch (e) {
+    Logger.log("⚠️ Error reading ScriptProperty [" + key + "]: " + e.message);
+  }
+  return fallback !== undefined ? fallback : '';
+}
 
-// LINE Channel Access Token สำหรับส่งและตอบกลับข้อความ
-const LINE_CHANNEL_ACCESS_TOKEN = 'Xms7iAxLJ8JUunpaDiwhHILstl9SL5y0xbjDtYV7bR2+fJ/6OSEeXjm+njmUoOHzdig8wZsIET3If9AyKBZ8PyroJvy3l30+Y3bvcYAPMgf736a1g8GamUfhAOy4D32e8IZyYhQgkjKXXGuUIGEVZAdB04t89/1O/w1cDnyilFU=';
+// ดึงค่าคอนฟิกจาก Script Properties (ตั้งค่าผ่าน Project Settings > Script Properties)
+const SS_ID = getScriptProperty('SS_ID', '');
+const DRIVE_FOLDER_ID = getScriptProperty('DRIVE_FOLDER_ID', '');
+const TMD_UID = getScriptProperty('TMD_UID', ''); // กรมอุตุนิยมวิทยา User ID
+const TMD_UKEY = getScriptProperty('TMD_UKEY', ''); // กรมอุตุนิยมวิทยา API Key
+const LINE_CHANNEL_ACCESS_TOKEN = getScriptProperty('LINE_CHANNEL_ACCESS_TOKEN', '');
 
 function doGet(e) {
   return HtmlService.createHtmlOutputFromFile('index')
@@ -432,7 +446,11 @@ function doPost(e) {
 // ==========================================
 function callTyphoonOCR(base64Image) {
   try {
-    var apiKey = "sk-9pulv7neHi9ya34kbdyxULiHG9UBeHWNDLhdmalBpFWCn0oi"; 
+    var apiKey = getScriptProperty('TYPHOON_API_KEY');
+    if (!apiKey) {
+      Logger.log("❌ ไม่พบ TYPHOON_API_KEY ใน Script Properties");
+      return { success: false, error: "กรุณาตั้งค่า TYPHOON_API_KEY ใน Script Properties ของ Google Apps Script" };
+    }
     var url = "https://api.opentyphoon.ai/v1/chat/completions";
     
     var promptText = "จงอ่านข้อมูลจากบัตรประชาชนไทยนี้ และแยกข้อมูลออกมาเป็นรูปแบบ JSON เท่านั้น โดยมีโครงสร้างดังนี้:\n" +
@@ -493,7 +511,11 @@ function callTyphoonOCR(base64Image) {
 // ==========================================
 function callAksonOCR(base64Image) {
  try {
-    var apiKey = "ak_9abe58148dc6478299f2d853a3a50be7"; 
+    var apiKey = getScriptProperty('AKSON_API_KEY');
+    if (!apiKey) {
+      Logger.log("❌ ไม่พบ AKSON_API_KEY ใน Script Properties");
+      return { success: false, error: "กรุณาตั้งค่า AKSON_API_KEY ใน Script Properties ของ Google Apps Script" };
+    }
     var url = "https://backend.aksonocr.com/api/v2/upload"; 
 
     var cleanBase64 = base64Image.replace(/^data:image\/[a-z]+;base64,/, '').replace(/\s+/g, '');
@@ -2278,4 +2300,36 @@ function testWaterLevelCardThresholds() {
 
   Logger.log("\n==========================================");
   Logger.log("✅ ทดสอบครบทั้ง 3 เกณฑ์เรียบร้อย!");
+}
+
+// ==========================================
+// 🛠️ ฟังก์ชันสำหรับตั้งค่า Script Properties เริ่มต้น
+// ==========================================
+/**
+ * รันฟังก์ชันนี้จาก Apps Script Editor เพื่อบันทึก Secret Keys ลง Script Properties อัตโนมัติ
+ * (หลังจากรันครั้งเดียว ข้อมูลจะถูกเก็บอย่างปลอดภัยใน Properties ของโปรเจกต์)
+ */
+function setupScriptProperties(customProps) {
+  var props = PropertiesService.getScriptProperties();
+  var defaultProps = {
+    'SS_ID': '',
+    'DRIVE_FOLDER_ID': '',
+    'TMD_UID': '',
+    'TMD_UKEY': '',
+    'LINE_CHANNEL_ACCESS_TOKEN': '',
+    'TYPHOON_API_KEY': '',
+    'AKSON_API_KEY': ''
+  };
+  var toSet = Object.assign({}, defaultProps, customProps || {});
+  // กรองเฉพาะค่าที่ไม่เป็นค่าว่าง เพื่อไม่ให้ทับค่าเดิมที่ตั้งไว้แล้ว
+  var finalProps = {};
+  for (var k in toSet) {
+    if (toSet[k] !== '') finalProps[k] = toSet[k];
+  }
+  if (Object.keys(finalProps).length > 0) {
+    props.setProperties(finalProps);
+    Logger.log("✅ บันทึก Script Properties สำเร็จ: " + JSON.stringify(Object.keys(finalProps)));
+  } else {
+    Logger.log("ℹ️ ไม่มีการเปลี่ยนแปลงค่า Script Properties");
+  }
 }

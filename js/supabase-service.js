@@ -249,7 +249,7 @@ async function sbFetchInitialData(targetPeriod = '2569') {
                 r.user_name
             ]),
             floodPolygons: (polyRes.data || [])
-                .filter(r => r.risk_level !== 'system_config' && r.title !== '__SYSTEM_RISK_MAP__')
+                .filter(r => r.risk_level !== 'system_config' && r.title !== '__SYSTEM_RISK_MAP__' && r.risk_level !== 'system_config_pin' && r.risk_level !== 'road_closed')
                 .map(r => [
                     r.created_at,
                     r.title,
@@ -259,6 +259,7 @@ async function sbFetchInitialData(targetPeriod = '2569') {
                     r.reporter,
                     r.period
                 ]),
+            roadClosures: await sbFetchRoadClosures(polyRes.data),
             evacReports: (repRes.data || []).map(r => [
                 r.reported_at,
                 r.address,
@@ -273,7 +274,8 @@ async function sbFetchInitialData(targetPeriod = '2569') {
             ]),
             users: (userRes.data || []).map(u => [u.username, u.role]),
             floodData: floodDataRows,
-            riskMapImageUrl: riskMapImageUrl
+            riskMapImageUrl: riskMapImageUrl,
+            citizenWaterReports: await sbFetchCitizenWaterReports()
         };
 
     } catch (err) {
@@ -509,6 +511,304 @@ async function sbSaveFloodPolygon(payload) {
     return { success: true };
 }
 
+// ==========================================
+// 🚧 ระบบรายงานเส้นทางปิด / ไม่สามารถสัญจรได้ (Dedicated Table: road_closures)
+// ==========================================
+async function sbSaveRoadClosure(payload) {
+    if (!isSupabaseReady()) throw new Error('Supabase ไม่พร้อมใช้งาน');
+
+    const lat = parseFloat(payload.lat) || 0;
+    const lng = parseFloat(payload.lng) || 0;
+
+    const rowData = {
+        created_at: new Date().toISOString(),
+        title: payload.title || 'เส้นทางปิดสัญจรไม่ได้',
+        status: payload.status || 'ปิดการจราจร',
+        water_depth: payload.waterDepth || payload.water_depth || '',
+        detour: payload.detour || '',
+        detail: payload.detail || '',
+        lat: lat,
+        lng: lng,
+        image: payload.image || '',
+        reporter: payload.reporter || (typeof currentUser !== 'undefined' ? currentUser : 'เจ้าหน้าที่'),
+        period: payload.period || (typeof currentPeriod !== 'undefined' && currentPeriod ? currentPeriod : '2569')
+    };
+
+    // 1. บันทึกลงตารางเฉพาะ road_closures
+    let { data, error } = await sbClient.from('road_closures').insert([rowData]).select();
+
+    if (!error && data && data.length > 0) {
+        console.log("✅ [Supabase 100%] บันทึกลงตารางเฉพาะ road_closures สำเร็จเรียบร้อย (ไม่ได้เข้า flood_polygons):", data[0]);
+        return { success: true, data: data[0] };
+    }
+
+    // 2. Fallback: หากพบข้อผิดพลาด ให้แสดงรายละเอียดและบันทึกลง flood_polygons ชั่วคราว
+    if (error) {
+        console.warn("⚠️ [Supabase] บันทึกลง road_closures ขัดข้อง:", {
+            code: error.code,
+            message: error.message,
+            details: error.details,
+            hint: error.hint
+        });
+        console.warn("🔄 กำลังใช้ Fallback สำรองบันทึกลง flood_polygons...");
+
+        const geoData = {
+            type: 'Point',
+            coordinates: [lng, lat],
+            status: payload.status || 'ปิดการจราจร',
+            waterDepth: payload.waterDepth || '',
+            image: payload.image || '',
+            detour: payload.detour || '',
+            updatedAt: new Date().toISOString()
+        };
+
+        const fbRes = await sbClient.from('flood_polygons').insert([{
+            created_at: new Date().toISOString(),
+            title: payload.title || 'เส้นทางปิดสัญจรไม่ได้',
+            detail: payload.detail || '',
+            risk_level: 'road_closed',
+            geojson: geoData,
+            reporter: payload.reporter || (typeof currentUser !== 'undefined' ? currentUser : 'เจ้าหน้าที่'),
+            period: payload.period || (typeof currentPeriod !== 'undefined' && currentPeriod ? currentPeriod : '2569')
+        }]).select();
+
+        if (fbRes.error) {
+            console.error("❌ [Supabase] Fallback saveRoadClosure error:", fbRes.error);
+            throw new Error(fbRes.error.message);
+        }
+        data = fbRes.data;
+        console.log("⚡ [Supabase Fallback] บันทึกลง flood_polygons สำเร็จ:", data);
+    }
+
+    return { success: true, data: data ? data[0] : null };
+}
+
+async function sbDeleteRoadClosure(id) {
+    if (!isSupabaseReady()) throw new Error('Supabase ไม่พร้อมใช้งาน');
+
+    // 1. ลองลบจากตารางเฉพาะ road_closures
+    const { error: err1 } = await sbClient.from('road_closures').delete().eq('id', id);
+
+    // 2. เผื่อเป็นรายการเก่าที่อยู่ใน flood_polygons
+    const { error: err2 } = await sbClient.from('flood_polygons').delete().eq('id', id);
+
+    if (err1 && err2) {
+        console.error("❌ [Supabase] deleteRoadClosure error:", err1 || err2);
+        throw new Error((err1 || err2).message);
+    }
+
+    console.log("⚡ [Supabase 100%] ลบรายงานเส้นทางปิด ID " + id + " สำเร็จ");
+    return { success: true };
+}
+
+async function sbFetchRoadClosures(polyDataFallback = null) {
+    if (!isSupabaseReady()) return [];
+    try {
+        // 1. ลองดึงจากตารางเฉพาะ road_closures ก่อน
+        const { data: newRoads, error: newErr } = await sbClient
+            .from('road_closures')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (!newErr && Array.isArray(newRoads) && newRoads.length > 0) {
+            console.log(`⚡ [Supabase 100%] โหลดเส้นทางปิดจากตาราง road_closures: พบ ${newRoads.length} รายการ`);
+            return newRoads.map(r => ({
+                id: r.id,
+                createdAt: r.created_at,
+                title: r.title || 'เส้นทางปิด',
+                detail: r.detail || '',
+                status: r.status || 'ปิดการจราจร',
+                waterDepth: r.water_depth || r.waterDepth || '',
+                image: r.image || '',
+                detour: r.detour || '',
+                lat: parseFloat(r.lat || 0),
+                lng: parseFloat(r.lng || 0),
+                reporter: r.reporter || 'เจ้าหน้าที่',
+                period: r.period || '2569'
+            }));
+        }
+
+        // 2. Fallback: ดึงจาก flood_polygons เผื่อยังไม่ได้ย้ายตารางหรือยังไม่ได้รัน SQL
+        let sourceRows = polyDataFallback;
+        if (!sourceRows) {
+            const { data: polyRows } = await sbClient
+                .from('flood_polygons')
+                .select('*')
+                .eq('risk_level', 'road_closed')
+                .order('created_at', { ascending: false });
+            sourceRows = polyRows || [];
+        }
+
+        const legacyRoads = (sourceRows || [])
+            .filter(r => r.risk_level === 'road_closed')
+            .map(r => {
+                let geo = r.geojson;
+                if (typeof geo === 'string') {
+                    try { geo = JSON.parse(geo); } catch (e) { geo = {}; }
+                } else if (!geo) geo = {};
+                const coords = (geo.coordinates && Array.isArray(geo.coordinates)) ? geo.coordinates : [0, 0];
+                return {
+                    id: r.id,
+                    createdAt: r.created_at,
+                    title: r.title || 'เส้นทางปิด',
+                    detail: r.detail || '',
+                    status: geo.status || 'ปิดการจราจร',
+                    waterDepth: geo.waterDepth || '',
+                    image: geo.image || '',
+                    detour: geo.detour || '',
+                    lat: parseFloat(coords[1] || geo.lat || 0),
+                    lng: parseFloat(coords[0] || geo.lng || 0),
+                    reporter: r.reporter || 'เจ้าหน้าที่',
+                    period: r.period || '2569'
+                };
+            });
+
+        return legacyRoads;
+    } catch (e) {
+        console.warn("⚠️ sbFetchRoadClosures error:", e);
+        return [];
+    }
+}
+
+// ==========================================
+// 🌊 ระบบรายงานระดับน้ำโดยประชาชน (Citizen Water Crowdsource)
+// ==========================================
+async function sbSaveCitizenWaterReport(payload) {
+    if (!isSupabaseReady()) throw new Error('Supabase ไม่พร้อมใช้งาน');
+
+    const lat = parseFloat(payload.lat) || 0;
+    const lng = parseFloat(payload.lng) || 0;
+
+    const record = {
+        created_at: new Date().toISOString(),
+        water_level_category: payload.levelCategory || '',
+        water_level_cm_range: payload.levelCmRange || '',
+        water_trend: payload.trend || 'ทรงตัว',
+        location_name: payload.locationName || '',
+        lat: lat,
+        lng: lng,
+        note: payload.note || '',
+        reporter_name: payload.reporterName || 'ประชาชน',
+        reporter_phone: payload.reporterPhone || '',
+        period: payload.period || (typeof currentPeriod !== 'undefined' && currentPeriod ? currentPeriod : '2569'),
+        status: 'active'
+    };
+
+    // 1. ลองบันทึกลงตารางใหม่ citizen_water_reports
+    try {
+        const { data, error } = await sbClient
+            .from('citizen_water_reports')
+            .insert([record])
+            .select();
+
+        if (!error && data && data.length > 0) {
+            console.log("⚡ [Supabase 100%] บันทึกรายงานระดับน้ำประชาชนลงตาราง citizen_water_reports สำเร็จ:", data);
+            return { success: true, data: data[0] };
+        }
+    } catch (e) {
+        console.warn("⚠️ บันทึกลง citizen_water_reports ไม่สำเร็จ กำลังใช้ Fallback:", e);
+    }
+
+    // 2. Fallback ลง flood_polygons ในกรณีที่ยังไม่ได้สร้างตารางใหม่
+    try {
+        const fallbackGeo = {
+            type: 'Point',
+            coordinates: [lng, lat],
+            category: payload.levelCategory,
+            range: payload.levelCmRange,
+            trend: payload.trend,
+            note: payload.note,
+            reporterPhone: payload.reporterPhone,
+            locationName: payload.locationName
+        };
+
+        const { data: fbData, error: fbError } = await sbClient
+            .from('flood_polygons')
+            .insert([{
+                created_at: new Date().toISOString(),
+                title: payload.locationName || `รายงานระดับน้ำ: ${payload.levelCategory}`,
+                detail: payload.note || `ระดับน้ำ: ${payload.levelCategory} (แนวโน้ม: ${payload.trend})`,
+                risk_level: 'citizen_water_report',
+                geojson: fallbackGeo,
+                reporter: payload.reporterName || 'ประชาชน',
+                period: payload.period || (typeof currentPeriod !== 'undefined' && currentPeriod ? currentPeriod : '2569')
+            }]).select();
+
+        if (fbError) throw fbError;
+        console.log("⚡ [Supabase 100%] บันทึกรายงานระดับน้ำประชาชน (Fallback) สำเร็จ:", fbData);
+        return { success: true, data: fbData ? fbData[0] : null };
+    } catch (err) {
+        console.error("❌ บันทึกรายงานระดับน้ำล้มเหลว:", err);
+        throw new Error('ไม่สามารถบันทึกข้อมูลได้: ' + err.message);
+    }
+}
+
+async function sbFetchCitizenWaterReports() {
+    if (!isSupabaseReady()) return [];
+    try {
+        // ลองดึงจากตาราง citizen_water_reports ก่อน
+        const { data, error } = await sbClient
+            .from('citizen_water_reports')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(50);
+
+        if (!error && data && data.length > 0) {
+            return data.map(r => ({
+                id: r.id,
+                createdAt: r.created_at,
+                levelCategory: r.water_level_category,
+                levelCmRange: r.water_level_cm_range,
+                trend: r.water_trend,
+                locationName: r.location_name,
+                lat: parseFloat(r.lat),
+                lng: parseFloat(r.lng),
+                note: r.note,
+                reporterName: r.reporter_name,
+                reporterPhone: r.reporter_phone
+            }));
+        }
+    } catch (e) {
+        // ละเว้นกรณีไม่มีตาราง
+    }
+
+    // Fallback: ดึงจาก flood_polygons ที่เป็น citizen_water_report
+    try {
+        const { data: fbData } = await sbClient
+            .from('flood_polygons')
+            .select('*')
+            .eq('risk_level', 'citizen_water_report')
+            .order('created_at', { ascending: false })
+            .limit(50);
+
+        if (fbData && fbData.length > 0) {
+            return fbData.map(r => {
+                let geo = r.geojson;
+                if (typeof geo === 'string') {
+                    try { geo = JSON.parse(geo); } catch (e) { geo = {}; }
+                } else if (!geo) geo = {};
+                const coords = (geo.coordinates && Array.isArray(geo.coordinates)) ? geo.coordinates : [0, 0];
+                return {
+                    id: r.id,
+                    createdAt: r.created_at,
+                    levelCategory: geo.category || r.title,
+                    levelCmRange: geo.range || '',
+                    trend: geo.trend || 'ทรงตัว',
+                    locationName: geo.locationName || r.title,
+                    lat: parseFloat(coords[1] || 0),
+                    lng: parseFloat(coords[0] || 0),
+                    note: r.detail || geo.note || '',
+                    reporterName: r.reporter || 'ประชาชน',
+                    reporterPhone: geo.reporterPhone || ''
+                };
+            });
+        }
+    } catch (err) {
+        console.warn("sbFetchCitizenWaterReports error:", err);
+    }
+    return [];
+}
+
 // ระบบจัดการผู้ใช้งาน (User Management)
 async function sbGetUsers() {
     if (!isSupabaseReady()) return [];
@@ -583,6 +883,123 @@ async function sbSaveRiskMapUrl(url) {
         return false;
     }
 }
+
+// ==========================================
+// 🔐 ระบบจัดการรหัสผ่านความปลอดภัยข้อมูลส่วนบุคคล (PDPA Security PIN)
+// ==========================================
+const DEFAULT_PDPA_PIN = '1111';
+
+/**
+ * ดึงรหัสผ่าน PDPA PIN จาก Supabase (หรือ Fallback)
+ */
+async function sbGetPdpaPin() {
+    if (!isSupabaseReady()) {
+        return localStorage.getItem('pdpa_access_pin') || DEFAULT_PDPA_PIN;
+    }
+
+    try {
+        // 1. ลองดึงจากตาราง system_settings (ถ้ามี)
+        const { data: setRow, error: setErr } = await sbClient
+            .from('system_settings')
+            .select('value')
+            .eq('key', 'pdpa_access_pin')
+            .maybeSingle();
+
+        if (!setErr && setRow && setRow.value) {
+            localStorage.setItem('pdpa_access_pin', String(setRow.value).trim());
+            return String(setRow.value).trim();
+        }
+
+        // 2. Fallback: ดึงจาก flood_polygons (system_config_pin)
+        const { data: polyRow } = await sbClient
+            .from('flood_polygons')
+            .select('detail')
+            .eq('risk_level', 'system_config_pin')
+            .maybeSingle();
+
+        if (polyRow && polyRow.detail) {
+            localStorage.setItem('pdpa_access_pin', String(polyRow.detail).trim());
+            return String(polyRow.detail).trim();
+        }
+    } catch (err) {
+        console.warn("⚠️ [Supabase] ดึง PDPA PIN ขัดข้อง ใช้ Local Cache:", err);
+    }
+
+    return localStorage.getItem('pdpa_access_pin') || DEFAULT_PDPA_PIN;
+}
+
+/**
+ * ตรวจสอบรหัสผ่าน PDPA PIN
+ */
+async function sbVerifyPdpaPin(inputPin) {
+    if (!inputPin) return false;
+    const cleanInput = String(inputPin).trim();
+    const currentPin = await sbGetPdpaPin();
+    return cleanInput === currentPin;
+}
+
+/**
+ * ปรับปรุง/เปลี่ยนรหัสผ่าน PDPA PIN
+ */
+async function sbUpdatePdpaPin(oldPin, newPin, isAdmin = false) {
+    if (!newPin || String(newPin).trim().length < 4) {
+        throw new Error('รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 4 ตัวอักษร');
+    }
+
+    const cleanNew = String(newPin).trim();
+
+    // หากไม่ใช่ Admin ที่ Override ต้องตรวจสอบรหัสเดิมก่อน
+    if (!isAdmin) {
+        const isValid = await sbVerifyPdpaPin(oldPin);
+        if (!isValid) {
+            throw new Error('รหัสผ่านเดิมไม่ถูกต้อง');
+        }
+    }
+
+    let saved = false;
+
+    if (isSupabaseReady()) {
+        // 1. ลองบันทึกลงตาราง system_settings
+        try {
+            const { error: upsertErr } = await sbClient
+                .from('system_settings')
+                .upsert([{ key: 'pdpa_access_pin', value: cleanNew }], { onConflict: 'key' });
+            if (!upsertErr) saved = true;
+        } catch (e) {
+            // ละเว้นกรณีไม่มีตาราง system_settings
+        }
+
+        // 2. บันทึกสำรองลง flood_polygons เสมอ เพื่อความแน่นอน
+        try {
+            await sbClient.from('flood_polygons').delete().eq('risk_level', 'system_config_pin');
+            const { error: insertErr } = await sbClient.from('flood_polygons').insert([{
+                title: '__SYSTEM_PDPA_PIN__',
+                detail: cleanNew,
+                risk_level: 'system_config_pin',
+                reporter: 'admin',
+                period: 'all'
+            }]);
+            if (!insertErr) saved = true;
+        } catch (e) {
+            console.warn("⚠️ [Supabase] บันทึก PIN สำรองขัดข้อง:", e);
+        }
+    }
+
+    // 3. บันทึกลง LocalStorage เสมอ
+    localStorage.setItem('pdpa_access_pin', cleanNew);
+    console.log("⚡ [Supabase 100%] เปลี่ยนรหัสผ่าน PDPA PIN สำเร็จ!");
+
+    return { success: true };
+}
+
+window.sbGetPdpaPin = sbGetPdpaPin;
+window.sbVerifyPdpaPin = sbVerifyPdpaPin;
+window.sbUpdatePdpaPin = sbUpdatePdpaPin;
+window.sbSaveRoadClosure = sbSaveRoadClosure;
+window.sbDeleteRoadClosure = sbDeleteRoadClosure;
+window.sbFetchRoadClosures = sbFetchRoadClosures;
+window.sbSaveCitizenWaterReport = sbSaveCitizenWaterReport;
+window.sbFetchCitizenWaterReports = sbFetchCitizenWaterReports;
 
 // Initialize ทันที
 initSupabase();

@@ -485,3 +485,53 @@ Responsive Layout: หน้าจอ PC / Laptop (ใหญ่กว่า 1366
     animation: shimmer 1.5s infinite linear;
 }
 
+/* 🎨 Clean Minimal Leaflet Popup Style */
+.clean-popup .leaflet-popup-content-wrapper {
+    border-radius: 1.25rem !important;
+    padding: 0.25rem !important;
+    box-shadow: 0 20px 25px -5px rgba(15, 23, 42, 0.15), 0 8px 10px -6px rgba(15, 23, 42, 0.1) !important;
+    background: #ffffff !important;
+    border: 1px solid rgba(241, 245, 249, 1) !important;
+}
+
+.clean-popup .leaflet-popup-content {
+    margin: 0.35rem !important;
+    line-height: 1.5 !important;
+}
+
+.clean-popup .leaflet-popup-tip-container {
+    margin-top: -1px;
+}
+
+.clean-popup .leaflet-popup-tip {
+    background: #ffffff !important;
+    box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.1) !important;
+}
+
+.clean-popup a.leaflet-popup-close-button {
+    top: 10px !important;
+    right: 10px !important;
+    width: 22px !important;
+    height: 22px !important;
+    border-radius: 9999px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    color: #94a3b8 !important;
+    background: #f1f5f9 !important;
+    font-size: 14px !important;
+    font-weight: bold !important;
+    transition: all 0.2s ease !important;
+    border: 1px solid #e2e8f0 !important;
+}
+
+.clean-popup a.leaflet-popup-close-button:hover {
+    color: #0f172a !important;
+    background: #e2e8f0 !important;
+    transform: scale(1.05);
+}
+/* 🏛️ Styling สำหรับพื้นที่นอกเขตเทศบาล (Inverted Mask) */
+.municipality-outer-mask {
+    filter: drop-shadow(0 0 12px rgba(0, 0, 0, 0.25));
+    cursor: not-allowed !important;
+}

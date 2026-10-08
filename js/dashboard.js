@@ -20,7 +20,8 @@ let dashLayers = {
     relief: null,
     evac: null,
     flood: null,
-    polygon: null
+    polygon: null,
+    road: null
 };
 
 let dashLayerStates = {
@@ -29,7 +30,8 @@ let dashLayerStates = {
     relief: true,
     evac: true,
     flood: true,
-    polygon: true
+    polygon: true,
+    road: true
 };
 
 // ==========================================
@@ -44,41 +46,38 @@ let dashLayerStates = {
 
             if (window.isPublicMode) {
                 // ==========================================
-                // 🟢 โหมดประชาชน (ลบหน้า Login ทิ้งทันที) 🟢
+                // 🟢 โหมดประชาชน (Clean Minimal Citizen Portal) 🟢
                 // ==========================================
                 currentUser = "ประชาชน (สแกน QR)";
                 userRole = "public";
 
-                // 🌟 สั่งลบหน้า Login และหน้าแอดมินออกจากระบบ 100%
+                // ลบหน้า Login และหน้าเจ้าหน้าที่ออกจาก DOM เพื่อความปลอดภัยและประหยัดแรม
                 const loginPage = document.getElementById('loginPage');
                 if (loginPage) loginPage.remove();
 
                 const mainApp = document.getElementById('mainApp');
                 if (mainApp) mainApp.remove();
 
-                // เปลี่ยนสีพื้นหลังให้ดูเป็นหน้าฉุกเฉิน
-                document.body.style.backgroundColor = '#0f172a';
+                // ปรับสไตล์พื้นหลังเป็น Clean Minimal สว่าง สะอาดตา นุ่มนวล
+                document.body.className = "bg-slate-50 text-slate-700 min-h-screen font-prompt antialiased selection:bg-blue-100 selection:text-blue-700";
 
-                // สร้าง UI หน้าประชาชน
-                const publicUI = document.createElement('div');
-                publicUI.className = "flex flex-col items-center justify-center min-h-screen p-6 text-center animate-fade-in w-full max-w-sm mx-auto";
-                publicUI.innerHTML = `
-            <img src="assets/logo.png" class="w-24 mx-auto mb-6 drop-shadow-lg">
-            <h1 class="text-2xl font-black text-white mb-2">ระบบรายงานสถานการณ์น้ำท่วม</h1>
-            <p class="text-slate-400 text-sm mb-10">เทศบาลตำบลตันหยงมัส</p>
-            
-            <button onclick="promptSafetyCheck()" class="w-full bg-blue-600 text-white px-8 py-5 rounded-[2rem] font-black shadow-lg shadow-blue-500/30 text-lg hover:bg-blue-700 active:scale-95 transition-all animate-bounce">
-                <i class="fas fa-bullhorn mr-2"></i> กดเพื่อรายงานสถานะ
-            </button>
-            
-            <p class="text-slate-500 text-[10px] mt-10 italic">ข้อมูลของท่านจะถูกส่งตรงถึงเทศบาลตำบลตันหยงมัสทันที</p>
-        `;
-                document.body.appendChild(publicUI);
+                // โหลดข้อมูลแบบขนาน (Parallel Fetching) เพื่อนำมารายงานระดับน้ำ แผนที่ และสภาพอากาศ
+                try {
+                    await Promise.allSettled([
+                        loadData(),
+                        typeof loadRIDWaterLevel === 'function' ? loadRIDWaterLevel() : Promise.resolve(),
+                        typeof loadWeatherForecast === 'function' ? loadWeatherForecast() : Promise.resolve()
+                    ]);
+                } catch (e) {
+                    console.warn("Public mode data fetch warning:", e);
+                }
 
-                // โหลดข้อมูลแผนที่เงียบๆ เผื่อต้องใช้
-                try { await loadData(); } catch (e) { }
+                // เรียกฟังก์ชันเรนเดอร์ Clean Minimal Citizen Portal
+                if (typeof renderPublicPortal === 'function') {
+                    renderPublicPortal();
+                }
 
-                return; // 🌟 จบการทำงานตรงนี้ ไม่รันโค้ดล็อกอินต่อ
+                return; // 🌟 จบการทำงานโหมดประชาชน
             }
 
             // ==========================================
@@ -214,6 +213,7 @@ let dashLayerStates = {
             if (pageId === 'dashboard') {
                 if (typeof initDashOneMap === 'function') initDashOneMap();
                 if (typeof renderDashOneMapLayers === 'function') renderDashOneMapLayers();
+                if (typeof renderAdminRoadClosuresList === 'function') renderAdminRoadClosuresList();
                 [100, 300, 500, 800].forEach(delay => {
                     setTimeout(() => {
                         if (window.dashOneMap && typeof window.dashOneMap.invalidateSize === 'function') {
@@ -515,6 +515,7 @@ let dashLayerStates = {
                 }
                 if (typeof initDashOneMap === 'function') initDashOneMap();
                 if (typeof renderDashOneMapLayers === 'function') renderDashOneMapLayers();
+                if (typeof renderAdminRoadClosuresList === 'function') renderAdminRoadClosuresList();
                 if (typeof window.loadEvacuationMarkers === 'function') window.loadEvacuationMarkers();
 
                 // โหลดข้อมูลเข้าหน้ารายงานน้ำท่วมด้วย
@@ -688,597 +689,7 @@ let dashLayerStates = {
                 else el.classList.add('hidden');
             }
         }
-        // --- Relief Functions ---
-        function initReliefForm() {
-            // 1. สร้างตัวเลือกจำนวนสมาชิก 1-30
-            let opts = "";
-            for (let i = 1; i <= 30; i++) {
-                opts += `<option value="${i}">${i} คน</option>`;
-            }
-            const membersSelect = document.getElementById('rel_members');
-            if (membersSelect) membersSelect.innerHTML = opts;
-
-            // 2. สร้างตัวเลือกที่อยู่จากข้อมูลใน store
-            const relAddrSelect = document.getElementById('rel_address_select');
-            if (relAddrSelect && store.addresses && store.addresses.length > 0) {
-                const addrOpts = '<option value="" disabled selected>เลือกที่อยู่</option>' +
-                    store.addresses.map(a => `<option value="${a}">${a}</option>`).join('') +
-                    '<option value="other">อื่นๆ (ระบุเอง)</option>';
-                relAddrSelect.innerHTML = addrOpts;
-            }
-        }
-
-
-        // ==========================================
-        // ส่วนจัดการ Modal แจกถุงยังชีพ
-        // ==========================================
-
-        // ฟังก์ชันดึงประวัติที่อยู่จากชีท Address_Evacuation และประวัติถุงยังชีพ
-        function getReliefAddressList() {
-            const evacAddrs = (typeof store !== 'undefined' && store.addressEvac && Array.isArray(store.addressEvac))
-                ? store.addressEvac.map(row => row[0] ? row[0].toString().trim() : '').filter(a => a !== '')
-                : ((typeof store !== 'undefined' && store.addresses && Array.isArray(store.addresses)) ? store.addresses : []);
-
-            const reliefAddrs = (typeof store !== 'undefined' && store.reliefData && Array.isArray(store.reliefData))
-                ? store.reliefData.map(r => r[4] ? r[4].toString().trim() : '').filter(a => a !== '')
-                : [];
-
-            return [...new Set([...evacAddrs, ...reliefAddrs])].filter(a => a !== '').sort();
-        }
-
-        // 1. ระบบ AutoComplete สำหรับที่อยู่
-        window.handleReliefAddressSearch = function (val) {
-            const resultBox = document.getElementById('rel_address_results');
-            if (!resultBox) return;
-
-            if (!val || val.trim().length < 1) {
-                resultBox.classList.add('hidden');
-                return;
-            }
-
-            if (!window.reliefAddressList || window.reliefAddressList.length === 0) {
-                window.reliefAddressList = getReliefAddressList();
-            }
-
-            const searchVal = val.toLowerCase().trim();
-            const filtered = window.reliefAddressList.filter(a => a.toLowerCase().includes(searchVal)).slice(0, 15);
-
-            if (filtered.length > 0) {
-                let html = '';
-                filtered.forEach(addr => {
-                    html += `<div onclick='selectReliefAddress(${JSON.stringify(addr)})' class="p-3 hover:bg-amber-100 cursor-pointer border-b border-slate-100 text-sm text-slate-700 transition-colors flex items-center justify-between"><span class="font-medium">${addr}</span><i class="fas fa-chevron-right text-[10px] text-amber-400"></i></div>`;
-                });
-                resultBox.innerHTML = html;
-                resultBox.classList.remove('hidden');
-            } else {
-                resultBox.innerHTML = '<div class="p-3 text-xs text-amber-600 font-bold bg-amber-50 flex items-center"><i class="fas fa-info-circle mr-2"></i>ไม่พบที่อยู่นี้ในระบบ (สามารถพิมพ์ต่อเพื่อระบุเป็นที่อยู่ใหม่ได้)</div>';
-                resultBox.classList.remove('hidden');
-            }
-        };
-
-        // เมื่อคลิกเลือกที่อยู่จาก Dropdown
-        window.selectReliefAddress = function (addr) {
-            document.getElementById('rel_address_search').value = addr;
-            document.getElementById('rel_address_results').classList.add('hidden');
-
-            const sameAddrCheckbox = document.getElementById('rel_same_addr');
-            if (sameAddrCheckbox && sameAddrCheckbox.checked) {
-                if (typeof copyAddress === 'function') {
-                    copyAddress(true);
-                }
-            }
-        };
-
-        /// 2. ฟังก์ชันเปิด/ปิด Modal (อัปเดตให้โหลดประวัติที่อยู่และเคลียร์ฟอร์มทุกครั้งที่เปิด)
-        window.openReliefModal = function () {
-            // ==========================================
-            // 🌟 ส่วนที่เพิ่มใหม่: เคลียร์ฟอร์มก่อนเปิดใช้งาน
-            // ==========================================
-            const form = document.getElementById('reliefForm');
-            if (form) form.reset(); // ล้างข้อความทุกช่อง
-
-            const sameAddrCheckbox = document.getElementById('rel_same_addr');
-            if (sameAddrCheckbox) sameAddrCheckbox.checked = false; // เอาเครื่องหมายถูกออก
-
-            if (typeof copyAddress === 'function') {
-                copyAddress(false); // ปลดล็อคช่องที่อยู่ทะเบียนบ้านให้กลับมาพิมพ์ได้
-            }
-
-            const ocrInput = document.getElementById('ocr_id_card');
-            if (ocrInput) ocrInput.value = ''; // ล้างไฟล์รูปภาพ AI OCR เดิมออก
-
-            const resultBox = document.getElementById('rel_address_results');
-            if (resultBox) resultBox.classList.add('hidden'); // ซ่อนกล่องค้นหา (ถ้ามีค้างอยู่)
-
-
-            // ==========================================
-            // ส่วนเดิม: โหลดข้อมูลประวัติที่อยู่สำหรับ AutoComplete จากชีท Address_Evacuation และประวัติแจกถุงยังชีพ
-            // ==========================================
-            window.reliefAddressList = getReliefAddressList();
-
-            // สั่งเปิด Modal
-            document.getElementById('reliefModal').classList.remove('hidden');
-        };
-
-        window.closeReliefModal = function () {
-            // สั่งปิด Modal
-            document.getElementById('reliefModal').classList.add('hidden');
-
-            // ซ่อนกล่องค้นหาด้วย
-            const resultBox = document.getElementById('rel_address_results');
-            if (resultBox) resultBox.classList.add('hidden');
-        };
-
-        // (ลบฟังก์ชัน toggleRelOtherAddr ของเดิมทิ้งไปได้เลยครับ เพราะเรารวมช่องแล้ว)
-
-        // 3. ฟังก์ชันคัดลอกที่อยู่ (อัปเดตให้ดึงจากช่อง Search)
-        window.copyAddress = function (isChecked) {
-            if (isChecked) {
-                // ดึงค่าจากช่องค้นหา AutoComplete เลย
-                const address = document.getElementById('rel_address_search').value;
-                document.getElementById('rel_regis_address').value = address;
-            } else {
-                document.getElementById('rel_regis_address').value = '';
-            }
-        };
-
-        // 4. ฟังก์ชันบันทึกข้อมูล (อัปเดตให้ดึงข้อมูลส่ง Backend อย่างถูกต้อง)
-        // 4. ฟังก์ชันบันทึกข้อมูล (อัปเดตระบบตรวจสอบที่อยู่ซ้ำ)
-        window.saveReliefData = async function (e) {
-            e.preventDefault();
-
-            const address = document.getElementById('rel_address_search').value.trim();
-
-            if (!address) {
-                Swal.fire('แจ้งเตือน', 'กรุณาระบุที่อยู่ปัจจุบันให้ครบถ้วน', 'warning');
-                return;
-            }
-
-            // 🌟 ส่วนที่เพิ่มใหม่: ตรวจสอบประวัติว่าที่อยู่นี้เคยรับถุงยังชีพไปแล้วหรือยัง
-            if (store.reliefData && store.reliefData.length > 0) {
-                const isDuplicate = store.reliefData.some(r => {
-                    const existingAddress = r[4] ? r[4].toString().trim() : '';
-                    return existingAddress === address; // เทียบว่าที่อยู่ตรงกัน 100% หรือไม่
-                });
-
-                if (isDuplicate) {
-                    Swal.fire({
-                        title: 'ไม่สามารถบันทึกได้!',
-                        html: `ที่อยู่ <b>"${address}"</b> <br><span class="text-rose-500">มีการรับถุงยังชีพไปแล้ว</span>`,
-                        icon: 'error',
-                        confirmButtonColor: '#ef4444'
-                    });
-                    return; // หยุดการทำงาน ไม่ส่งข้อมูลไปบันทึก
-                }
-            }
-
-            // เตรียมแพ็กเกจข้อมูลเพื่อส่งไป Code.gs
-            const payload = {
-                action: 'saveRelief',
-                name: document.getElementById('rel_name').value,
-                status: document.getElementById('rel_status').value,
-                members: document.getElementById('rel_members').value,
-                address: address, // ใช้ค่าจากช่องค้นหา
-                regisAddress: document.getElementById('rel_regis_address').value,
-                period: currentPeriod
-            };
-
-            Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading() });
-
-            try {
-                if (typeof sbSaveRelief === 'function') {
-                    await sbSaveRelief(payload);
-                } else {
-                    throw new Error('Supabase Service ไม่พร้อมทำงาน');
-                }
-
-                Swal.fire({
-                    title: 'สำเร็จ',
-                    text: 'บันทึกข้อมูลแจกถุงยังชีพเรียบร้อย',
-                    icon: 'success',
-                    timer: 1500,
-                    showConfirmButton: false
-                });
-
-                // เคลียร์ฟอร์มให้สะอาด เผื่อกดเพิ่มคนต่อไป
-                e.target.reset();
-                document.getElementById('rel_address_search').value = '';
-
-                closeReliefModal();
-                await loadData(); // โหลดข้อมูลมาอัปเดตตารางและกราฟใหม่
-            } catch (err) {
-                Swal.fire('ผิดพลาด', err.message, 'error');
-            }
-        };
-
-
-        // 1. ฟังก์ชันคำนวณสต๊อก
-        window.renderStockDashboard = function () {
-            // ต้องมีข้อมูลจากชีทสต๊อก (ReliefStock) ถึงจะทำงาน
-            if (!store.reliefStock) return;
-
-            let totalIn = 0;
-            let totalOut = 0;
-
-            // วนลูปอ่านค่าจากแท็บ ReliefStock โดยตรงเท่านั้น
-            store.reliefStock.forEach(r => {
-                const type = r[1] ? r[1].toString().toLowerCase().trim() : '';
-                const amount = Number(r[2]) || 0;
-
-                // รองรับทั้งภาษาอังกฤษและภาษาไทย
-                if (type === 'in' || type === 'รับเข้า') totalIn += amount;
-                if (type === 'out' || type === 'จ่ายออก') totalOut += amount;
-            });
-
-            const remain = totalIn - totalOut;
-
-            // อัปเดตตัวเลขขึ้นหน้าจอ
-            if (document.getElementById('stockInCount')) document.getElementById('stockInCount').innerText = totalIn;
-            if (document.getElementById('stockOutCount')) document.getElementById('stockOutCount').innerText = totalOut;
-
-            const remainEl = document.getElementById('stockRemainCount');
-            if (remainEl) {
-                remainEl.innerText = remain;
-
-                // (Optional) เปลี่ยนสีตัวเลขตามยอดคงเหลือ เพื่อให้แอดมินสังเกตง่ายขึ้น
-                if (remain <= 0) {
-                    remainEl.className = "text-5xl font-black text-rose-500"; // สีแดง ถ้ายอดหมด
-                } else if (remain <= 50) {
-                    remainEl.className = "text-5xl font-black text-amber-500"; // สีส้ม ถ้ายอดเหลือน้อย
-                } else {
-                    remainEl.className = "text-5xl font-black text-emerald-500"; // สีเขียว ปกติ
-                }
-            }
-        };
-        // 3. ฟังก์ชันเปิด-ปิด Modal
-        function openStockModal() {
-            const modal = document.getElementById('stockModal');
-            if (!modal) return;
-
-            modal.classList.remove('hidden');
-
-            // --- จุดสำคัญ: ตรวจสอบข้อมูลก่อนวาดตาราง ---
-            if (store && store.reliefStock) {
-                renderStockTable();
-            } else {
-                // ถ้ายังไม่มีข้อมูลใน store ให้แสดงข้อความรอ
-                const tbody = document.getElementById('stockTableBody');
-                if (tbody) tbody.innerHTML = `<tr><td colspan="4" class="text-center py-6 text-slate-400 italic text-xs">ไม่พบข้อมูลในระบบ หรือ กำลังโหลด...</td></tr>`;
-
-                // ลองโหลดข้อมูลใหม่ (ถ้าคุณมีฟังก์ชัน loadData)
-                if (typeof loadData === "function") loadData();
-            }
-
-            setTimeout(() => {
-                modal.classList.remove('opacity-0');
-                modal.querySelector('.bg-white').classList.remove('scale-95');
-            }, 10);
-        }
-
-        function closeStockModal() {
-            const modal = document.getElementById('stockModal');
-            modal.classList.add('opacity-0');
-            modal.querySelector('.bg-white').classList.add('scale-95');
-            setTimeout(() => { modal.classList.add('hidden'); }, 300);
-        }
-
-
-
-
-        function changeMapLayer(type) {
-            const btnOsm = document.getElementById('btn-osm');
-            const btnSat = document.getElementById('btn-sat');
-
-            if (type === 'satellite') {
-                evacMap.removeLayer(osmLayer);
-                satelliteLayer.addTo(evacMap);
-
-                // สลับ Style ปุ่ม
-                btnSat.classList.add('bg-white', 'shadow-sm', 'text-blue-600');
-                btnSat.classList.remove('text-slate-500');
-                btnOsm.classList.remove('bg-white', 'shadow-sm', 'text-blue-600');
-                btnOsm.classList.add('text-slate-500');
-            } else {
-                evacMap.removeLayer(satelliteLayer);
-                osmLayer.addTo(evacMap);
-
-                // สลับ Style ปุ่ม
-                btnOsm.classList.add('bg-white', 'shadow-sm', 'text-blue-600');
-                btnOsm.classList.remove('text-slate-500');
-                btnSat.classList.remove('bg-white', 'shadow-sm', 'text-blue-600');
-                btnSat.classList.add('text-slate-500');
-            }
-        }
-
-        // 4. บันทึกข้อมูลสต๊อก
-        async function saveStock(e) {
-            e.preventDefault();
-            const btn = e.target.querySelector('button');
-            btn.innerText = "กำลังบันทึก..."; btn.disabled = true;
-
-            const payload = {
-                action: 'saveStock',
-                type: document.getElementById('stock_type').value,
-                amount: document.getElementById('stock_amount').value,
-                note: document.getElementById('stock_note').value,
-                user: currentUser,
-                period: currentPeriod
-            };
-
-            try {
-                if (typeof sbSaveStock === 'function') {
-                    await sbSaveStock(payload);
-                } else {
-                    throw new Error('Supabase Service ไม่พร้อมทำงาน');
-                }
-                Swal.fire('สำเร็จ', 'อัปเดตสต๊อกเรียบร้อยแล้ว', 'success');
-                document.getElementById('stockForm').reset();
-                closeStockModal();
-                loadData(); // โหลดข้อมูลใหม่เพื่อคำนวณยอด
-            } catch (err) { Swal.fire('ผิดพลาด', err.message || 'บันทึกไม่สำเร็จ', 'error'); }
-            btn.innerText = "บันทึกสต๊อก"; btn.disabled = false;
-        }
-        // ฟังก์ชันคำนวณยอดสต๊อก (อิงจากการกดปุ่ม จัดการสต๊อก เท่านั้น)
-        window.updateStockSummary = function () {
-            if (!store.stockData) return; // ต้องมีข้อมูลจากชีทสต๊อก
-
-            let totalIn = 0;
-            let totalOut = 0;
-
-            // วนลูปบวกลบเลขจากข้อมูลสต๊อก
-            store.stockData.forEach(r => {
-                // ⚠️ หมายเหตุ: ตรวจสอบ index ให้ตรงกับคอลัมน์ในชีทสต๊อกของคุณ 
-                // สมมติว่า r[1] คือประเภท (รับเข้า/จ่ายออก) และ r[2] คือจำนวน
-                const type = r[1] ? String(r[1]).trim() : '';
-                const amount = parseInt(r[2]) || 0;
-
-                // เช็คเงื่อนไขให้ครอบคลุมทั้งภาษาไทยและอังกฤษ (เผื่อ value ใน select เป็นแบบไหน)
-                if (type === 'รับเข้า' || type === 'IN') {
-                    totalIn += amount;
-                } else if (type === 'จ่ายออก' || type === 'OUT') {
-                    totalOut += amount;
-                }
-            });
-
-            const balance = totalIn - totalOut; // ยอดคงเหลือสุทธิ
-
-            // แสดงผลตัวเลขขึ้นการ์ดสรุปยอด (รบกวนเปลี่ยน ID ให้ตรงกับ ID ของการ์ดที่คุณใช้อยู่)
-            if (document.getElementById('cardTotalIn')) document.getElementById('cardTotalIn').innerText = totalIn;
-            if (document.getElementById('cardTotalOut')) document.getElementById('cardTotalOut').innerText = totalOut;
-
-            // การ์ดยอดคงเหลือ
-            const balanceEl = document.getElementById('cardStockBalance');
-            if (balanceEl) {
-                balanceEl.innerText = balance;
-                // เปลี่ยนสีตัวเลขถ้ายอดเหลือน้อย
-                if (balance <= 0) {
-                    balanceEl.className = "text-5xl font-black text-rose-500";
-                } else if (balance <= 50) {
-                    balanceEl.className = "text-5xl font-black text-amber-500";
-                } else {
-                    balanceEl.className = "text-5xl font-black text-emerald-500";
-                }
-            }
-        };
-        // 1. ฟังก์ชันวาดตารางประวัติสต็อก
-        function renderStockTable() {
-            const tbody = document.getElementById('stockTableBody');
-            if (!tbody) return;
-
-            // ตรวจสอบว่ามีข้อมูลใน store หรือไม่
-            if (!store || !store.reliefStock || store.reliefStock.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="4" class="text-center py-8 text-slate-300 italic text-xs">ยังไม่มีประวัติการทำรายการในขณะนี้</td></tr>`;
-                return;
-            }
-
-            // นำข้อมูลล่าสุดขึ้นก่อน
-            const displayData = [...store.reliefStock].reverse();
-
-            tbody.innerHTML = displayData.map(r => {
-                // ป้องกันค่า Error จากวันที่
-                let dateStr = "-";
-                let timeStr = "";
-                try {
-                    if (r[0]) {
-                        const d = new Date(r[0]);
-                        dateStr = d.toLocaleDateString('th-TH', { day: '2-digit', month: 'short' });
-                        timeStr = d.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
-                    }
-                } catch (e) { console.error("Date error", e); }
-
-                const type = (r[1] || '').toString().toLowerCase() === 'in' ?
-                    '<span class="text-blue-500 font-bold text-[10px]">รับเข้า</span>' :
-                    '<span class="text-rose-500 font-bold text-[10px]">จ่ายออก</span>';
-
-                const amount = Number(r[2] || 0).toLocaleString();
-                const note = r[3] || '-';
-
-                return `
-            <tr class="hover:bg-slate-50 transition-colors border-b border-slate-50">
-                <td class="p-2">
-                    <div class="font-bold text-slate-700 text-[11px]">${dateStr}</div>
-                    <div class="text-[8px] opacity-40">${timeStr}</div>
-                </td>
-                <td class="p-2 text-center">${type}</td>
-                <td class="p-2 text-right font-black ${r[1] === 'in' ? 'text-blue-600' : 'text-rose-600'} text-[11px]">
-                    ${amount}
-                </td>
-                <td class="p-2 text-right">
-                    <div class="text-[10px] text-slate-400 leading-tight truncate max-w-[70px] ml-auto" title="${note}">
-                        ${note}
-                    </div>
-                </td>
-            </tr>
-        `;
-            }).join('');
-        }
-
-
-        // --- กฎเกณฑ์การแยก Zone ตามชื่อถนน ---
-        const zoneRules = window.ZONE_RULES;
-
-        function renderReliefTable(data, isSearching = false) {
-            const tableBody = document.getElementById('reliefTableBody');
-            if (!tableBody) return;
-
-            // 1. กำหนดข้อมูลที่จะนำมาใช้นับสรุป (รวมทั้งหมด หรือ เฉพาะที่ค้นหา)
-            const summaryData = isSearching ? data : (store.reliefData || []);
-
-            // อัปเดตยอดรวมทั้งหมด
-            if (document.getElementById('totalReliefCount')) {
-                document.getElementById('totalReliefCount').innerText = summaryData.length;
-            }
-
-            // 2. ตัวแปรเก็บจำนวนของแต่ละ Zone
-            let counts = { zone1: 0, zone2: 0, zone3: 0, zone4: 0, zone5: 0 };
-
-            // 3. วนลูปเช็คที่อยู่ (สมมติว่าที่อยู่เก็บในช่อง r[4])
-            summaryData.forEach(r => {
-                const address = r[4] ? r[4].toString() : '';
-
-                // เรียกใช้ฟังก์ชันวิเคราะห์โซนแบบแม่นยำ (ป้องกันคำซ้อนทับกัน)
-                const exactZone = window.getExactZoneForAddress(address);
-
-                // นำผลลัพธ์ (เช่น 'zone 1') มาตัดช่องว่างออกเป็น 'zone1' เพื่อบวกเลขเข้าตัวแปร counts ให้ตรงจุด
-                const zoneKey = exactZone.replace(' ', '');
-
-                if (counts[zoneKey] !== undefined) {
-                    counts[zoneKey]++;
-                }
-            });
-
-            // 4. แสดงผลตัวเลขขึ้นการ์ด
-            if (document.getElementById('zone1Count')) document.getElementById('zone1Count').innerText = counts.zone1;
-            if (document.getElementById('zone2Count')) document.getElementById('zone2Count').innerText = counts.zone2;
-            if (document.getElementById('zone3Count')) document.getElementById('zone3Count').innerText = counts.zone3;
-            if (document.getElementById('zone4Count')) document.getElementById('zone4Count').innerText = counts.zone4;
-            if (document.getElementById('zone5Count')) document.getElementById('zone5Count').innerText = counts.zone5;
-
-            // --- ส่วนตารางด้านล่าง ---
-            if (!data || data.length === 0) {
-                tableBody.innerHTML = `<tr><td colspan="5" class="text-center py-20 text-slate-400 font-bold"><i class="fas fa-search-minus text-3xl mb-3 block opacity-20"></i>ไม่พบข้อมูล</td></tr>`;
-                return;
-            }
-
-            let displayData = isSearching ? data : [...data].reverse();
-            window.currentReliefDisplayData = displayData;
-
-            tableBody.innerHTML = displayData.map((r, index) => {
-                const timestamp = r[0] ? new Date(r[0]).toLocaleString('th-TH', { day: '2-digit', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-';
-                const statusClass = r[2] === 'เจ้าบ้าน' ? 'bg-green-50 text-green-600 border-green-100' : 'bg-amber-50 text-amber-600 border-amber-100';
-
-                return `
-            <tr class="hover:bg-slate-50 transition-colors">
-                <td class="p-5 text-center font-bold text-slate-300">
-                    ${isSearching ? '•' : (displayData.length - index)}
-                </td>
-                <td class="p-5">
-                    <div class="text-[9px] text-slate-400 font-bold mb-1"><i class="far fa-clock mr-1"></i>${timestamp}</div>
-                    <div class="font-black text-slate-700 text-sm">${r[1] || 'ไม่ระบุชื่อ'}</div>
-                </td>
-                <td class="p-5 text-slate-600 font-medium leading-relaxed">${r[4] || '-'}</td>
-                <td class="p-5 text-center">
-                    <span class="bg-slate-100 text-slate-600 px-3 py-1 rounded-xl font-black">${r[3] || 0}</span>
-                </td>
-                <td class="p-5 text-center">
-                    <span class="px-3 py-1 rounded-full font-black text-[9px] border ${statusClass} shadow-sm uppercase">
-                        ${r[2] || 'ปกติ'}
-                    </span>
-                </td>
-            </tr>
-        `;
-            }).join('');
-        }
-        async function loadUsers() {
-            const tbody = document.getElementById('userTableBody');
-            tbody.innerHTML = `<tr><td colspan="3" class="text-center py-10"><i class="fas fa-spinner fa-spin text-slate-300 text-2xl"></i></td></tr>`;
-
-            try {
-                const users = typeof sbGetUsers === 'function' ? await sbGetUsers() : [];
-                if (users && users.length > 0) {
-                    tbody.innerHTML = users.map((u) => `
-                <tr class="hover:bg-slate-50 transition-colors">
-                    <td class="p-4 font-bold text-slate-700">${u[0]}</td>
-                    <td class="p-4 text-center">
-                        <span class="px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${u[1] === 'admin' ? 'bg-indigo-50 text-indigo-600' : u[1] === 'flood_report' ? 'bg-blue-50 text-blue-600' : 'bg-slate-100 text-slate-500'}">${u[1]}</span>
-                    </td>
-                    <td class="p-4 text-center">
-                        <button onclick="deleteUser('${u[0]}')" class="w-8 h-8 rounded-full bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-all shadow-sm"><i class="fas fa-trash-alt text-xs"></i></button>
-                    </td>
-                </tr>
-            `).join('');
-                } else {
-                    tbody.innerHTML = `<tr><td colspan="3" class="text-center py-6 text-slate-400 font-bold">ยังไม่มีรายชื่อผู้ใช้งาน</td></tr>`;
-                }
-            } catch (err) {
-                console.error(err);
-                tbody.innerHTML = `<tr><td colspan="3" class="text-center text-red-400 py-4">ดึงข้อมูลล้มเหลว</td></tr>`;
-            }
-        }
-
-
-        /**
-         * ฟังก์ชันสำหรับกรองข้อมูลในตารางตาม Zone
-         * @param {string} zoneKey - ชื่อโซน (zone1, zone2, ...)
-         */
-        function filterByZone(zoneKey) {
-            if (!store.reliefData) return;
-
-            window.currentZoneFilter = zoneKey;
-
-            const searchInput = document.getElementById('reliefSearchInput');
-            if (searchInput) searchInput.value = '';
-
-            document.getElementById('clearFilterArea').classList.remove('hidden');
-
-            // 🌟 เปลี่ยนเงื่อนไขการกรองมาใช้ getExactZoneForAddress
-            const filteredData = store.reliefData.filter(r => {
-                const address = r[4] ? r[4].toString() : '';
-                return window.getExactZoneForAddress(address) === zoneKey;
-            });
-
-            document.querySelectorAll('.zone-filter-btn').forEach(btn => {
-                btn.classList.replace('bg-blue-50', 'bg-white');
-                btn.style.opacity = "0.5";
-                btn.classList.remove('ring-2');
-            });
-
-            const activeBtn = document.getElementById(`btn-${zoneKey}`);
-            if (activeBtn) {
-                activeBtn.style.opacity = "1";
-                activeBtn.classList.add('ring-2');
-            }
-
-            renderReliefTable(filteredData, true);
-            console.log(`Filtering by ${zoneKey}: พบ ${filteredData.length} รายการ`);
-        }
-
-        /**
-         * ฟังก์ชันล้างตัวกรอง กลับไปแสดงข้อมูลทั้งหมด
-         */
-        function clearZoneFilter() {
-            // 1. รีเซ็ตค่า Global เพื่อให้หัวกระดาษพิมพ์กลับไปแสดงคำว่า "ข้อมูลทั้งหมด"
-            window.currentZoneFilter = '';
-
-            // 2. ซ่อนปุ่มล้างตัวกรอง
-            document.getElementById('clearFilterArea').classList.add('hidden');
-
-            // 3. เคลียร์ข้อความในช่องค้นหา (เพื่อไม่ให้เงื่อนไขค้นหาเก่าค้างอยู่)
-            const searchInput = document.getElementById('reliefSearchInput');
-            if (searchInput) searchInput.value = '';
-
-            // 4. รีเซ็ตสไตล์ปุ่ม Zone กลับเป็นค่าเริ่มต้น
-            document.querySelectorAll('.zone-filter-btn').forEach(btn => {
-                btn.style.opacity = "1";
-                btn.classList.remove('ring-2');
-            });
-
-            // 5. แสดงข้อมูลทั้งหมดใหม่
-            if (store.reliefData) {
-                renderReliefTable(store.reliefData);
-                console.log(`Cleared filters: แสดงข้อมูลทั้งหมด ${store.reliefData.length} รายการ`);
-            }
-        }
+        // [โมดูลย่อย] การจัดการถุงยังชีพ สต๊อกสินค้า และการกรองโซน ย้ายไปที่ js/modules/relief.js และ js/modules/user-mgmt.js เรียบร้อยแล้ว
         // ==========================================
         // ระบบ AI OCR (สแกนบัตรประชาชน)
         // ==========================================
@@ -1459,46 +870,7 @@ let dashLayerStates = {
                 });
             }
         }
-        async function saveUser(e) {
-            e.preventDefault();
-            const btn = e.target.querySelector('button');
-            btn.innerText = "กำลังบันทึก..."; btn.disabled = true;
-
-            const payload = {
-                action: 'saveUser',
-                targetUser: document.getElementById('manage_username').value.trim(),
-                targetRole: document.getElementById('manage_role').value
-            };
-
-            try {
-                if (typeof sbSaveUser === 'function') {
-                    await sbSaveUser(payload.targetUser, payload.targetRole);
-                } else {
-                    throw new Error('Supabase Service ไม่พร้อมทำงาน');
-                }
-                Swal.fire('สำเร็จ', 'บันทึกสิทธิ์ผู้ใช้งานแล้ว', 'success');
-                document.getElementById('userForm').reset();
-                loadUsers(); // โหลดตารางใหม่
-            } catch (err) { Swal.fire('ผิดพลาด', err.message || 'บันทึกไม่สำเร็จ', 'error'); }
-            btn.innerText = "บันทึกข้อมูล"; btn.disabled = false;
-        }
-
-        async function deleteUser(username) {
-            if (username === currentUser) return Swal.fire('ปฏิเสธ', 'ไม่สามารถลบบัญชีตัวเองขณะใช้งานได้', 'warning');
-
-            const confirm = await Swal.fire({ title: 'ยืนยันการลบ?', text: `ต้องการลบผู้ใช้ ${username} ใช่หรือไม่`, icon: 'warning', showCancelButton: true, confirmButtonText: 'ลบข้อมูล', confirmButtonColor: '#ef4444' });
-            if (!confirm.isConfirmed) return;
-
-            try {
-                if (typeof sbDeleteUser === 'function') {
-                    await sbDeleteUser(username);
-                } else {
-                    throw new Error('Supabase Service ไม่พร้อมทำงาน');
-                }
-                Swal.fire('ลบแล้ว', 'ลบผู้ใช้งานสำเร็จ', 'success');
-                loadUsers();
-            } catch (err) { Swal.fire('ผิดพลาด', err.message || 'ลบไม่สำเร็จ', 'error'); }
-        }
+        // [โมดูลย่อย] ระบบจัดการผู้ใช้ (saveUser, deleteUser) ย้ายไปที่ js/modules/user-mgmt.js เรียบร้อยแล้ว
         function selectTrend(value, btn) {
             // เก็บค่าลงใน Input Hidden เพื่อส่งไปพร้อมฟอร์ม
             document.getElementById('water_trend').value = value;
@@ -2058,13 +1430,24 @@ let dashLayerStates = {
             setTimeout(() => { if (dashOneMap) dashOneMap.invalidateSize(); }, 200);
             setTimeout(() => { if (dashOneMap) dashOneMap.invalidateSize(); }, 500);
 
-            // 3. Feature Groups สำหรับ 6 เลเยอร์
+            // 🏛️ ตีกรอบขอบเขตเทศบาลตำบลตันหยงมัส & พื้นที่นอกเขตเป็นสีเทา (Inverted Mask)
+            if (typeof window.addMunicipalityMaskToMap === 'function') {
+                window.addMunicipalityMaskToMap(dashOneMap, {
+                    fillColor: '#0f172a',
+                    fillOpacity: 0.45,
+                    borderColor: '#334155',
+                    outlineColor: '#2563eb'
+                });
+            }
+
+            // 3. Feature Groups สำหรับ 7 เลเยอร์
             dashLayers.water = L.layerGroup().addTo(dashOneMap);
             dashLayers.shelter = L.layerGroup().addTo(dashOneMap);
             dashLayers.relief = L.layerGroup().addTo(dashOneMap);
             dashLayers.evac = L.layerGroup().addTo(dashOneMap);
             dashLayers.flood = L.layerGroup().addTo(dashOneMap);
             dashLayers.polygon = L.layerGroup().addTo(dashOneMap);
+            dashLayers.road = L.layerGroup().addTo(dashOneMap);
 
             dashDrawnItems = new L.FeatureGroup().addTo(dashOneMap);
 
@@ -2235,7 +1618,8 @@ let dashLayerStates = {
                 relief: { id: 'btnLayerRelief', color: 'bg-amber-500' },
                 evac: { id: 'btnLayerEvac', color: 'bg-purple-600' },
                 flood: { id: 'btnLayerFlood', color: 'bg-rose-600' },
-                polygon: { id: 'btnLayerPolygon', color: 'bg-red-700' }
+                polygon: { id: 'btnLayerPolygon', color: 'bg-red-700' },
+                road: { id: 'btnLayerRoad', color: 'bg-amber-600' }
             };
 
             const target = btnIdMap[layerKey];
@@ -2390,11 +1774,50 @@ let dashLayerStates = {
                         }
                     }
                 });
+
+                // เพิ่มหมุดรายงานระดับน้ำจากประชาชน (Citizen Crowdsourced)
+                if (store.citizenWaterReports && store.citizenWaterReports.length > 0) {
+                    store.citizenWaterReports.forEach(cw => {
+                        const cLat = parseFloat(cw.lat);
+                        const cLng = parseFloat(cw.lng);
+                        if (isNaN(cLat) || isNaN(cLng) || (cLat === 0 && cLng === 0)) return;
+
+                        const cIcon = L.divIcon({
+                            className: 'custom-one-cwater-marker bg-transparent border-0',
+                            html: `
+                                <div class="relative flex flex-col items-center">
+                                    <div class="bg-blue-600 text-white w-7 h-7 rounded-full border-2 border-white shadow-md flex items-center justify-center text-[10px] animate-pulse">
+                                        <i class="fas fa-droplet"></i>
+                                    </div>
+                                    <span class="bg-blue-950 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full shadow-md mt-0.5 whitespace-nowrap border border-blue-400/30">${cw.levelCmRange || ''}</span>
+                                </div>
+                            `,
+                            iconSize: [32, 42],
+                            iconAnchor: [16, 42],
+                            popupAnchor: [0, -42]
+                        });
+
+                        const cPopup = `
+                            <div class="font-sans p-2 min-w-[190px]">
+                                <div class="flex items-center justify-between border-b pb-1 mb-1.5">
+                                    <span class="font-black text-slate-800 text-xs"><i class="fas fa-droplet text-blue-500 mr-1"></i>${cw.locationName || 'รายงานระดับน้ำ'}</span>
+                                    <span class="text-[9px] font-bold text-white bg-blue-600 px-2 py-0.5 rounded-full">ประชาชน</span>
+                                </div>
+                                <p class="text-xs text-slate-600 mb-1">ระดับน้ำ: <b class="text-blue-600 font-bold">${cw.levelCategory}</b> (แนวโน้ม: ${cw.trend || 'ทรงตัว'})</p>
+                                ${cw.note ? `<p class="text-[11px] text-slate-500 bg-slate-50 p-1.5 rounded border border-slate-100 my-1">${cw.note}</p>` : ''}
+                                <p class="text-[10px] text-slate-400"><i class="far fa-user mr-1"></i>${cw.reporterName || 'ประชาชน'} ${cw.reporterPhone ? `(${cw.reporterPhone})` : ''} | ${cw.createdAt ? new Date(cw.createdAt).toLocaleDateString('th-TH') : '-'}</p>
+                            </div>
+                        `;
+
+                        const cm = L.marker([cLat, cLng], { icon: cIcon }).bindPopup(cPopup);
+                        dashLayers.water.addLayer(cm);
+                    });
+                }
             }
 
             // 2. เลเยอร์ศูนย์พักพิง (สีชมพู Pink Theme + ป้ายใต้หมุด)
             const defaultShelterPoints = [
-                { name: 'ศูนย์เทศบาลตำบลตันหยงมัส/บาลูกา', lat: 6.294334921438347, lng: 101.72202946829752, cap: 80 },
+                { name: 'ศูนย์เทศบาลตำบลตันหยงมัส', lat: 6.2942468005304475, lng: 101.72202727872536, cap: 80 },
                 { name: 'ศูนย์มัสยิดตันหยงมัส', lat: 6.29778118011179, lng: 101.72990501280613, cap: 80 },
                 { name: 'ศูนย์โรงเรียนบ้านเขาพระ', lat: 6.298263196460374, lng: 101.710772727857, cap: 60 }
             ];
@@ -2883,7 +2306,560 @@ let dashLayerStates = {
                     }
                 });
             }
+            // 7. เลเยอร์เส้นทางปิด / ไม่สามารถสัญจรได้ (Road Closures)
+            const roadClosures = store.roadClosures || [];
+            const roadCountBadge = document.getElementById('dash_roadCountBadge');
+            if (roadCountBadge) {
+                roadCountBadge.innerText = roadClosures.length;
+            }
+
+            if (roadClosures.length > 0 && dashLayers.road) {
+                roadClosures.forEach(rc => {
+                    const lat = parseFloat(rc.lat);
+                    const lng = parseFloat(rc.lng);
+                    if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) return;
+
+                    const isFullyClosed = (rc.status || '').includes('ทุกชนิด') || (rc.status || '').includes('ปิดการจราจร');
+                    const markerBg = isFullyClosed ? 'bg-rose-600' : 'bg-amber-600';
+                    const badgeText = rc.status || 'ปิดสัญจร';
+
+                    const icon = L.divIcon({
+                        className: 'custom-one-road-marker bg-transparent border-0',
+                        html: `
+                            <div class="relative flex flex-col items-center">
+                                <div class="${markerBg} text-white w-9 h-9 rounded-2xl border-2 border-white shadow-lg flex items-center justify-center text-sm font-black animate-pulse">
+                                    <i class="fas fa-road-barrier"></i>
+                                </div>
+                                <span class="bg-slate-900 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-md mt-0.5 whitespace-nowrap border border-white/20">${badgeText}</span>
+                            </div>
+                        `,
+                        iconSize: [42, 54],
+                        iconAnchor: [21, 54],
+                        popupAnchor: [0, -54]
+                    });
+
+                    let imgHtml = '';
+                    if (rc.image) {
+                        imgHtml = `
+                            <div class="mt-2 rounded-xl overflow-hidden border border-slate-200">
+                                <img src="${rc.image}" class="w-full h-28 object-cover cursor-pointer hover:opacity-90 transition" onclick="zoomImageModal('${rc.image}', '${rc.title}')" title="คลิกเพื่อดูรูปขนาดใหญ่">
+                            </div>
+                        `;
+                    }
+
+                    const popup = `
+                        <div class="font-sans p-2 min-w-[220px] max-w-[280px]">
+                            <div class="flex items-center justify-between border-b pb-1.5 mb-2">
+                                <span class="font-black text-slate-800 text-xs truncate mr-2"><i class="fas fa-road-barrier text-amber-600 mr-1"></i>${rc.title}</span>
+                                <span class="text-[9px] font-bold text-white ${markerBg} px-2 py-0.5 rounded-full shrink-0">${rc.status || 'ปิดสัญจร'}</span>
+                            </div>
+                            ${rc.detail ? `<p class="text-xs text-slate-600 mb-1.5 leading-relaxed">${rc.detail}</p>` : ''}
+                            ${rc.waterDepth ? `<p class="text-[11px] text-rose-600 font-bold mb-1"><i class="fas fa-water mr-1"></i>ระดับน้ำบนผิวทาง: ${rc.waterDepth}</p>` : ''}
+                            ${rc.detour ? `<p class="text-[11px] text-emerald-700 bg-emerald-50 p-1.5 rounded-lg border border-emerald-100 font-medium mb-1"><i class="fas fa-route mr-1"></i>ทางเลี่ยง: ${rc.detour}</p>` : ''}
+                            ${imgHtml}
+                            <div class="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400">
+                                <span><i class="far fa-user mr-1"></i>${rc.reporter || 'เจ้าหน้าที่'}</span>
+                                <a href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}" target="_blank" class="text-blue-600 font-bold hover:underline flex items-center gap-1">
+                                    <i class="fas fa-location-arrow"></i> นำทาง
+                                </a>
+                            </div>
+                        </div>
+                    `;
+
+                    const m = L.marker([lat, lng], { icon: icon }).bindPopup(popup);
+                    dashLayers.road.addLayer(m);
+                });
+            }
         }
+
+        // ==========================================
+        // 🚧 ระบบจัดการเส้นทางปิด / ไม่สามารถสัญจรได้ (Road Closures Management)
+        // ==========================================
+
+        window.zoomImageModal = function (src, title) {
+            Swal.fire({
+                title: `<span class="text-slate-800 font-bold text-base">${title || 'รูปภาพสภาพเส้นทาง'}</span>`,
+                imageUrl: src,
+                imageAlt: title,
+                imageWidth: '100%',
+                imageHeight: 'auto',
+                showConfirmButton: true,
+                confirmButtonText: 'ปิดหน้าต่าง',
+                confirmButtonColor: '#64748b',
+                customClass: {
+                    popup: 'rounded-[2rem] max-w-lg p-4',
+                    image: 'rounded-2xl max-h-[70vh] object-contain shadow-sm'
+                }
+            });
+        };
+
+        window.panOneMapToRoadClosure = function (lat, lng, title) {
+            if (!dashOneMap) {
+                initDashOneMap();
+            }
+            const mapCard = document.getElementById('dashOneMapCard');
+            if (mapCard) {
+                mapCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            setTimeout(() => {
+                if (dashOneMap) {
+                    dashOneMap.setView([lat, lng], 16, { animate: true });
+                }
+            }, 300);
+        };
+
+        function renderAdminRoadClosuresList() {
+            const listEl = document.getElementById('dashRoadClosuresList');
+            const badgeEl = document.getElementById('dash_roadSummaryBadge');
+            const badgeOneMap = document.getElementById('dash_roadCountBadge');
+            if (!listEl) return;
+
+            const items = store.roadClosures || [];
+
+            if (badgeOneMap) {
+                badgeOneMap.innerText = items.length;
+            }
+
+            if (badgeEl) {
+                if (items.length > 0) {
+                    badgeEl.className = "text-[10px] font-black px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-700 border border-rose-200";
+                    badgeEl.innerText = `ปิดสัญจร ${items.length} จุด`;
+                } else {
+                    badgeEl.className = "text-[10px] font-black px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200";
+                    badgeEl.innerText = "เปิดสัญจรปกติทุกสาย";
+                }
+            }
+
+            if (items.length === 0) {
+                listEl.innerHTML = `
+                    <div class="col-span-full py-10 text-center bg-slate-50/80 rounded-2xl border border-dashed border-slate-200">
+                        <div class="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center text-xl mx-auto mb-3">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <h4 class="text-sm font-bold text-slate-700">ไม่มีรายงานเส้นทางปิดในขณะนี้</h4>
+                        <p class="text-xs text-slate-400 mt-1">ถนนและเส้นทางสัญจรในเขตเทศบาลตำบลตันหยงมัสสามารถใช้งานได้ตามปกติ</p>
+                        <button onclick="openAddRoadClosureModal()" class="mt-4 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-rose-600 text-white font-bold text-xs transition shadow-sm hover:opacity-95 active:scale-95">
+                            <i class="fas fa-plus mr-1"></i> รายงานเส้นทางปิดใหม่
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+
+            listEl.innerHTML = items.map(item => {
+                const isFullyClosed = (item.status || '').includes('ทุกชนิด') || (item.status || '').includes('ปิดการจราจร');
+                const badgeColor = isFullyClosed ? 'bg-rose-100 text-rose-700 border-rose-200' : 'bg-amber-100 text-amber-700 border-amber-200';
+                const iconColor = isFullyClosed ? 'text-rose-600 bg-rose-50' : 'text-amber-600 bg-amber-50';
+
+                const lat = parseFloat(item.lat) || 0;
+                const lng = parseFloat(item.lng) || 0;
+                const hasCoords = lat !== 0 && lng !== 0;
+
+                return `
+                    <div class="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group">
+                        <div>
+                            <!-- ส่วนหัวการ์ด -->
+                            <div class="flex items-start justify-between gap-2 mb-2">
+                                <div class="flex items-center gap-2 min-w-0">
+                                    <div class="w-8 h-8 rounded-xl ${iconColor} flex items-center justify-center text-xs shrink-0 font-bold">
+                                        <i class="fas fa-road-barrier"></i>
+                                    </div>
+                                    <h4 class="font-bold text-slate-800 text-sm truncate" title="${item.title}">${item.title}</h4>
+                                </div>
+                                <span class="text-[9px] font-bold px-2 py-0.5 rounded-full border ${badgeColor} whitespace-nowrap shrink-0">
+                                    ${item.status || 'ปิดสัญจร'}
+                                </span>
+                            </div>
+
+                            <!-- รูปถ่ายขนาดเล็ก (ถ้ามี) -->
+                            ${item.image ? `
+                                <div class="my-2.5 rounded-xl overflow-hidden border border-slate-200/80 relative group/img cursor-pointer" onclick="zoomImageModal('${item.image}', '${item.title}')">
+                                    <img src="${item.image}" class="w-full h-32 object-cover transition duration-300 group-hover/img:scale-105" alt="${item.title}">
+                                    <div class="absolute inset-0 bg-black/20 opacity-0 group-hover/img:opacity-100 transition flex items-center justify-center text-white text-xs font-bold gap-1">
+                                        <i class="fas fa-search-plus"></i> แตะดูรูปใหญ่
+                                    </div>
+                                </div>
+                            ` : ''}
+
+                            <!-- รายละเอียด -->
+                            ${item.detail ? `<p class="text-xs text-slate-600 mb-2 leading-relaxed bg-slate-50 p-2.5 rounded-xl">${item.detail}</p>` : ''}
+
+                            <div class="space-y-1.5 text-xs mb-3">
+                                ${item.waterDepth ? `
+                                    <div class="flex items-center gap-1.5 text-rose-600 font-bold text-[11px]">
+                                        <i class="fas fa-water text-xs"></i>
+                                        <span>ระดับน้ำบนผิวทาง: ${item.waterDepth}</span>
+                                    </div>
+                                ` : ''}
+                                ${item.detour ? `
+                                    <div class="flex items-start gap-1.5 text-emerald-700 bg-emerald-50/60 p-2 rounded-xl border border-emerald-100 text-[11px]">
+                                        <i class="fas fa-route text-xs mt-0.5 shrink-0"></i>
+                                        <span><b>ทางเลี่ยง:</b> ${item.detour}</span>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+
+                        <!-- Footer ปุ่มจัดการและการนำทาง -->
+                        <div class="pt-3 border-t border-slate-100 flex items-center justify-between text-xs mt-2">
+                            <div class="text-[10px] text-slate-400">
+                                <span><i class="far fa-user mr-1"></i>${item.reporter || 'เจ้าหน้าที่'}</span>
+                                ${item.createdAt ? `<span class="block text-[9px]">${new Date(item.createdAt).toLocaleDateString('th-TH')}</span>` : ''}
+                            </div>
+
+                            <div class="flex items-center gap-1.5">
+                                ${hasCoords ? `
+                                    <button onclick="panOneMapToRoadClosure(${lat}, ${lng}, '${item.title}')" class="px-2.5 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 text-xs font-bold transition flex items-center gap-1" title="ซูมไปยังจุดนี้บน One Map">
+                                        <i class="fas fa-location-crosshairs text-[10px]"></i> แผนที่
+                                    </button>
+                                ` : ''}
+                                <button onclick="deleteRoadClosure('${item.id}')" class="px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-bold transition flex items-center gap-1" title="ลบรายงาน">
+                                    <i class="fas fa-trash-alt text-[10px]"></i> ลบ
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        window._tempRoadClosureDraft = null;
+        window._tempRoadClosureBase64 = '';
+
+        window.handleRoadFileChange = async function(input) {
+            if (!input.files || !input.files[0]) return;
+            const file = input.files[0];
+            try {
+                const compressed = await compressImage(file, 640, 480, 0.7);
+                window._tempRoadClosureBase64 = compressed;
+                const prev = document.getElementById('swal_road_prev');
+                const prevImg = document.getElementById('swal_road_prev_img');
+                if (prev && prevImg) {
+                    prevImg.src = compressed;
+                    prev.classList.remove('hidden');
+                }
+            } catch (e) {
+                console.warn("รูปภาพบีบอัดไม่สำเร็จ", e);
+            }
+        };
+
+        window.removeRoadFilePreview = function() {
+            window._tempRoadClosureBase64 = '';
+            const fileInput = document.getElementById('swal_road_file');
+            if (fileInput) fileInput.value = '';
+            const prev = document.getElementById('swal_road_prev');
+            if (prev) prev.classList.add('hidden');
+        };
+
+        window.getGpsForRoadClosure = function() {
+            const latEl = document.getElementById('swal_road_lat');
+            const lngEl = document.getElementById('swal_road_lng');
+            if (!navigator.geolocation) {
+                Swal.showValidationMessage('อุปกรณ์ไม่รองรับการดึงพิกัด GPS');
+                return;
+            }
+            if (latEl) latEl.value = 'กำลังดึง GPS...';
+            if (lngEl) lngEl.value = 'กำลังดึง GPS...';
+
+            navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                    const lat = pos.coords.latitude;
+                    const lng = pos.coords.longitude;
+                    if (typeof window.isInsideMunicipality === 'function' && !window.isInsideMunicipality(lat, lng)) {
+                        alert('⚠️ พิกัด GPS ของท่านอยู่นอกเขตเทศบาลตำบลตันหยงมัส กรุณาปักหมุดเลือกตำแหน่งภายในเขตเทศบาล');
+                        if (latEl) latEl.value = '6.294450';
+                        if (lngEl) lngEl.value = '101.723620';
+                        return;
+                    }
+                    if (latEl) latEl.value = lat.toFixed(6);
+                    if (lngEl) lngEl.value = lng.toFixed(6);
+                },
+                (err) => {
+                    if (latEl) latEl.value = '6.294450';
+                    if (lngEl) lngEl.value = '101.723620';
+                    alert('ไม่สามารถดึงพิกัด GPS ได้ กรุณาเปิด Location บนอุปกรณ์');
+                },
+                { enableHighAccuracy: true, timeout: 8000 }
+            );
+        };
+
+        window.pickPointOnOneMap = function() {
+            // บันทึกฟอร์มที่กรอกค้างไว้
+            const titleEl = document.getElementById('swal_road_title');
+            const statusEl = document.getElementById('swal_road_status');
+            const depthEl = document.getElementById('swal_road_depth');
+            const detourEl = document.getElementById('swal_road_detour');
+            const detailEl = document.getElementById('swal_road_detail');
+
+            window._tempRoadClosureDraft = {
+                title: titleEl ? titleEl.value : '',
+                status: statusEl ? statusEl.value : 'ปิดการจราจรทุกชนิด (รถทุกชนิดผ่านไม่ได้)',
+                depth: depthEl ? depthEl.value : '',
+                detour: detourEl ? detourEl.value : '',
+                detail: detailEl ? detailEl.value : '',
+                image: window._tempRoadClosureBase64 || ''
+            };
+
+            Swal.close();
+
+            // เลื่อนไปที่ OneMap
+            const mapCard = document.getElementById('dashOneMapCard');
+            if (mapCard) {
+                mapCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+
+            if (!dashOneMap) initDashOneMap();
+
+            // แสดง Toast แนะนำ
+            const toast = Swal.mixin({
+                toast: true,
+                position: 'top',
+                showConfirmButton: false,
+                timer: 6000,
+                timerProgressBar: true
+            });
+            toast.fire({
+                icon: 'info',
+                title: '📍 กรุณาคลิกเลือกจุดบนแผนที่ One Map'
+            });
+
+            // รอคลิก 1 ครั้งบน OneMap
+            dashOneMap.once('click', function(e) {
+                const pickedLat = e.latlng.lat.toFixed(6);
+                const pickedLng = e.latlng.lng.toFixed(6);
+
+                if (typeof window.isInsideMunicipality === 'function' && !window.isInsideMunicipality(pickedLat, pickedLng)) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: '⚠️ อยู่นอกเขตเทศบาล',
+                        text: 'ตำแหน่งที่ท่านเลือกอยู่นอกเขตเทศบาลตำบลตันหยงมัส กรุณาคลิกเลือกจุดภายในเขตเทศบาลเท่านั้น',
+                        confirmButtonText: 'เลือกใหม่',
+                        confirmButtonColor: '#d97706',
+                        customClass: { popup: 'rounded-[2rem]' }
+                    }).then(() => {
+                        window.pickPointOnOneMap();
+                    });
+                    return;
+                }
+
+                // ปักหมุดชั่วคราว
+                const tempPin = L.circleMarker([e.latlng.lat, e.latlng.lng], {
+                    radius: 10,
+                    color: '#ea580c',
+                    fillColor: '#f97316',
+                    fillOpacity: 0.8
+                }).addTo(dashOneMap);
+                setTimeout(() => { if (dashOneMap) dashOneMap.removeLayer(tempPin); }, 15000);
+
+                // เปิด Modal คืนพร้อมพิกัด
+                openAddRoadClosureModal({
+                    ...window._tempRoadClosureDraft,
+                    lat: pickedLat,
+                    lng: pickedLng
+                });
+            });
+        };
+
+        function openAddRoadClosureModal(initialData = null) {
+            const data = initialData || {};
+            const initialLat = data.lat || '6.294450';
+            const initialLng = data.lng || '101.723620';
+            window._tempRoadClosureBase64 = data.image || '';
+
+            Swal.fire({
+                title: '<div class="text-amber-600 font-black text-lg flex items-center justify-center gap-2"><i class="fas fa-road-barrier"></i> รายงานเส้นทางปิด / ไม่สามารถสัญจรได้</div>',
+                html: `
+                    <div class="text-left space-y-3 mt-2 font-prompt text-xs">
+                        <div>
+                            <label class="font-bold text-slate-700 block mb-1">ชื่อเส้นทาง / ถนน / ช่วงบริเวณ *</label>
+                            <input type="text" id="swal_road_title" value="${data.title || ''}" class="w-full p-2.5 border border-slate-200 rounded-xl outline-none text-xs font-bold focus:border-amber-500 bg-slate-50" placeholder="เช่น ถนนระแงะมรรคา (ช่วงหน้า รพ.ระแงะ - ตลาดสด)">
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                            <div>
+                                <label class="font-bold text-slate-700 block mb-1">สถานะการสัญจร</label>
+                                <select id="swal_road_status" class="w-full p-2.5 border border-slate-200 rounded-xl outline-none text-xs font-bold bg-slate-50 focus:border-amber-500">
+                                    <option value="ปิดการจราจรทุกชนิด (รถทุกชนิดผ่านไม่ได้)" ${(data.status || '').includes('ทุกชนิด') ? 'selected' : ''}>⛔ ปิดการจราจรทุกชนิด</option>
+                                    <option value="รถเล็กไม่สามารถผ่านได้ (รถยกสูงผ่านได้)" ${(data.status || '').includes('รถเล็ก') ? 'selected' : ''}>⚠️ รถเล็กไม่สามารถผ่านได้</option>
+                                    <option value="เฝ้าระวังน้ำท่วมผิวทาง (สัญจรได้ระมัดระวัง)" ${(data.status || '').includes('เฝ้าระวัง') ? 'selected' : ''}>🟡 เฝ้าระวังน้ำท่วมผิวทาง</option>
+                                    <option value="ระดับน้ำลดแล้ว - เปิดสัญจรปกติ" ${(data.status || '').includes('เปิดสัญจร') ? 'selected' : ''}>✅ เปิดสัญจรได้ตามปกติ</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="font-bold text-slate-700 block mb-1">ระดับน้ำบนผิวทาง (ถ้ามี)</label>
+                                <input type="text" id="swal_road_depth" value="${data.depth || ''}" class="w-full p-2.5 border border-slate-200 rounded-xl outline-none text-xs bg-slate-50 focus:border-amber-500" placeholder="เช่น 30-50 ซม. หรือ น้ำท่วมขังเสมอขอบทาง">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="font-bold text-slate-700 block mb-1">เส้นทางเลี่ยงที่แนะนำ (ถ้ามี)</label>
+                            <input type="text" id="swal_road_detour" value="${data.detour || ''}" class="w-full p-2.5 border border-slate-200 rounded-xl outline-none text-xs bg-slate-50 focus:border-amber-500" placeholder="เช่น ใช้เส้นทางเลี่ยงบายพาส หรือซอยเทศบาล 4">
+                        </div>
+
+                        <div>
+                            <label class="font-bold text-slate-700 block mb-1">รายละเอียดเพิ่มเติม / สภาพพื้นที่</label>
+                            <textarea id="swal_road_detail" class="w-full p-2.5 border border-slate-200 rounded-xl outline-none text-xs h-16 bg-slate-50 focus:border-amber-500" placeholder="เช่น กระแสน้ำไหลเชี่ยว มีเสาไฟฟ้าหรือกิ่งไม้กีดขวาง เจ้าหน้าที่กำลังวางแนวกระสอบทราย">${data.detail || ''}</textarea>
+                        </div>
+
+                        <!-- แนบรูปภาพ -->
+                        <div>
+                            <label class="font-bold text-slate-700 block mb-1"><i class="fas fa-camera mr-1 text-amber-500"></i> แนบรูปภาพสภาพเส้นทาง</label>
+                            <input type="file" id="swal_road_file" accept="image/*" onchange="handleRoadFileChange(this)" class="w-full p-2 border border-slate-200 rounded-xl text-xs bg-slate-50 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-amber-500 file:text-white cursor-pointer">
+                            <div id="swal_road_prev" class="${data.image ? '' : 'hidden'} mt-2 relative group rounded-xl overflow-hidden border border-slate-200 max-h-36">
+                                <img id="swal_road_prev_img" src="${data.image || ''}" class="w-full h-32 object-cover">
+                                <button type="button" onclick="removeRoadFilePreview()" class="absolute top-1.5 right-1.5 bg-rose-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs shadow-md hover:bg-rose-700" title="ลบรูป">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- พิกัดตำแหน่ง -->
+                        <div>
+                            <div class="flex items-center justify-between mb-1">
+                                <label class="font-bold text-slate-700"><i class="fas fa-location-dot mr-1 text-rose-500"></i> พิกัดตำแหน่ง (Latitude, Longitude) *</label>
+                                <div class="flex items-center gap-1">
+                                    <button type="button" onclick="getGpsForRoadClosure()" class="px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 font-bold text-[10px] border border-emerald-200 hover:bg-emerald-100 transition">
+                                        <i class="fas fa-crosshairs"></i> GPS
+                                    </button>
+                                    <button type="button" onclick="pickPointOnOneMap()" class="px-2 py-0.5 rounded-lg bg-blue-50 text-blue-700 font-bold text-[10px] border border-blue-200 hover:bg-blue-100 transition">
+                                        <i class="fas fa-map-pin"></i> จิ้ม OneMap
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2">
+                                <input type="text" id="swal_road_lat" value="${initialLat}" class="p-2 border border-slate-200 rounded-xl outline-none text-xs font-mono font-bold bg-slate-50 focus:border-amber-500" placeholder="Latitude เช่น 6.294450">
+                                <input type="text" id="swal_road_lng" value="${initialLng}" class="p-2 border border-slate-200 rounded-xl outline-none text-xs font-mono font-bold bg-slate-50 focus:border-amber-500" placeholder="Longitude เช่น 101.723620">
+                            </div>
+                        </div>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: 'บันทึกรายงานเส้นทาง',
+                cancelButtonText: 'ยกเลิก',
+                confirmButtonColor: '#d97706',
+                cancelButtonColor: '#64748b',
+                customClass: { popup: 'rounded-[2rem] max-w-lg' },
+                preConfirm: () => {
+                    const title = (document.getElementById('swal_road_title').value || '').trim();
+                    const status = document.getElementById('swal_road_status').value;
+                    const waterDepth = (document.getElementById('swal_road_depth').value || '').trim();
+                    const detour = (document.getElementById('swal_road_detour').value || '').trim();
+                    const detail = (document.getElementById('swal_road_detail').value || '').trim();
+                    const lat = parseFloat(document.getElementById('swal_road_lat').value);
+                    const lng = parseFloat(document.getElementById('swal_road_lng').value);
+
+                    if (!title) {
+                        Swal.showValidationMessage('กรุณาระบุชื่อเส้นทางหรือถนน');
+                        return false;
+                    }
+                    if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) {
+                        Swal.showValidationMessage('กรุณาระบุพิกัด Latitude และ Longitude ให้ถูกต้อง');
+                        return false;
+                    }
+                    if (typeof window.isInsideMunicipality === 'function' && !window.isInsideMunicipality(lat, lng)) {
+                        Swal.showValidationMessage('⚠️ พิกัดที่ระบุอยู่นอกเขตเทศบาลตำบลตันหยงมัส กรุณาปักหมุดภายในเขตเทศบาลเท่านั้น');
+                        return false;
+                    }
+
+                    return {
+                        title,
+                        status,
+                        waterDepth,
+                        detour,
+                        detail,
+                        lat,
+                        lng,
+                        image: window._tempRoadClosureBase64 || ''
+                    };
+                }
+            }).then(async (result) => {
+                if (result.isConfirmed) {
+                    const payload = result.value;
+                    Swal.fire({
+                        title: 'กำลังบันทึกข้อมูลเส้นทาง...',
+                        allowOutsideClick: false,
+                        didOpen: () => Swal.showLoading()
+                    });
+
+                    try {
+                        if (typeof sbSaveRoadClosure === 'function') {
+                            await sbSaveRoadClosure(payload);
+                        } else {
+                            throw new Error('ระบบเชื่อมต่อ Supabase ไม่พร้อมใช้งาน');
+                        }
+
+                        // เคลียร์ Draft
+                        window._tempRoadClosureDraft = null;
+                        window._tempRoadClosureBase64 = '';
+
+                        Swal.fire({
+                            title: 'บันทึกสำเร็จ!',
+                            text: 'อัปเดตเส้นทางปิดและส่งพิกัดลง One Map เรียบร้อยแล้ว',
+                            icon: 'success',
+                            timer: 1600,
+                            showConfirmButton: false
+                        });
+
+                        await loadData();
+                    } catch (err) {
+                        Swal.fire('เกิดข้อผิดพลาด', err.message, 'error');
+                    }
+                }
+            });
+        }
+
+        async function deleteRoadClosure(id) {
+            if (!id) return;
+
+            const res = await Swal.fire({
+                title: 'ยืนยันการลบ?',
+                text: 'คุณต้องการลบรายงานเส้นทางปิดนี้ออกจากระบบหรือไม่',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'ลบข้อมูล',
+                cancelButtonText: 'ยกเลิก',
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#64748b',
+                customClass: { popup: 'rounded-[2rem]' }
+            });
+
+            if (res.isConfirmed) {
+                Swal.fire({
+                    title: 'กำลังลบข้อมูล...',
+                    allowOutsideClick: false,
+                    didOpen: () => Swal.showLoading()
+                });
+
+                try {
+                    if (typeof sbDeleteRoadClosure === 'function') {
+                        await sbDeleteRoadClosure(id);
+                    } else {
+                        throw new Error('ฟังก์ชันลบข้อมูลไม่พร้อมใช้งาน');
+                    }
+
+                    if (store.roadClosures) {
+                        store.roadClosures = store.roadClosures.filter(r => r.id !== id);
+                    }
+
+                    renderDashOneMapLayers();
+                    renderAdminRoadClosuresList();
+
+                    Swal.fire({
+                        title: 'ลบเรียบร้อย',
+                        text: 'ลบรายงานเส้นทางเรียบร้อยแล้ว',
+                        icon: 'success',
+                        timer: 1500,
+                        showConfirmButton: false
+                    });
+                } catch (err) {
+                    Swal.fire('เกิดข้อผิดพลาด', err.message, 'error');
+                }
+            }
+        }
+
+        window.openAddRoadClosureModal = openAddRoadClosureModal;
+        window.deleteRoadClosure = deleteRoadClosure;
+        window.renderAdminRoadClosuresList = renderAdminRoadClosuresList;
 
         // ฟังก์ชันเริ่มต้นแผนที่
         function initWaterMap() {
@@ -2898,6 +2874,16 @@ let dashLayerStates = {
             }).addTo(waterMap);
 
             markerLayer.addTo(waterMap);
+
+            // 🏛️ ตีกรอบขอบเขตเทศบาลตำบลตันหยงมัส & พื้นที่นอกเขตเป็นสีเทา (Inverted Mask)
+            if (typeof window.addMunicipalityMaskToMap === 'function') {
+                window.addMunicipalityMaskToMap(waterMap, {
+                    fillColor: '#0f172a',
+                    fillOpacity: 0.45,
+                    borderColor: '#334155',
+                    outlineColor: '#2563eb'
+                });
+            }
 
             setTimeout(() => { if (waterMap) waterMap.invalidateSize(); }, 300);
         }
@@ -3087,6 +3073,7 @@ let dashLayerStates = {
 
         // กำหนดความจุของแต่ละศูนย์
         const SHELTER_CAPACITY = {
+            'ศูนย์เทศบาลตำบลตันหยงมัส': 80,
             'ศูนย์เทศบาลตำบลตันหยงมัส/บาลูกา': 80,
             'ศูนย์มัสยิดตันหยงมัส': 80,
             'ศูนย์โรงเรียนบ้านเขาพระ': 60
@@ -3389,22 +3376,18 @@ let dashLayerStates = {
             }
         }
 
+        // ฟังก์ชันตรวจสอบสิทธิ์และยืนยันการเข้าถึงข้อมูลส่วนบุคคล (PDPA Security PIN)
         async function checkPasswordBeforeDetailByData(idCard, name) {
-            const { value: password } = await Swal.fire({
-                title: 'ระบบรักษาความปลอดภัย',
-                text: 'กรุณาระบุรหัสผ่านเพื่อดูข้อมูลส่วนตัว',
-                input: 'password',
-                inputPlaceholder: ' ',
-                confirmButtonText: 'ยืนยัน',
-                confirmButtonColor: '#2563eb',
-                showCancelButton: true,
-                cancelButtonText: 'ยกเลิก'
-            });
+            const staffName = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : 'เจ้าหน้าที่';
+            const currentRole = (typeof userRole !== 'undefined' ? userRole : '').toLowerCase();
 
-            if (password === '1111') {
+            if (typeof promptPdpaSecurityPin === 'function') {
+                promptPdpaSecurityPin(`คุณ ${name || 'ผู้ประสบภัย'}`, () => {
+                    console.log(`🔒 [PDPA Audit] ${new Date().toISOString()} - User: ${staffName} (${currentRole}) accessed details of: ${name}`);
+                    showDetailsByData(idCard, name);
+                });
+            } else {
                 showDetailsByData(idCard, name);
-            } else if (password) {
-                Swal.fire('รหัสผ่านไม่ถูกต้อง', 'คุณไม่ได้รับอนุญาตให้ดูข้อมูลนี้', 'error');
             }
         }
 
@@ -3420,23 +3403,18 @@ let dashLayerStates = {
             }
         }
 
-        // 1. ฟังก์ชันตรวจสอบรหัสผ่าน 1111
+        // ฟังก์ชันตรวจสอบสิทธิ์และยืนยันการเข้าถึงข้อมูลตามลำดับ (PDPA Security PIN)
         async function checkPasswordBeforeDetail(index) {
-            const { value: password } = await Swal.fire({
-                title: 'ระบบรักษาความปลอดภัย',
-                text: 'กรุณาระบุรหัสผ่านเพื่อดูข้อมูลส่วนตัว',
-                input: 'password',
-                inputPlaceholder: ' ',
-                confirmButtonText: 'ยืนยัน',
-                confirmButtonColor: '#2563eb',
-                showCancelButton: true,
-                cancelButtonText: 'ยกเลิก'
-            });
+            const staffName = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : 'เจ้าหน้าที่';
+            const currentRole = (typeof userRole !== 'undefined' ? userRole : '').toLowerCase();
 
-            if (password === '1111') {
+            if (typeof promptPdpaSecurityPin === 'function') {
+                promptPdpaSecurityPin(`ผู้ประสบภัยลำดับที่ ${index + 1}`, () => {
+                    console.log(`🔒 [PDPA Audit] ${new Date().toISOString()} - User: ${staffName} (${currentRole}) accessed details index #${index}`);
+                    showDetails(index);
+                });
+            } else {
                 showDetails(index);
-            } else if (password) {
-                Swal.fire('รหัสผ่านไม่ถูกต้อง', 'คุณไม่ได้รับอนุญาตให้ดูข้อมูลนี้', 'error');
             }
         }
 
@@ -3467,9 +3445,17 @@ let dashLayerStates = {
             const modal = document.getElementById('dataModal');
             const content = document.getElementById('modalContent');
 
-            // จัดการเบอร์โทร (ลบเครื่องหมาย ' ออกถ้ามี)
-            const rawPhone = person[7] ? person[7].toString() : "";
-            const cleanPhone = rawPhone.replace(/'/g, "");
+            // จัดการข้อมูลส่วนบุคคลตามมาตรฐาน PDPA (Data Masking)
+            const rawIdCard = (person[3] || '').toString().replace(/['\s]/g, '');
+            const maskedIdCard = rawIdCard.length === 13
+                ? `${rawIdCard[0]}-${rawIdCard.slice(1, 5)}-•••••-${rawIdCard.slice(10, 12)}-${rawIdCard[12]}`
+                : (rawIdCard.length > 4 ? rawIdCard.slice(0, 3) + '••••••' + rawIdCard.slice(-2) : (rawIdCard || '-'));
+
+            const rawPhone = person[7] ? person[7].toString().replace(/'/g, "") : "";
+            const cleanPhone = rawPhone.replace(/\s+/g, "");
+            const maskedPhone = cleanPhone.length >= 9
+                ? `${cleanPhone.slice(0, 3)}-•••-${cleanPhone.slice(-4)}`
+                : (cleanPhone || 'ไม่ระบุ');
 
             const healthStatus = person[8] || 'ปกติ';
             const isNotNormal = healthStatus !== 'ปกติ';
@@ -3492,8 +3478,15 @@ let dashLayerStates = {
                     <i class="fas fa-id-card text-xs"></i>
                 </div>
                 <div class="flex-1">
-                    <p class="text-[9px] text-slate-400 font-bold uppercase">เลขบัตรประจำตัวประชาชน</p>
-                    <p class="text-sm font-bold text-slate-700">${person[3] || '-'}</p>
+                    <div class="flex items-center justify-between">
+                        <p class="text-[9px] text-slate-400 font-bold uppercase">เลขบัตรประจำตัวประชาชน</p>
+                        ${rawIdCard ? `
+                        <button type="button" onclick="window.toggleModalMask('modalIdCardDisplay', '${rawIdCard}', '${maskedIdCard}', this)"
+                                class="text-[10px] text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded-md transition-colors">
+                            <i class="fas fa-eye text-[10px]"></i> แสดงเลขเต็ม
+                        </button>` : ''}
+                    </div>
+                    <p id="modalIdCardDisplay" class="text-sm font-bold text-slate-700 font-mono tracking-wider mt-0.5">${maskedIdCard}</p>
                 </div>
             </div>
 
@@ -3502,9 +3495,16 @@ let dashLayerStates = {
                     <i class="fas fa-phone-alt text-xs"></i>
                 </div>
                 <div class="flex-1">
-                    <p class="text-[9px] text-slate-400 font-bold uppercase">เบอร์โทรศัพท์</p>
-                    <a href="tel:${cleanPhone}" class="text-sm font-bold text-blue-600 underline">
-                        ${cleanPhone || 'ไม่ระบุ'}
+                    <div class="flex items-center justify-between">
+                        <p class="text-[9px] text-slate-400 font-bold uppercase">เบอร์โทรศัพท์</p>
+                        ${cleanPhone ? `
+                        <button type="button" onclick="window.toggleModalMask('modalPhoneDisplay', '${cleanPhone}', '${maskedPhone}', this)"
+                                class="text-[10px] text-emerald-600 hover:text-emerald-800 font-bold flex items-center gap-1 bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded-md transition-colors">
+                            <i class="fas fa-eye text-[10px]"></i> แสดงเบอร์เต็ม
+                        </button>` : ''}
+                    </div>
+                    <a id="modalPhoneDisplay" href="${cleanPhone ? 'tel:' + cleanPhone : '#'}" class="text-sm font-bold text-blue-600 underline font-mono tracking-wider mt-0.5 inline-block">
+                        ${maskedPhone}
                     </a>
                 </div>
             </div>
@@ -3779,182 +3779,7 @@ let dashLayerStates = {
         // ระบบรายงานสถานะการอพยพ
         // ==========================================
 
-        // ฟังก์ชันสลับตัวเลือกสถานที่อพยพใน Popup
-        window.toggleEvacDest = function (type) {
-            const boxC = document.getElementById('box_dest_center');
-            const boxO = document.getElementById('box_dest_other');
-            const btnC = document.getElementById('btn_dest_center');
-            const btnO = document.getElementById('btn_dest_other');
-            document.getElementById('swal_evac_type').value = type;
-
-            if (type === 'ศูนย์') {
-                boxC.classList.remove('hidden'); boxO.classList.add('hidden');
-                btnC.className = "flex-1 py-3 rounded-xl border-2 border-orange-400 bg-orange-50 text-orange-600 font-bold text-xs transition-all";
-                btnO.className = "flex-1 py-3 rounded-xl border-2 border-transparent bg-slate-50 text-slate-500 font-bold text-xs transition-all";
-            } else {
-                boxO.classList.remove('hidden'); boxC.classList.add('hidden');
-                btnO.className = "flex-1 py-3 rounded-xl border-2 border-orange-400 bg-orange-50 text-orange-600 font-bold text-xs transition-all";
-                btnC.className = "flex-1 py-3 rounded-xl border-2 border-transparent bg-slate-50 text-slate-500 font-bold text-xs transition-all";
-            }
-        };
-
-        // ฟังก์ชันดึงประวัติที่อยู่จากชีททั้งหมดในระบบ (Address_Evacuation, Addresses, Flood_DATA, Relief)
-        window.getEvacAddressList = function () {
-            if (typeof store === 'undefined' || !store) return [];
-
-            const evacAddrs = (store.addressEvac && Array.isArray(store.addressEvac))
-                ? store.addressEvac.map(row => row[0] ? row[0].toString().trim() : '').filter(a => a !== '')
-                : [];
-
-            const regisAddrs = (store.addresses && Array.isArray(store.addresses))
-                ? store.addresses.map(a => a ? a.toString().trim() : '').filter(a => a !== '')
-                : [];
-
-            const floodAddrs = (store.floodData && Array.isArray(store.floodData))
-                ? store.floodData.map(row => row[2] ? row[2].toString().trim() : (row[1] ? row[1].toString().trim() : '')).filter(a => a !== '')
-                : [];
-
-            const reliefAddrs = (store.reliefData && Array.isArray(store.reliefData))
-                ? store.reliefData.map(r => r[4] ? r[4].toString().trim() : '').filter(a => a !== '')
-                : [];
-
-            return [...new Set([...evacAddrs, ...regisAddrs, ...floodAddrs, ...reliefAddrs])].filter(a => a !== '').sort();
-        };
-
-        // ฟังก์ชันค้นหาที่อยู่ (Autocomplete)
-        window.handleEvacAddressSearch = function (val) {
-            const resultBox = document.getElementById('swal_evac_addr_results');
-            if (!resultBox) return;
-
-            if (!val || val.trim().length < 1) {
-                resultBox.classList.add('hidden');
-                return;
-            }
-
-            if (!window.evacAddressList || window.evacAddressList.length === 0) {
-                window.evacAddressList = getEvacAddressList();
-            }
-
-            const searchVal = val.toLowerCase().trim();
-            const filtered = window.evacAddressList.filter(a => a.toLowerCase().includes(searchVal)).slice(0, 15);
-
-            if (filtered.length > 0) {
-                let html = '';
-                filtered.forEach(addr => {
-                    html += `<div onclick='selectEvacAddress(${JSON.stringify(addr)})' class="p-3 hover:bg-orange-100 cursor-pointer border-b border-slate-100 text-sm text-slate-700 transition-colors flex items-center justify-between"><span class="font-medium">${addr}</span><i class="fas fa-chevron-right text-[10px] text-orange-400"></i></div>`;
-                });
-                resultBox.innerHTML = html;
-                resultBox.classList.remove('hidden');
-            } else {
-                resultBox.innerHTML = '<div class="p-3 text-xs text-orange-600 font-bold bg-orange-50 flex items-center"><i class="fas fa-info-circle mr-2"></i>ไม่พบที่อยู่นี้ในระบบ (สามารถเลือก "ระบุที่อยู่อื่นๆ" ด้านล่างได้)</div>';
-                resultBox.classList.remove('hidden');
-            }
-        };
-
-        // ฟังก์ชันเมื่อคลิกเลือกที่อยู่จากการค้นหา
-        window.selectEvacAddress = function (addr) {
-            document.getElementById('swal_evac_addr_search').value = addr;
-            document.getElementById('swal_evac_addr_results').classList.add('hidden');
-        };
-
-        // เปิด/ปิดช่องกรอกที่อยู่อื่น + เรียก GPS
-        window.toggleEvacOtherAddress = function (isChecked) {
-            const boxOther = document.getElementById('box_evac_other_addr');
-            const inputSearch = document.getElementById('swal_evac_addr_search');
-
-            if (isChecked) {
-                boxOther.classList.remove('hidden');
-                inputSearch.disabled = true;
-                inputSearch.classList.add('opacity-50');
-                getEvacLocation(); // สั่งดึงพิกัดอัตโนมัติ
-            } else {
-                boxOther.classList.add('hidden');
-                inputSearch.disabled = false;
-                inputSearch.classList.remove('opacity-50');
-            }
-        };
-
-        // ดึง GPS ผู้ใช้งาน
-        window.getEvacLocation = function () {
-            const coordsInput = document.getElementById('swal_evac_coords');
-            coordsInput.value = 'กำลังค้นหาตำแหน่งพิกัด GPS...';
-
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(
-                    (p) => {
-                        coordsInput.value = `${p.coords.latitude},${p.coords.longitude}`;
-                    },
-                    (err) => {
-                        console.warn(err);
-                        coordsInput.value = 'กรุณาเปิด GPS และกดปุ่มดึงพิกัดอีกครั้ง';
-                    },
-                    { enableHighAccuracy: true, timeout: 10000 }
-                );
-            } else {
-                coordsInput.value = 'อุปกรณ์ไม่รองรับระบบพิกัด';
-            }
-        };
-
-
-        async function saveEvacuationData(data) {
-            Swal.fire({
-                title: 'กำลังบันทึกข้อมูล...',
-                allowOutsideClick: false,
-                didOpen: () => { Swal.showLoading(); }
-            });
-
-            // ดึงข้อมูลชื่อจากช่อง input (ป้องกัน Error ถ้าหาช่องไม่เจอ)
-            const nameInput = document.getElementById('evac_name');
-            const evacName = data.evacName;
-
-            // 🌟 จัดเตรียมข้อมูลส่งไปหลังบ้าน
-            const payload = {
-                action: 'saveEvacuation',
-                address: data.address,
-                count: data.count,
-                type: data.type,
-                dest: data.dest,
-                user: currentUser,
-                coords: data.coords,
-                evacName: data.evacName,
-                status: data.status,
-                note: data.note, // 🌟 เพิ่มบรรทัดนี้ เพื่อส่งรายละเอียดเพิ่มเติมไปหลังบ้าน
-                period: currentPeriod
-            };
-
-            // 🌟 เรดาร์ตรวจจับ: เช็คว่ารอบนี้มีชื่อและสถานะติดไปไหม!
-            console.log("🚀 ข้อมูลที่จะส่งไปเซิร์ฟเวอร์:", payload);
-
-            try {
-                if (typeof sbSaveEvacuation === 'function') {
-                    await sbSaveEvacuation(payload);
-                } else {
-                    throw new Error('Supabase Service ไม่พร้อมทำงาน');
-                }
-
-                Swal.fire({
-                    title: 'บันทึกสำเร็จ',
-                    // 🌟 เปลี่ยนข้อความให้เข้ากับประชาชน
-                    text: isPublicMode ? 'เทศบาลตำบลตันหยงมัสได้รับรายงานของท่านแล้ว ขอบคุณครับ' : 'อัปเดตรายงานสถานะเรียบร้อยแล้ว',
-                    icon: 'success',
-                    timer: isPublicMode ? 3000 : 1500,
-                    showConfirmButton: false
-                });
-
-                // เคลียร์ช่องชื่อทิ้งหลังบันทึกเสร็จ
-                if (nameInput) nameInput.value = '';
-
-                // 🌟 ถ้าเป็นโหมดประชาชน ไม่ต้องรีเฟรชแผนที่ (เพราะหน้าแผนที่ถูกซ่อนไว้)
-                if (!isPublicMode) {
-                    await loadData();
-                    if (typeof loadEvacuationMarkers === 'function') {
-                        loadEvacuationMarkers();
-                    }
-                }
-            } catch (err) {
-                Swal.fire('ผิดพลาด', err.message, 'error');
-            }
-        }
+        // [โมดูลย่อย] ระบบค้นหาที่อยู่อพยพ Autocomplete และบันทึกข้อมูลอพยพ ย้ายไปที่ js/modules/public-report.js เรียบร้อยแล้ว
         // ==========================================
         // ข้อมูลตารางหน้าศูนย์พักพิง
         // ==========================================
@@ -4069,1773 +3894,12 @@ let dashLayerStates = {
                 originalChildren.forEach(item => { item.el.style.display = item.display; });
             }, 500);
         };
-        // ==========================================
-        // พิมพ์ตารางหน้าถุงยังชีพ
-        // ==========================================
-
-
-        // ฟังก์ชันพิมพ์ตารางรายชื่อผู้รับถุงยังชีพ
-        window.printReliefTable = function () {
-            const data = window.currentReliefDisplayData || [];
-
-            if (data.length === 0) {
-                Swal.fire('ไม่พบข้อมูล', 'ไม่มีข้อมูลสำหรับพิมพ์', 'warning');
-                return;
-            }
-
-            // 1. ตรวจสอบว่ามี window.ZONE_RULES หรือไม่ (ถ้าไม่มีให้สร้าง Default ไว้ป้องกัน Error)
-            window.ZONE_RULES = window.ZONE_RULES || {
-                'zone 1': ['เทศบาล 1', 'เทศบาล 2', 'ตลาดตันหยงมัส', 'สถานีรถไฟ'],
-                'zone 2': ['เทศบาล 3', 'เทศบาล 4', 'ระแงะมรรคา', 'ฮูลูปาเระ'],
-                'zone 3': ['เทศบาล 5', 'เทศบาล 6', 'บ้านบาโงตา'],
-                'zone 4': ['บ้านทำเนียบ', 'เขาพระ'],
-                'zone 5': ['อื่นๆ']
-            };
-
-            const printArea = document.getElementById('printArea');
-            const searchInputRaw = document.getElementById('reliefSearchInput').value;
-            const searchText = searchInputRaw.toLowerCase().trim();
-
-            // ดึงสถานะปุ่ม Zone ปัจจุบันที่ถูกกดอยู่ (ถ้ามีตัวแปรนี้ในระบบ)
-            const activeZoneVar = typeof window.currentZoneFilter !== 'undefined' ? window.currentZoneFilter : '';
-
-            let filterText = "ข้อมูลทั้งหมด";
-
-            // ฟังก์ชันช่วยดึงข้อมูลถนนจาก ZONE_RULES มาเรียงต่อกันในวงเล็บ
-            const getZoneDetailsString = (zoneKey) => {
-                if (window.ZONE_RULES && window.ZONE_RULES[zoneKey]) {
-                    return ` (${window.ZONE_RULES[zoneKey].join(', ')})`;
-                }
-                return '';
-            };
-
-            // 2. กำหนดข้อความ "เงื่อนไขข้อมูล" บนหัวกระดาษ
-            if (activeZoneVar && activeZoneVar !== 'all') {
-                // กรณีกดปุ่มเลือก Zone ไว้
-                const zoneKey = activeZoneVar.toLowerCase();
-                filterText = `กรองตามโซน: ${activeZoneVar.toUpperCase()}${getZoneDetailsString(zoneKey)}`;
-
-                // ถ้ามีการพิมพ์ค้นหาชื่อต่อจากที่เลือก Zone ไว้ ให้แสดงบอกด้วย
-                if (searchText) {
-                    filterText += ` | ค้นหาเพิ่มเติม: "${searchInputRaw}"`;
-                }
-            } else if (searchText) {
-                // กรณีพิมพ์ค้นหาทั่วไป (ตรวจสอบว่าพิมพ์คำว่า zone 1, zone 2 หรือไม่)
-                const matchedZone = Object.keys(window.ZONE_RULES).find(z => searchText.includes(z));
-                if (matchedZone) {
-                    filterText = `กรองตามโซน: ${matchedZone.toUpperCase()}${getZoneDetailsString(matchedZone)}`;
-                } else {
-                    filterText = `ค้นหาคำว่า: "${searchInputRaw}"`;
-                }
-            }
-
-            // 3. เตรียมพื้นที่พิมพ์ (ซ่อนของเดิม)
-            const originalChildren = [];
-            Array.from(printArea.children).forEach(child => {
-                originalChildren.push({ el: child, display: child.style.display });
-                child.style.display = 'none';
-            });
-
-            // 4. สร้างโครงสร้าง HTML สำหรับพิมพ์
-            const tempDiv = document.createElement('div');
-            tempDiv.className = "print-page";
-            tempDiv.innerHTML = `
-        <div style="text-align: center; margin-bottom: 20px; border-bottom: 2px solid #334155; padding-bottom: 15px;">
-            <h2 style="font-size: 18px; font-weight: bold; margin: 0;">รายงานการแจกถุงยังชีพ เทศบาลตำบลตันหยงมัส</h2>
-            <p style="font-size: 12px; margin: 5px 0; color: #64748b; font-weight: bold;">เงื่อนไขข้อมูล: ${filterText}</p>
-            
-            <div style="display: inline-block; background: #fffbeb; border: 1px solid #fcd34d; padding: 6px 20px; border-radius: 20px; margin-top: 8px;">
-                <span style="font-size: 14px; font-weight: bold; color: #d97706;">จำนวนถุงยังชีพที่แจกแล้ว: ${data.length} ชุด</span>
-            </div>
-        </div>
-        
-        <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
-            <thead style="background-color: #f1f5f9;">
-                <tr>
-                    <th style="border: 1px solid #cbd5e1; padding: 8px; text-align: center; width: 40px;">ลำดับ</th>
-                    <th style="border: 1px solid #cbd5e1; padding: 8px; text-align: left;">วัน-เวลา ที่รับ</th>
-                    <th style="border: 1px solid #cbd5e1; padding: 8px; text-align: left;">ชื่อ-นามสกุลผู้รับ</th>
-                    <th style="border: 1px solid #cbd5e1; padding: 8px; text-align: left;">ที่อยู่</th>
-                    <th style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">จำนวนผู้อาศัย</th>
-                    <th style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">สถานะผู้รับ</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${data.map((r, i) => {
-                const timestamp = r[0] ? new Date(r[0]).toLocaleString('th-TH', { day: '2-digit', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-';
-                return `
-                    <tr>
-                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;">${i + 1}</td>
-                        <td style="border: 1px solid #cbd5e1; padding: 6px;">${timestamp}</td>
-                        <td style="border: 1px solid #cbd5e1; padding: 6px; font-weight: bold;">${r[1] || '-'}</td>
-                        <td style="border: 1px solid #cbd5e1; padding: 6px;">${r[4] || '-'}</td>
-                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;">${r[3] || 0}</td>
-                        <td style="border: 1px solid #cbd5e1; padding: 6px; text-align: center;">${r[2] || '-'}</td>
-                    </tr>
-                `}).join('')}
-            </tbody>
-        </table>
-    `;
-
-            printArea.appendChild(tempDiv);
-            printArea.classList.remove('hidden');
-
-            // 5. สั่งพิมพ์ และเคลียร์หน้ากระดาษกลับเป็นปกติ
-            setTimeout(() => {
-                window.print();
-                printArea.classList.add('hidden');
-                printArea.removeChild(tempDiv);
-                originalChildren.forEach(item => { item.el.style.display = item.display; });
-            }, 500);
-        };
-
-
-
-        //-------------------------------------------//
-        //---------------หน้าหลัก---------------------//
-
-        // ตัวแปรเก็บกราฟหน้า Dashboard (ป้องกันกราฟซ้อน)
-        let dashMainWaterChartInstance = null;
-
-        window.renderAdminDashboard = function () {
-            // 1. สั่งอัปเดตหมุดแผนที่ระดับน้ำ
-            if (typeof updateDashWaterMapMarkers === 'function') updateDashWaterMapMarkers();
-
-            // 🌟 2. คำนวณและอัปเดตข้อมูลการอพยพ/ปลอดภัยขึ้นการ์ดแบบ Auto-Sync
-            if (typeof window.loadEvacuationMarkers === 'function') {
-                window.loadEvacuationMarkers();
-            }
-
-            // 3. คำนวณข้อมูลศูนย์พักพิง
-            const evacuees = store.evacuees || [];
-            const total = evacuees.length;
-
-            const households = [...new Set(evacuees.map(r => String(r[2]).trim()).filter(a => a !== ''))].length;
-            const male = evacuees.filter(r => r[6] === 'ชาย').length;
-            const female = evacuees.filter(r => r[6] === 'หญิง').length;
-            const ageGroups = {
-                infant: evacuees.filter(r => r[5] >= 0 && r[5] <= 7).length,
-                child: evacuees.filter(r => r[5] >= 8 && r[5] <= 15).length,
-                adult: evacuees.filter(r => r[5] >= 16 && r[5] <= 59).length,
-                elderly: evacuees.filter(r => r[5] >= 60).length
-            };
-            const sickCount = evacuees.filter(r => ['ผู้ป่วย', 'ผู้พิการ'].includes(String(r[8]).trim())).length;
-            const vulnerableCount = evacuees.filter(r => String(r[8]).trim() === 'กลุ่มเปราะบาง').length;
-
-            if (document.getElementById('dash_statTotalPeople')) document.getElementById('dash_statTotalPeople').innerText = total;
-            if (document.getElementById('dash_statTotalHouseholds')) document.getElementById('dash_statTotalHouseholds').innerText = households;
-            if (document.getElementById('dash_statSick')) document.getElementById('dash_statSick').innerText = sickCount;
-            if (document.getElementById('dash_statVulnerable')) document.getElementById('dash_statVulnerable').innerText = vulnerableCount;
-
-            if (document.getElementById('dash_numMale')) document.getElementById('dash_numMale').innerText = male;
-            if (document.getElementById('dash_numFemale')) document.getElementById('dash_numFemale').innerText = female;
-            if (document.getElementById('dash_numAgeInfant')) document.getElementById('dash_numAgeInfant').innerText = ageGroups.infant;
-            if (document.getElementById('dash_numAgeChild')) document.getElementById('dash_numAgeChild').innerText = ageGroups.child;
-            if (document.getElementById('dash_numAgeAdult')) document.getElementById('dash_numAgeAdult').innerText = ageGroups.adult;
-            if (document.getElementById('dash_numAgeElderly')) document.getElementById('dash_numAgeElderly').innerText = ageGroups.elderly;
-
-            const totalCapacity = typeof SHELTER_CAPACITY !== 'undefined' ? Object.values(SHELTER_CAPACITY).reduce((a, b) => a + b, 0) : 220;
-            const occupancyRate = totalCapacity > 0 ? (total / totalCapacity) * 100 : 0;
-            let capacityColorClass = 'bg-green-400';
-            if (occupancyRate >= 90) capacityColorClass = 'bg-rose-500';
-            else if (occupancyRate >= 60) capacityColorClass = 'bg-amber-400';
-
-            if (document.getElementById('dash_statCapacityText')) {
-                document.getElementById('dash_statCapacityText').innerText = `${total} / ${totalCapacity}`;
-                const bar = document.getElementById('dash_statCapacityBar');
-                if (bar) {
-                    bar.style.width = `${Math.min(occupancyRate, 100)}%`;
-                    bar.className = `h-full rounded-full transition-all duration-1000 ${capacityColorClass}`;
-                }
-            }
-
-            if (typeof updateChart === 'function') {
-                updateChart('dash_gender', 'dash_chartGender', ['ชาย', 'หญิง'], [male, female], ['#3b82f6', '#ec4899'], '65%', false);
-                updateChart('dash_age', 'dash_chartAge', ['0-7 ปี', '8-15 ปี', '16-59 ปี', '60+ ปี'],
-                    [ageGroups.infant, ageGroups.child, ageGroups.adult, ageGroups.elderly], ['#10b981', '#3b82f6', '#f59e0b', '#f43f5e'], '65%', false);
-            }
-
-            // 4. คำนวณข้อมูลถุงยังชีพและคลังสต๊อก
-            let totalReliefDistributed = 0;
-            if (store.reliefData) {
-                totalReliefDistributed = store.reliefData.length;
-            }
-            if (document.getElementById('dash_totalReliefCount')) {
-                document.getElementById('dash_totalReliefCount').innerText = totalReliefDistributed.toLocaleString();
-            }
-
-            let stockIn = 0;
-            let stockOut = 0;
-            if (store.reliefStock) {
-                store.reliefStock.forEach(r => {
-                    const type = r[1] ? String(r[1]).toLowerCase().trim() : '';
-                    const amount = Number(r[2]) || 0;
-                    if (type === 'in' || type === 'รับเข้า') stockIn += amount;
-                    if (type === 'out' || type === 'จ่ายออก') stockOut += amount;
-                });
-            }
-            let stockRemain = stockIn - stockOut;
-
-            if (document.getElementById('dash_stockInCount')) document.getElementById('dash_stockInCount').innerText = stockIn.toLocaleString();
-            if (document.getElementById('dash_stockOutCount')) document.getElementById('dash_stockOutCount').innerText = stockOut.toLocaleString();
-
-            const dashRemainEl = document.getElementById('dash_stockRemainCount');
-            if (dashRemainEl) {
-                dashRemainEl.innerText = stockRemain.toLocaleString();
-                if (stockRemain <= 0) dashRemainEl.className = "text-3xl font-black text-rose-500";
-                else if (stockRemain <= 50) dashRemainEl.className = "text-3xl font-black text-amber-500";
-                else dashRemainEl.className = "text-3xl font-black text-emerald-600";
-            }
-        };
-        let dashWaterMap;
-        let dashMarkerLayer = L.layerGroup();
-
-        window.initDashWaterMap = function () {
-            if (dashWaterMap) return;
-
-            dashWaterMap = L.map('dashWaterMap').setView([6.29445, 101.72362], 14); // ตั้งค่าพิกัดศูนย์กลาง
-
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap'
-            }).addTo(dashWaterMap);
-
-            dashMarkerLayer.addTo(dashWaterMap);
-        };
-
-        window.updateDashWaterMapMarkers = function () {
-            if (!dashWaterMap || !store.waterLevels) return;
-
-            dashMarkerLayer.clearLayers();
-
-            // ดึงเฉพาะข้อมูลล่าสุดของแต่ละจุด
-            const latestData = {};
-            store.waterLevels.forEach(r => {
-                const loc = r[1];
-                const time = new Date(r[0]).getTime();
-                if (!latestData[loc] || time > latestData[loc].time) {
-                    latestData[loc] = { data: r, time: time };
-                }
-            });
-
-            // สร้างหมุดทีละจุด
-            Object.values(latestData).forEach(item => {
-                const r = item.data;
-                const name = r[1];
-                const level = parseFloat(r[2] || 0);
-                let coordinateStr = String(r[5] || '').trim();
-                if (!coordinateStr && window.waterPointsMap && window.waterPointsMap[name]) {
-                    coordinateStr = window.waterPointsMap[name];
-                }
-
-                let statusText = 'ปกติ', statusColor = 'bg-green-100 text-green-600';
-                if (level >= 1 && level <= 30) { statusText = 'เฝ้าระวัง'; statusColor = 'bg-yellow-100 text-yellow-700'; }
-                else if (level >= 31 && level <= 80) { statusText = 'เตือนภัย'; statusColor = 'bg-orange-100 text-orange-600'; }
-                else if (level >= 81) { statusText = 'วิกฤต'; statusColor = 'bg-red-100 text-red-600'; }
-
-                if (coordinateStr.includes(',')) {
-                    const [lat, lng] = coordinateStr.split(',').map(v => parseFloat(v.trim()));
-
-                    if (!isNaN(lat) && !isNaN(lng)) {
-                        // ดึงฟังก์ชัน getWaterIcon ตัวเดิมมาใช้งานได้เลย
-                        const marker = L.marker([lat, lng], { icon: getWaterIcon(level) });
-
-                        const popupContent = `
-                    <div class="font-sans">
-                        <div class="px-4 py-2 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
-                            <span class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Live Report</span>
-                            <span class="popup-badge ${statusColor}">${statusText}</span>
-                        </div>
-                        <div class="p-4 text-center">
-                            <p class="text-[11px] font-bold text-slate-500 mb-1 leading-tight">${name}</p>
-                            <div class="flex items-baseline justify-center space-x-1">
-                                <span class="text-4xl font-black text-slate-800 tracking-tighter">${level}</span>
-                                <span class="text-xs font-bold text-slate-400">ซม.</span>
-                            </div>
-                        </div>
-                        <div class="px-4 py-2 bg-slate-50 text-center border-t border-slate-100">
-                            <p class="text-[9px] text-slate-500 font-bold leading-tight">
-                                <i class="far fa-calendar-alt mr-1 text-blue-400"></i> 
-                                ${new Date(r[0]).toLocaleDateString('th-TH', { day: '2-digit', month: 'short', year: '2-digit' })}
-                                <span class="mx-1 text-slate-300">|</span>
-                                <i class="far fa-clock mr-1 text-blue-400"></i> 
-                                ${new Date(r[0]).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })} น.
-                            </p>
-                        </div>
-                    </div>
-                `;
-
-                        marker.bindPopup(popupContent);
-                        dashMarkerLayer.addLayer(marker);
-                    }
-                }
-            });
-        };
-
-        // ==========================================
-        // ระบบจัดการรายงานข้อมูลน้ำท่วม (Flood DATA Dashboard & Leaflet Map)
-        // ==========================================
-
-        let floodReportMap = null;
-        let floodMarkerLayer = L.layerGroup();
-        let showOnlyUnnumbered = false;
-
-        window.initFloodReportMap = function () {
-            if (floodReportMap) return;
-
-            // Define base layers
-            const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap'
-            });
-
-            const esriSatelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
-            });
-
-            floodReportMap = L.map('floodReportMap', {
-                center: [6.29445, 101.72362],
-                zoom: 14,
-                layers: [osmLayer] // default layer
-            });
-
-            // Base layers object for control
-            const baseLayers = {
-                "แผนที่ปกติ (OpenStreetMap)": osmLayer,
-                "ภาพดาวเทียม (Esri Satellite)": esriSatelliteLayer
-            };
-
-            // Overlay layers (like markers)
-            const overlays = {
-                "ตำแหน่งผู้ประสบภัย": floodMarkerLayer
-            };
-
-            // Add Layer Control to Map
-            L.control.layers(baseLayers, overlays, { position: 'topright' }).addTo(floodReportMap);
-
-            floodMarkerLayer.addTo(floodReportMap);
-        };
-
-        window.toggleUnnumberedFilter = function () {
-            showOnlyUnnumbered = !showOnlyUnnumbered;
-            const btn = document.getElementById('floodUnnumberedFilterBtn');
-            if (showOnlyUnnumbered) {
-                btn.className = "px-4 py-3 border border-amber-500 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 active:scale-95 shrink-0 bg-amber-50 text-amber-600 hover:bg-amber-100";
-            } else {
-                btn.className = "px-4 py-3 border border-slate-200 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 active:scale-95 shrink-0 bg-slate-50 text-slate-600 hover:bg-slate-100";
-            }
-            filterFloodMap();
-        };
-
-        window.openFullscreenRiskMap = function () {
-            const img = document.getElementById('riskMapImg');
-            if (!img || img.classList.contains('hidden') || !img.src) return;
-
-            // Create fullscreen overlay with backdrop-blur
-            const overlay = document.createElement('div');
-            overlay.id = 'riskMapFullscreenOverlay';
-            overlay.className = 'fixed inset-0 bg-black/90 backdrop-blur-md z-[9999] flex items-center justify-center cursor-zoom-out opacity-0 transition-opacity duration-300';
-
-            // Image inside overlay
-            const fullImg = document.createElement('img');
-            fullImg.src = img.src;
-            fullImg.className = 'max-w-[95%] max-h-[95%] object-contain rounded-lg shadow-2xl scale-95 transition-transform duration-300';
-
-            // Close button (X)
-            const closeBtn = document.createElement('button');
-            closeBtn.className = 'absolute top-6 right-6 text-white/70 hover:text-white text-3xl font-bold bg-white/10 hover:bg-white/20 w-12 h-12 rounded-full flex items-center justify-center transition-all';
-            closeBtn.innerHTML = '&times;';
-
-            overlay.appendChild(fullImg);
-            overlay.appendChild(closeBtn);
-            document.body.appendChild(overlay);
-
-            // Animate opening
-            setTimeout(() => {
-                overlay.classList.remove('opacity-0');
-                fullImg.classList.remove('scale-95');
-            }, 10);
-
-            const closeOverlay = () => {
-                overlay.classList.add('opacity-0');
-                fullImg.classList.add('scale-95');
-                setTimeout(() => {
-                    if (overlay.parentNode) {
-                        overlay.parentNode.removeChild(overlay);
-                    }
-                }, 300);
-            };
-
-            overlay.addEventListener('click', closeOverlay);
-            closeBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                closeOverlay();
-            });
-        };
-
-        window.zoomToFloodMarker = function (name, lat, lng) {
-            if (!floodReportMap) return;
-
-            // Zoom/center on the leaflet map coordinates
-            floodReportMap.setView([lat, lng], 18, { animate: true, duration: 1.5 });
-
-            // Open popup for this marker
-            const md = window.floodMarkersMap ? window.floodMarkersMap[name] : null;
-            if (md && md.marker) {
-                md.marker.openPopup();
-            }
-        };
-
-        window.filterFloodMap = function () {
-            if (!floodReportMap) return;
-
-            floodMarkerLayer.clearLayers();
-            window.floodMarkersMap = {}; // Reset markers map references
-
-            const searchVal = document.getElementById('floodSearchInput').value.trim().toLowerCase();
-            const riskVal = document.getElementById('floodRiskFilter').value;
-
-            const floodData = (store.floodData && store.floodData.length > 0) ? store.floodData : [];
-            const headers = floodData[0] || [];
-            const findColIdx = (kws) => {
-                return headers.findIndex(h => {
-                    const clean = String(h || '').trim().toLowerCase();
-                    return kws.some(kw => clean.includes(kw.toLowerCase()) || kw.toLowerCase().includes(clean));
-                });
-            };
-
-            const houseIdIdx = findColIdx(['house id', 'house_id', 'รหัสบ้าน']);
-            const roadIdx = findColIdx(['ถนน', 'road']);
-            const addressIdx = findColIdx(['ที่อยู่', 'address']);
-            const nameIdx = findColIdx(['ชื่อ-สกุล', 'ชื่อสกุล', 'ชื่อ', 'name']);
-            const statusIdx = findColIdx(['สถานะ', 'status']);
-            const residentsIdx = findColIdx(['จำนวนผู้อาศัย', 'ประชากร', 'จำนวนสมาชิก', 'สมาชิก', 'people', 'members', 'population', 'residents']);
-            const contactIdx = findColIdx(['ติดต่อ', 'เบอร์', 'phone', 'contact']);
-            const latIdx = findColIdx(['latitude', 'ละติจูด', 'lat']);
-            const lngIdx = findColIdx(['longtitude', 'longitude', 'ลองจิจูด', 'lng']);
-            const riskIdx = findColIdx(['ความเสี่ยง', 'risk']);
-            const detailsIdx = findColIdx(['รายละเอียด', 'note', 'detail', 'details']);
-
-            const rows = floodData.slice(1);
-            let filteredRows = [];
-
-            rows.forEach(r => {
-                const name = nameIdx !== -1 ? String(r[nameIdx] || '').trim() : 'ไม่ระบุชื่อ';
-                const road = roadIdx !== -1 ? String(r[roadIdx] || '').trim() : '';
-                const address = addressIdx !== -1 ? String(r[addressIdx] || '').trim() : 'ไม่ระบุที่อยู่';
-                const status = statusIdx !== -1 ? String(r[statusIdx] || '').trim() : '';
-                const risk = riskIdx !== -1 ? String(r[riskIdx] || '').trim() : '';
-                const houseId = houseIdIdx !== -1 ? String(r[houseIdIdx] || '').trim() : '';
-                const residents = residentsIdx !== -1 ? (parseInt(r[residentsIdx]) || 1) : 1;
-                const contact = contactIdx !== -1 ? String(r[contactIdx] || '').trim() : '';
-                const details = detailsIdx !== -1 ? String(r[detailsIdx] || '').trim() : '';
-
-                let isUnnumbered = false;
-                if (status.includes('ไม่มีเลขที่') || status.includes('ไม่มี') || address.includes('ไม่มีเลขที่')) {
-                    isUnnumbered = true;
-                }
-
-                // Apply filters
-                if (showOnlyUnnumbered && !isUnnumbered) return;
-
-                if (riskVal !== 'all') {
-                    if (riskVal === 'กลุ่มเปราะบาง' && !(risk.includes('กลุ่มเปราะบาง') || risk.includes('เปราะบาง'))) return;
-                    if (riskVal === 'กลุ่มผู้พิการ/ผู้สูงอายุ' && !(risk.includes('ผู้พิการ') || risk.includes('ผู้สูงอายุ') || risk.includes('สูงอายุ') || risk.includes('พิการ'))) return;
-                    if (riskVal === 'ปกติ' && !risk.includes('ปกติ')) return;
-                }
-
-                if (searchVal) {
-                    let cleanSearchVal = searchVal;
-                    if (cleanSearchVal.startsWith("ถนน")) {
-                        cleanSearchVal = cleanSearchVal.substring(4).trim();
-                    } else if (cleanSearchVal.startsWith("ถ.")) {
-                        cleanSearchVal = cleanSearchVal.substring(2).trim();
-                    }
-
-                    const nameMatch = name.toLowerCase().includes(searchVal);
-                    const addressMatch = address.toLowerCase().includes(searchVal);
-                    const roadMatch = road.toLowerCase().includes(searchVal) || (cleanSearchVal && road.toLowerCase().includes(cleanSearchVal));
-                    const houseIdMatch = houseId.toLowerCase().includes(searchVal);
-                    if (!nameMatch && !addressMatch && !roadMatch && !houseIdMatch) return;
-                }
-
-                // Collect filtered row
-                filteredRows.push({
-                    houseId,
-                    name,
-                    road,
-                    address,
-                    status,
-                    risk,
-                    residents,
-                    contact,
-                    details,
-                    isUnnumbered
-                });
-
-                // Coordinate matching (separate columns first, fallback to combined)
-                let lat = NaN, lng = NaN;
-                if (latIdx !== -1 && lngIdx !== -1) {
-                    lat = parseFloat(r[latIdx]);
-                    lng = parseFloat(r[lngIdx]);
-                } else {
-                    const possibleCoordCols = [latIdx, lngIdx, addressIdx].filter(idx => idx !== -1);
-                    for (let idx of possibleCoordCols) {
-                        const val = String(r[idx] || '').trim();
-                        if (val.includes(',')) {
-                            const parts = val.split(',');
-                            const pLat = parseFloat(parts[0]);
-                            const pLng = parseFloat(parts[1]);
-                            if (!isNaN(pLat) && !isNaN(pLng)) {
-                                lat = pLat;
-                                lng = pLng;
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                if (!isNaN(lat) && !isNaN(lng)) {
-                    let markerColor = '#3b82f6'; // default blue (ปกติ)
-                    let extraClass = '';
-                    let shadowColor = 'rgba(59, 130, 246, 0.4)';
-                    let headerBg = 'from-blue-600 to-indigo-500';
-                    let headerText = 'text-white';
-                    let badgeBg = 'bg-white/20 text-white';
-
-                    if (risk.includes('กลุ่มเปราะบาง') || risk.includes('เปราะบาง')) {
-                        markerColor = '#ef4444'; // Red
-                        extraClass = 'critical-pulse';
-                        shadowColor = 'rgba(239, 68, 68, 0.5)';
-                        headerBg = 'from-red-600 to-rose-500';
-                        badgeBg = 'bg-red-950/30 text-red-100';
-                    } else if (risk.includes('ผู้พิการ') || risk.includes('ผู้สูงอายุ') || risk.includes('สูงอายุ') || risk.includes('พิการ')) {
-                        markerColor = '#facc15'; // Yellow
-                        shadowColor = 'rgba(250, 204, 21, 0.4)';
-                        headerBg = 'from-yellow-400 to-amber-400';
-                        headerText = 'text-slate-800';
-                        badgeBg = 'bg-yellow-950/10 text-slate-800';
-                    }
-
-                    const markerIcon = L.divIcon({
-                        className: 'custom-flood-marker',
-                        html: `<div class="${extraClass}" style="
-                            background-color: ${markerColor}; 
-                            width: 16px; 
-                            height: 16px; 
-                            border-radius: 50%; 
-                            border: 2px solid white; 
-                            box-shadow: 0 0 0 3px ${shadowColor}, 0 2px 8px rgba(0,0,0,0.15);
-                        "></div>`,
-                        iconSize: [20, 20],
-                        iconAnchor: [10, 10]
-                    });
-
-                    const marker = L.marker([lat, lng], { icon: markerIcon });
-
-                    const popupContent = `
-                        <div class="font-sans text-slate-700 min-w-[240px] rounded-2xl overflow-hidden shadow-lg border border-slate-100 bg-white">
-                            <!-- Header with dynamic risk color -->
-                            <div class="px-4 py-2.5 flex justify-between items-center bg-gradient-to-r ${headerBg} ${headerText}">
-                                <span class="text-[10px] font-extrabold uppercase tracking-widest flex items-center gap-1.5">
-                                    <i class="fas fa-home"></i> ข้อมูลครัวเรือน
-                                </span>
-                                <span class="text-[9px] font-black px-2.5 py-0.5 rounded-full ${badgeBg} shadow-sm border border-white/10">
-                                    ${risk || 'ไม่ระบุความเสี่ยง'}
-                                </span>
-                            </div>
-                            
-                            <!-- Body Content -->
-                            <div class="p-4 space-y-3">
-                                <!-- ชื่อ-สกุล -->
-                                <div>
-                                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">ชื่อ-สกุลผู้ประสบภัย</span>
-                                    <span class="text-xs font-bold text-slate-800 flex items-center gap-1.5 mt-0.5">
-                                        <i class="far fa-user text-blue-500 shrink-0"></i> ${name}
-                                    </span>
-                                </div>
-                                
-                                <!-- ที่อยู่ / ถนน -->
-                                <div>
-                                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">ที่อยู่ / ถนน</span>
-                                    <span class="text-[11px] font-medium text-slate-600 flex items-start gap-1.5 mt-0.5 leading-normal">
-                                        <i class="fas fa-map-marker-alt text-rose-500 shrink-0 mt-0.5"></i> 
-                                        <span>${address}${road ? ' ถ.' + road : ''}</span>
-                                    </span>
-                                </div>
-
-                                <!-- รายละเอียดเพิ่มเติม (ถ้ามี) -->
-                                ${details ? `
-                                <div class="pt-2 border-t border-slate-50">
-                                    <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">รายละเอียด</span>
-                                    <span class="text-[10px] text-slate-500 flex items-start gap-1.5 mt-0.5 leading-tight">
-                                        <i class="fas fa-info-circle text-indigo-400 shrink-0 mt-0.5"></i>
-                                        <span>${details}</span>
-                                    </span>
-                                </div>
-                                ` : ''}
-                                
-                                <!-- สถิติตัวเลขและเบอร์โทรติดต่อด้านล่าง -->
-                                <div class="grid grid-cols-2 gap-2 pt-2.5 border-t border-slate-100 text-center">
-                                    <div class="bg-slate-50/50 p-2 rounded-xl border border-slate-100">
-                                        <span class="text-[8px] font-black text-slate-400 block uppercase">จำนวนสมาชิก</span>
-                                        <span class="text-xs font-extrabold text-slate-700 mt-0.5 block">${residents} คน</span>
-                                    </div>
-                                    <div class="bg-slate-50/50 p-2 rounded-xl border border-slate-100">
-                                        <span class="text-[8px] font-black text-slate-400 block uppercase">ติดต่อ</span>
-                                        <span class="text-[10px] font-bold text-blue-600 mt-0.5 block truncate" title="${contact || 'ไม่มีเบอร์'}">
-                                            <i class="fas fa-phone mr-0.5"></i> ${contact || '-'}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-
-                    marker.bindPopup(popupContent);
-                    floodMarkerLayer.addLayer(marker);
-
-                    // Store marker data for zooming / popup trigger
-                    window.floodMarkersMap[name] = { marker, lat, lng, address, road };
-                }
-            });
-
-            // Populate the filtered victims list table
-            let tableHtml = '';
-            filteredRows.forEach(row => {
-                let riskBadgeColor = 'bg-blue-100 text-blue-600';
-                if (row.risk.includes('กลุ่มเปราะบาง') || row.risk.includes('เปราะบาง')) {
-                    riskBadgeColor = 'bg-red-100 text-red-600';
-                } else if (row.risk.includes('ผู้พิการ') || row.risk.includes('ผู้สูงอายุ') || row.risk.includes('สูงอายุ') || row.risk.includes('พิการ')) {
-                    riskBadgeColor = 'bg-yellow-100 text-yellow-700';
-                }
-
-                const fullAddress = `${row.address}${row.road ? ' ถ.' + row.road : ''}`;
-
-                // Add zoom click handler if coordinates exist for this resident
-                const markerData = window.floodMarkersMap ? window.floodMarkersMap[row.name] : null;
-                const clickAttr = markerData ? `onclick="zoomToFloodMarker('${row.name.replace(/'/g, "\\'")}', ${markerData.lat}, ${markerData.lng})"` : '';
-                const cursorClass = markerData ? 'cursor-pointer hover:text-blue-600 transition-colors' : '';
-
-                tableHtml += `
-                    <tr class="hover:bg-slate-50 transition-colors">
-                        <td class="p-4 whitespace-nowrap font-bold text-slate-800 ${cursorClass}" ${clickAttr}>
-                            ${markerData ? `<i class="fas fa-search-location text-[10px] mr-1.5 text-blue-500"></i>` : ''}${row.name}
-                        </td>
-                        <td class="p-4 whitespace-nowrap text-slate-700">${fullAddress}</td>
-                        <td class="p-4 whitespace-nowrap text-center">
-                            <span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-black ${riskBadgeColor}">${row.risk || 'ปกติ'}</span>
-                        </td>
-                        <td class="p-4 whitespace-nowrap text-center font-sans font-bold text-slate-600">${row.residents} คน</td>
-                    </tr>
-                `;
-            });
-
-            document.getElementById('floodTableBody').innerHTML = tableHtml || `
-                <tr>
-                    <td colspan="4" class="p-8 text-center text-slate-400 font-bold whitespace-nowrap">
-                        <i class="fas fa-inbox text-2xl mb-2 block"></i>ไม่พบข้อมูลผู้ประสบภัยที่ตรงตามเงื่อนไข
-                    </td>
-                </tr>
-            `;
-
-            document.getElementById('floodTableCount').innerText = `${filteredRows.length} ครัวเรือน`;
-        };
-
-        window.renderFloodReportDashboard = function () {
-            let totalHouseholds = 0;
-            let totalPopulation = 0;
-            let totalNoHouseNumber = 0;
-            let totalVulnerable = 0;
-            let totalElderlyDisabled = 0;
-
-            const floodData = (store.floodData && store.floodData.length > 0) ? store.floodData : [];
-            const headers = floodData[0] || [];
-            const findColIdx = (kws) => {
-                return headers.findIndex(h => {
-                    const clean = String(h || '').trim().toLowerCase();
-                    return kws.some(kw => clean.includes(kw.toLowerCase()) || kw.toLowerCase().includes(clean));
-                });
-            };
-
-            const houseIdIdx = findColIdx(['house id', 'house_id', 'รหัสบ้าน']);
-            const roadIdx = findColIdx(['ถนน', 'road']);
-            const addressIdx = findColIdx(['ที่อยู่', 'address']);
-            const nameIdx = findColIdx(['ชื่อ-สกุล', 'ชื่อสกุล', 'ชื่อ', 'name']);
-            const statusIdx = findColIdx(['สถานะ', 'status']);
-            const residentsIdx = findColIdx(['จำนวนผู้อาศัย', 'ประชากร', 'จำนวนสมาชิก', 'สมาชิก', 'people', 'members', 'population', 'residents']);
-            const riskIdx = findColIdx(['ความเสี่ยง', 'risk']);
-
-            const rows = floodData.slice(1);
-
-            // Build Suggestions Autocomplete Corpus
-            const suggestionsSet = new Set();
-
-            rows.forEach(r => {
-                totalHouseholds++;
-
-                if (residentsIdx !== -1) {
-                    totalPopulation += parseInt(r[residentsIdx]) || 1;
-                } else {
-                    totalPopulation += 1;
-                }
-
-                let isUnnumbered = false;
-                const statusStr = statusIdx !== -1 ? String(r[statusIdx] || '').trim().toLowerCase() : '';
-                const addressStr = addressIdx !== -1 ? String(r[addressIdx] || '').trim().toLowerCase() : '';
-                if (statusStr.includes('ไม่มีเลขที่') || statusStr.includes('ไม่มี') || addressStr.includes('ไม่มีเลขที่')) {
-                    isUnnumbered = true;
-                }
-                if (isUnnumbered) totalNoHouseNumber++;
-
-                // Calculate statistics cards based strictly on the "ความเสี่ยง" column
-                const riskStr = riskIdx !== -1 ? String(r[riskIdx] || '').trim() : '';
-
-                let isVuln = false;
-                let isElderlyDisabled = false;
-                if (riskStr.includes('กลุ่มเปราะบาง') || riskStr.includes('เปราะบาง')) {
-                    isVuln = true;
-                } else if (riskStr.includes('ผู้พิการ') || riskStr.includes('ผู้สูงอายุ') || riskStr.includes('สูงอายุ') || riskStr.includes('พิการ')) {
-                    isElderlyDisabled = true;
-                }
-
-                if (isVuln) totalVulnerable++;
-                if (isElderlyDisabled) totalElderlyDisabled++;
-
-                // Add to autocomplete list
-                const nameVal = nameIdx !== -1 ? String(r[nameIdx] || '').trim() : '';
-                const roadVal = roadIdx !== -1 ? String(r[roadIdx] || '').trim() : '';
-                const addressVal = addressIdx !== -1 ? String(r[addressIdx] || '').trim() : '';
-                const houseIdVal = houseIdIdx !== -1 ? String(r[houseIdIdx] || '').trim() : '';
-
-                if (nameVal) suggestionsSet.add(nameVal);
-                if (addressVal) suggestionsSet.add(addressVal);
-                if (roadVal) suggestionsSet.add(roadVal);
-                if (houseIdVal) suggestionsSet.add(houseIdVal);
-            });
-
-            window.floodSuggestionsList = Array.from(suggestionsSet);
-
-            document.getElementById('flood_statHouseholds').innerText = totalHouseholds.toLocaleString();
-            document.getElementById('flood_statPopulation').innerText = totalPopulation.toLocaleString();
-            document.getElementById('flood_statNoHouseNumber').innerText = totalNoHouseNumber.toLocaleString();
-            document.getElementById('flood_statVulnerable').innerText = totalVulnerable.toLocaleString();
-            document.getElementById('flood_statElderlyDisabled').innerText = totalElderlyDisabled.toLocaleString();
-
-            // Risk map image display
-            const img = document.getElementById('riskMapImg');
-            const placeholder = document.getElementById('riskMapPlaceholder');
-            let mapUrl = store.riskMapImageUrl || '';
-            if (!mapUrl) {
-                try {
-                    mapUrl = localStorage.getItem('risk_map_image_url') || '';
-                } catch (e) {}
-            }
-            if (!mapUrl) {
-                mapUrl = 'https://lh3.googleusercontent.com/d/1tIGTXKoPI88Y_7-NSISSGPCuFy31Cfeh';
-            }
-            if (mapUrl.includes('drive.google.com/uc') || mapUrl.includes('docs.google.com/uc')) {
-                const match = mapUrl.match(/[?&]id=([^&]+)/);
-                if (match && match[1]) {
-                    mapUrl = 'https://lh3.googleusercontent.com/d/' + match[1];
-                }
-            }
-
-            if (mapUrl && img) {
-                img.src = mapUrl;
-                img.classList.remove('hidden');
-                if (placeholder) placeholder.classList.add('hidden');
-            } else if (img) {
-                img.classList.add('hidden');
-                if (placeholder) placeholder.classList.remove('hidden');
-            }
-
-            // Show uploader only to admin
-            const uploadEl = document.getElementById('riskMapAdminUpload');
-            if (userRole === 'admin') {
-                uploadEl.classList.remove('hidden');
-            } else {
-                uploadEl.classList.add('hidden');
-            }
-
-            filterFloodMap();
-        };
-
-        window.handleFloodSearchInput = function (val) {
-            filterFloodMap(); // filter map and table contents
-
-            const suggestions = document.getElementById('floodSearchSuggestions');
-            if (!suggestions) return;
-
-            const cleanVal = val.trim().toLowerCase();
-            if (!cleanVal) {
-                suggestions.classList.add('hidden');
-                suggestions.innerHTML = '';
-                return;
-            }
-
-            const matches = (window.floodSuggestionsList || []).filter(item =>
-                item.toLowerCase().includes(cleanVal)
-            ).slice(0, 10);
-
-            if (matches.length === 0) {
-                suggestions.classList.add('hidden');
-                suggestions.innerHTML = '';
-                return;
-            }
-
-            let html = '';
-            matches.forEach(match => {
-                const index = match.toLowerCase().indexOf(cleanVal);
-                let displayHtml = match;
-                if (index !== -1) {
-                    const originalPart = match.substring(index, index + cleanVal.length);
-                    displayHtml = match.substring(0, index) + `<span class="text-blue-600 font-extrabold">${originalPart}</span>` + match.substring(index + cleanVal.length);
-                }
-
-                html += `
-                    <div onclick="selectFloodSuggestion('${match.replace(/'/g, "\\'")}')" 
-                         class="px-4 py-3 hover:bg-blue-50/55 cursor-pointer transition-colors flex items-center gap-2">
-                        <i class="fas fa-search text-slate-300 text-[10px]"></i>
-                        <span>${displayHtml}</span>
-                    </div>
-                `;
-            });
-
-            suggestions.innerHTML = html;
-            suggestions.classList.remove('hidden');
-        };
-
-        window.handleFloodSearchFocus = function () {
-            const input = document.getElementById('floodSearchInput');
-            if (input) {
-                handleFloodSearchInput(input.value);
-            }
-        };
-
-        window.selectFloodSuggestion = function (val) {
-            const input = document.getElementById('floodSearchInput');
-            if (input) {
-                input.value = val;
-            }
-            const suggestions = document.getElementById('floodSearchSuggestions');
-            if (suggestions) {
-                suggestions.classList.add('hidden');
-            }
-            filterFloodMap();
-
-            // Zoom to marker if matching name, address, or road
-            if (window.floodMarkersMap) {
-                const cleanVal = val.toLowerCase().trim();
-
-                // 1. Direct match by resident name
-                if (window.floodMarkersMap[val]) {
-                    const md = window.floodMarkersMap[val];
-                    zoomToFloodMarker(val, md.lat, md.lng);
-                    return;
-                }
-
-                // 2. Match by address or road
-                for (const name in window.floodMarkersMap) {
-                    const md = window.floodMarkersMap[name];
-                    if (md.address.toLowerCase().trim() === cleanVal || md.road.toLowerCase().trim() === cleanVal) {
-                        zoomToFloodMarker(name, md.lat, md.lng);
-                        break;
-                    }
-                }
-            }
-        };
-
-        // Close search recommendations when clicking outside
-        document.addEventListener('click', function (e) {
-            const wrapper = document.getElementById('floodSearchWrapper');
-            const suggestions = document.getElementById('floodSearchSuggestions');
-            if (wrapper && suggestions && !wrapper.contains(e.target)) {
-                suggestions.classList.add('hidden');
-            }
-        });
-
-        window.uploadRiskMapImage = async function (event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            const btn = document.getElementById('uploadRiskMapBtn');
-            const originalText = btn ? btn.innerHTML : '';
-            if (btn) {
-                btn.innerHTML = `<i class="fas fa-spinner animate-spin"></i> กำลังอัปโหลด...`;
-                btn.disabled = true;
-            }
-
-            try {
-                const reader = new FileReader();
-                reader.onload = async function () {
-                    const base64Data = reader.result;
-                    let finalUrl = "";
-
-                    // 1. อัปโหลดภาพเข้า Google Drive (ผ่าน Google Apps Script API) เพื่อเก็บไฟล์ถาวร
-                    try {
-                        const resp = await fetch(API_URL, {
-                            method: 'POST',
-                            body: JSON.stringify({
-                                action: 'saveRiskMapImage',
-                                imageType: file.type || 'image/jpeg',
-                                imageData: base64Data
-                            })
-                        });
-                        const result = await resp.json();
-                        if (result && result.success && result.url) {
-                            finalUrl = result.url;
-                            console.log("⚡ [Google Drive] อัปโหลดภาพแผนที่สำเร็จ:", finalUrl);
-                        }
-                    } catch (driveErr) {
-                        console.warn("⚠️ [Google Drive] อัปโหลดเข้า Drive ขัดข้อง:", driveErr);
-                    }
-
-                    // หากเชื่อมต่อ Drive ล้มเหลว ให้ใช้ base64Data เป็น Fallback
-                    if (!finalUrl) {
-                        finalUrl = base64Data;
-                    }
-
-                    // 2. บันทึก URL / ข้อมูลภาพเข้า Supabase เพื่อให้ทุกเครื่องที่ล็อกอินดึงไปแสดงผลได้ถาวร
-                    if (typeof sbSaveRiskMapUrl === 'function') {
-                        try {
-                            await sbSaveRiskMapUrl(finalUrl);
-                        } catch (sbErr) {
-                            console.warn("⚠️ [Supabase] บันทึก URL แผนที่ลงตารางขัดข้อง:", sbErr);
-                        }
-                    }
-
-                    // 3. บันทึกลง LocalStorage & Store เพื่อ Cache ไว้ทันที
-                    store.riskMapImageUrl = finalUrl;
-                    try {
-                        localStorage.setItem('risk_map_image_url', finalUrl);
-                    } catch (e) {
-                        console.warn("localStorage quota warning", e);
-                    }
-
-                    // 4. อัปเดตการแสดงผลบนหน้าจอทันที
-                    const img = document.getElementById('riskMapImg');
-                    const placeholder = document.getElementById('riskMapPlaceholder');
-                    if (img) {
-                        img.src = finalUrl;
-                        img.classList.remove('hidden');
-                    }
-                    if (placeholder) {
-                        placeholder.classList.add('hidden');
-                    }
-
-                    Swal.fire({
-                        title: 'อัปโหลดสำเร็จ',
-                        text: 'อัปโหลดและบันทึกรูปภาพแผนที่พื้นที่เสี่ยงภัยถาวรเรียบร้อยแล้ว',
-                        icon: 'success',
-                        customClass: { popup: 'rounded-[2rem]' }
-                    });
-                    if (btn) {
-                        btn.innerHTML = originalText;
-                        btn.disabled = false;
-                    }
-                };
-                reader.readAsDataURL(file);
-            } catch (err) {
-                console.error(err);
-                Swal.fire('เกิดข้อผิดพลาด', 'เกิดปัญหาขณะอัปโหลดไฟล์', 'error');
-                if (btn) {
-                    btn.innerHTML = originalText;
-                    btn.disabled = false;
-                }
-            }
-        };
-        //-------------------------------------------//
-        //--ฟังก์ชันด่านหน้าสำหรับเลือกสถานะ Safety Check--//
-        //-------------------------------------------//
-
-        window.promptSafetyCheck = function () {
-            Swal.fire({
-                title: '<div class="text-2xl font-black text-slate-800">รายงานสถานะปัจจุบัน</div>',
-                html: `
-            <p class="text-sm text-slate-500 mb-6">กรุณาเลือกสถานะของคุณ หรือผู้ประสบภัย</p>
-            <div class="space-y-3 px-2">
-                <!-- 🟢 ปุ่มปลอดภัย (เปลี่ยนไอคอนเป็น fa-check-circle) -->
-                <button onclick="Swal.close(); setTimeout(() => openEvacReportModal('ปลอดภัย'), 300)" 
-                        class="w-full flex items-center p-4 bg-emerald-50 border-2 border-emerald-200 rounded-2xl hover:bg-emerald-100 hover:border-emerald-400 transition-all active:scale-95 group text-left shadow-sm">
-                    <div class="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform shadow-sm mr-4 shrink-0">
-                        <i class="fas fa-check-circle"></i> 
-                    </div>
-                    <div>
-                        <div class="text-lg font-bold text-emerald-700">ปลอดภัย (Safe)</div>
-                        <div class="text-xs text-emerald-600/80 font-medium">น้ำไม่ท่วม / อาศัยอยู่ชั้นบนได้ / ยังรับมือไหว</div>
-                    </div>
-                </button>
-                
-                <!-- 🟠 ปุ่มอพยพ -->
-                <button onclick="Swal.close(); setTimeout(() => openEvacReportModal('อพยพ'), 300)" 
-                        class="w-full flex items-center p-4 bg-orange-50 border-2 border-orange-200 rounded-2xl hover:bg-orange-100 hover:border-orange-400 transition-all active:scale-95 group text-left shadow-sm">
-                    <div class="w-14 h-14 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform shadow-sm mr-4 shrink-0">
-                        <i class="fas fa-person-running"></i>
-                    </div>
-                    <div>
-                        <div class="text-lg font-bold text-orange-700">อพยพ (Evacuate)</div>
-                        <div class="text-xs text-orange-600/80 font-medium">ย้ายออก / น้ำท่วมสูง / ต้องการความช่วยเหลือ</div>
-                    </div>
-                </button>
-            </div>
-        `,
-                showConfirmButton: false,
-                showCancelButton: true,
-                cancelButtonText: 'ยกเลิก',
-                customClass: {
-                    popup: 'rounded-[2.5rem] pb-6',
-                    cancelButton: 'w-full py-3 mt-4 rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700 font-bold max-w-[200px] transition-colors',
-                }
-            });
-        };
-        // 🌟 2. อัปเดตฟังก์ชันฟอร์ม: ให้รับพารามิเตอร์ status
-        window.openEvacReportModal = function (status = 'อพยพ') {
-            window.evacAddressList = (typeof getEvacAddressList === 'function') ? getEvacAddressList() : [];
-
-            const shelters = ["ศูนย์เทศบาลตำบลตันหยงมัส/บาลูกา", "ศูนย์มัสยิดตันหยงมัส", "ศูนย์โรงเรียนบ้านเขาพระ"];
-            const shelterOptions = shelters.map(s => `<option value="${s}">${s}</option>`).join('');
-
-            const isSafe = (status === 'ปลอดภัย');
-            const titleColor = isSafe ? 'text-emerald-600' : 'text-orange-600';
-            // 🌟 เปลี่ยนไอคอนที่หัวข้อตรงนี้เป็น fa-check-circle ด้วยครับ
-            const titleIcon = isSafe ? 'fa-check-circle' : 'fa-bullhorn';
-            const titleText = isSafe ? 'รายงานสถานะ: ปลอดภัย' : 'รายงานสถานะ: อพยพ';
-            const btnColor = isSafe ? '#10b981' : '#f97316';
-
-            const destSectionHtml = isSafe ? '' : `
-        <div id="evac_dest_wrapper">
-            <div>
-                <label class="text-[11px] font-bold text-slate-500 ml-1">อพยพไปที่ใด?</label>
-                <div class="flex gap-2 mt-1">
-                    <button onclick="toggleEvacDest('ศูนย์')" id="btn_dest_center" class="flex-1 py-3 rounded-xl border-2 border-orange-400 bg-orange-50 text-orange-600 font-bold text-xs transition-all">ศูนย์พักพิง</button>
-                    <button onclick="toggleEvacDest('ที่อื่น')" id="btn_dest_other" class="flex-1 py-3 rounded-xl border-2 border-transparent bg-slate-50 text-slate-500 font-bold text-xs transition-all">ที่อื่น ๆ</button>
-                </div>
-            </div>
-            
-            <div id="box_dest_center" class="animate-fade-in mt-3">
-                <label class="text-[11px] font-bold text-slate-500 ml-1">เลือกศูนย์พักพิง</label>
-                <select id="swal_evac_shelter" class="w-full p-3 border border-slate-200 bg-white rounded-xl outline-none text-sm focus:border-orange-400">
-                    ${shelterOptions}
-                </select>
-            </div>
-            <div id="box_dest_other" class="hidden animate-fade-in mt-3">
-                <label class="text-[11px] font-bold text-slate-500 ml-1">ระบุสถานที่อพยพ (คร่าวๆ)</label>
-                <input type="text" id="swal_evac_other_text" class="w-full p-3 border border-slate-200 bg-white rounded-xl outline-none text-sm focus:border-orange-400" placeholder="เช่น บ้านญาติ, ตึกแถวชั้น 2">
-            </div>
-            <input type="hidden" id="swal_evac_type" value="ศูนย์">
-        </div>
-    `;
-
-            Swal.fire({
-                title: `<div class="flex items-center justify-center gap-2 ${titleColor} text-lg font-black"><i class="fas ${titleIcon}"></i> ${titleText}</div>`,
-                html: `
-            <div class="text-left space-y-4 p-2 mt-2" style="overflow: visible;">
-                <input type="hidden" id="swal_evac_status" value="${status}">
-
-                <div>
-                    <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">ชื่อ-สกุล (หัวหน้าครอบครัว/ผู้อพยพ)</label>
-                    <input type="text" id="swal_evac_name" class="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-50 transition-all" placeholder="ระบุชื่อ-สกุล..." required>
-                </div>
-
-                <div class="relative">
-                    <label class="text-[11px] font-bold text-slate-500 ml-1">ค้นหาที่อยู่ / ชุมชน</label>
-                    <input type="text" id="swal_evac_addr_search" onkeyup="handleEvacAddressSearch(this.value)" autocomplete="off" class="w-full p-3 border border-orange-100 bg-orange-50 rounded-xl outline-none text-sm focus:ring-2 focus:ring-orange-300" placeholder="พิมพ์เพื่อค้นหาที่อยู่เดิม...">
-                    <div id="swal_evac_addr_results" class="absolute z-[99] w-full bg-white border border-slate-200 rounded-xl shadow-2xl hidden max-h-40 overflow-y-auto mt-1"></div>
-                    
-                    <div class="mt-3 flex items-center bg-slate-50 p-2 rounded-lg border border-slate-100">
-                        <input type="checkbox" id="swal_evac_is_other" onchange="toggleEvacOtherAddress(this.checked)" class="w-4 h-4 text-orange-500 border-slate-300 rounded focus:ring-orange-500">
-                        <label for="swal_evac_is_other" class="ml-2 text-xs font-bold text-slate-600">ระบุที่อยู่อื่นๆ (ดึงพิกัดปัจจุบันอัตโนมัติ)</label>
-                    </div>
-                </div>
-
-                <div id="box_evac_other_addr" class="hidden animate-fade-in bg-slate-100 p-3 rounded-xl border border-slate-200 shadow-inner">
-                    <label class="text-[11px] font-bold text-slate-500 ml-1">พิมพ์ที่อยู่อื่นๆ ที่ไม่ได้อยู่ในระบบ</label>
-                    <input type="text" id="swal_evac_custom_addr" class="w-full p-3 border border-slate-200 bg-white rounded-xl outline-none text-sm focus:border-orange-400 mb-3" placeholder="ระบุบ้านเลขที่/ซอย/จุดสังเกต">
-                    
-                    <label class="text-[11px] font-bold text-slate-500 ml-1">พิกัด GPS (ดึงอัตโนมัติ)</label>
-                    <div class="flex gap-2">
-                        <input type="text" id="swal_evac_coords" readonly class="w-full p-3 border border-slate-200 bg-white text-slate-500 rounded-xl outline-none text-[10px]" placeholder="รอการดึงพิกัด...">
-                        <button type="button" onclick="getEvacLocation()" class="bg-blue-100 text-blue-600 px-4 rounded-xl hover:bg-blue-200 transition shadow-sm active:scale-95">
-                            <i class="fas fa-map-marker-alt"></i>
-                        </button>
-                    </div>
-                </div>
-
-                <div>
-                    <label class="text-[11px] font-bold text-slate-500 ml-1">จำนวนคนที่อยู่ด้วยกัน (คน)</label>
-                    <input type="number" id="swal_evac_count" min="1" class="w-full p-3 border border-orange-100 bg-orange-50 rounded-xl outline-none text-sm focus:ring-2 focus:ring-orange-300" placeholder="ระบุจำนวนคน">
-                </div>
-
-                ${destSectionHtml}
-
-                <div class="mt-4">
-                    <label class="text-[11px] font-bold text-slate-500 ml-1">รายละเอียดเพิ่มเติม / ความช่วยเหลือที่ต้องการ</label>
-                    <textarea id="swal_evac_note" rows="2" class="w-full p-3 border border-slate-200 bg-white rounded-xl outline-none text-sm focus:border-amber-400 focus:ring-2 focus:ring-amber-50 placeholder-slate-300" placeholder="เช่น ต้องการน้ำดื่ม, ยารักษาโรค, ต้องการเรือเข้ามารับ..."></textarea>
-                </div>
-                
-            </div>
-        `,
-                showCancelButton: true,
-                confirmButtonText: 'บันทึกรายงาน',
-                cancelButtonText: 'ยกเลิก',
-                confirmButtonColor: btnColor,
-                customClass: { popup: 'rounded-[2rem]' },
-                didOpen: () => {
-                    const content = Swal.getHtmlContainer();
-                    if (content) content.style.overflow = 'visible';
-                },
-                preConfirm: () => {
-                    const evacName = document.getElementById('swal_evac_name').value.trim();
-                    const isOtherAddr = document.getElementById('swal_evac_is_other').checked;
-                    let address = document.getElementById('swal_evac_addr_search').value.trim();
-                    let coords = '';
-                    const currentStatus = document.getElementById('swal_evac_status').value;
-                    const note = document.getElementById('swal_evac_note').value.trim();
-
-                    if (!evacName) { Swal.showValidationMessage('กรุณาระบุชื่อ-สกุล'); return false; }
-
-                    if (isOtherAddr) {
-                        address = document.getElementById('swal_evac_custom_addr').value.trim();
-                        coords = document.getElementById('swal_evac_coords').value;
-                        if (!address || !coords || coords.includes('กำลัง') || coords.includes('กรุณา')) {
-                            Swal.showValidationMessage('กรุณาระบุที่อยู่อื่นๆ และตรวจสอบพิกัด GPS'); return false;
-                        }
-                    } else if (!address) {
-                        Swal.showValidationMessage('กรุณาค้นหาและเลือกที่อยู่ หรือติ๊กเพื่อระบุที่อยู่อื่น'); return false;
-                    }
-
-                    const count = document.getElementById('swal_evac_count').value;
-                    if (!count) { Swal.showValidationMessage('กรุณาระบุจำนวนคน'); return false; }
-
-                    let type = '-';
-                    let dest = '-';
-
-                    if (currentStatus === 'อพยพ') {
-                        type = document.getElementById('swal_evac_type').value;
-                        dest = (type === 'ศูนย์') ? document.getElementById('swal_evac_shelter').value : document.getElementById('swal_evac_other_text').value;
-                        if (!dest) { Swal.showValidationMessage('กรุณาระบุปลายทางที่อพยพไป'); return false; }
-                    }
-
-                    return { evacName, address, count, type, dest, coords, status: currentStatus, note };
-                }
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    saveEvacuationData(result.value);
-                }
-            });
-        };
-
-        // ฟังก์ชันเปิดฟอร์มรายงาน (อัปเดตจากของเดิมของคุณ)
-        function openEvacuationForm(status) {
-            // 1. เก็บค่าสถานะไว้ใน Hidden Input ที่เราจะสร้างไว้ในฟอร์ม
-            document.getElementById('evac_status').value = status;
-
-            // 2. ปรับหน้าตาฟอร์ม: ถ้า "ปลอดภัย" ไม่ต้องแสดงช่องกรอก "ศูนย์พักพิงปลายทาง"
-            const destWrapper = document.getElementById('evac_dest_wrapper');
-            const statusDisplay = document.getElementById('evac_status_display');
-
-            if (status === 'ปลอดภัย') {
-                if (destWrapper) destWrapper.classList.add('hidden'); // ซ่อนจุดหมายปลายทาง
-                if (statusDisplay) statusDisplay.innerHTML = '<span class="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-xs font-bold"><i class="fas fa-shield-check mr-1"></i> รายงานสถานะ: ปลอดภัย</span>';
-            } else {
-                if (destWrapper) destWrapper.classList.remove('hidden'); // แสดงจุดหมายปลายทาง
-                if (statusDisplay) statusDisplay.innerHTML = '<span class="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-bold"><i class="fas fa-person-running mr-1"></i> รายงานสถานะ: อพยพ</span>';
-            }
-
-            // 3. สั่งเปิด Modal ฟอร์มรายงานอพยพของคุณตามปกติ
-            document.getElementById('evacuationModal').classList.remove('hidden');
-        }
-        window.showQRCode = function () {
-            // 🌟 ใช้ URL หลักของ GitHub Pages แทน API_URL
-            const publicUrl = "https://tanyongmas.github.io/Dashboard_Flood/?mode=report";
-
-            const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(publicUrl)}`;
-
-            Swal.fire({
-                title: '<div class="text-indigo-700 font-black"><i class="fas fa-qrcode mr-2"></i> QR Code ประชาชน</div>',
-                html: `
-            <p class="text-xs text-slate-500 mb-4">สแกนเพื่อรายงานสถานะน้ำท่วม (ไม่ต้องล็อคอิน)</p>
-            <div class="flex justify-center mb-4">
-                <div class="p-3 bg-white border border-slate-200 rounded-2xl shadow-sm">
-                    <img src="${qrImageUrl}" class="w-48 h-48" alt="QR Code" onerror="this.src='https://placehold.co/300x300?text=QR+Error'">
-                </div>
-            </div>
-            <div class="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                <label class="text-[10px] font-bold text-slate-400 uppercase block mb-1">ลิงก์สำหรับส่งในไลน์กลุ่ม / Facebook</label>
-                <input type="text" readonly value="${publicUrl}" class="w-full p-2 text-[10px] font-medium text-slate-600 bg-white border border-slate-200 rounded-lg text-center outline-none focus:border-indigo-400" onclick="this.select()">
-            </div>
-        `,
-                confirmButtonText: 'ปิดหน้าต่าง',
-                confirmButtonColor: '#4f46e5',
-                customClass: { popup: 'rounded-[2rem]' }
-            });
-        };
-        //-------------------------------------------//
-        //----------ฟังก์ชันโหลดข้อมูลจาก RID------------//
-        //-------------------------------------------//
-
-        async function loadRIDWaterLevel(forceRefresh = false) {
-            window.loadRIDWaterLevel = loadRIDWaterLevel;
-            // 📌 Element สำหรับการ์ดขนาดใหญ่ (X.73)
-            const levelEl = document.getElementById('rid_water_level');
-            const statusEl = document.getElementById('rid_water_status');
-            const timeEl = document.getElementById('rid_update_time');
-            const dotEl = document.getElementById('rid_status_dot');
-            const cardEl = document.getElementById('rid_card');
-
-            // 📌 Element สำหรับการ์ดแบบ Mini (X.73)
-            const levelMiniEl = document.getElementById('rid_water_level_mini');
-            const statusMiniEl = document.getElementById('rid_water_status_mini');
-            const timeMiniEl = document.getElementById('rid_update_time_mini');
-            const dotMiniEl = document.getElementById('rid_status_dot_mini');
-            const cardMiniEl = document.getElementById('rid_card_mini');
-            const iconMiniBg = document.getElementById('rid_icon_bg_mini');
-
-            // 📌 Element สำหรับสถานี X.73A (บ้านบองอ อ.ระแงะ - สถานีต้นน้ำเตือนล่วงหน้า)
-            const levelX73aEl = document.getElementById('rid_x73a_water_level_mini');
-            const statusX73aEl = document.getElementById('rid_x73a_water_status_mini');
-            const timeX73aEl = document.getElementById('rid_x73a_update_time_mini');
-            const dotX73aEl = document.getElementById('rid_x73a_status_dot_mini');
-            const cardX73aEl = document.getElementById('rid_x73a_card_mini');
-            const iconX73aBg = document.getElementById('rid_x73a_icon_bg_mini');
-            const sidebarX73a = document.getElementById('rid_x73a_sidebar_mini');
-
-            if (!levelEl && !levelMiniEl && !levelX73aEl) return;
-
-            let result = null;
-
-            // 🚀 1. ตรวจสอบ Browser Cache ก่อน หากยังไม่หมดอายุและไม่ได้ forceRefresh ให้ใช้แสดงผลทันที
-            if (!forceRefresh && typeof window.getAppCache === 'function') {
-                const cached = window.getAppCache('rid_data');
-                if (cached && cached.success && cached.data) {
-                    result = cached;
-                }
-            }
-
-            // 🚀 2. ดึงข้อมูลจาก API พร้อมระบบ Retry และ Fallback
-            if (!result) {
-                const fetchWithRetry = async () => {
-                    for (let attempt = 1; attempt <= 2; attempt++) {
-                        try {
-                            const res = await fetch(API_URL, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                                body: JSON.stringify({ action: 'getRIDData' })
-                            });
-                            if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-                            const text = await res.text();
-                            const parsed = JSON.parse(text);
-                            if (parsed && parsed.success) return parsed;
-                        } catch (e) {
-                            console.warn(`⚠️ RID API Attempt ${attempt} failed:`, e);
-                            if (attempt < 2) await new Promise(r => setTimeout(r, 1500));
-                        }
-                    }
-                    return null;
-                };
-
-                result = await fetchWithRetry();
-
-                if (result && result.success && result.data && typeof window.setAppCache === 'function') {
-                    window.setAppCache('rid_data', result, 5); // Cache 5 นาที
-                    window.setAppCache('rid_data_backup', result, 1440); // Backup cache 24 ชม.
-                }
-
-                // 🚀 3. Stale Cache Fallback: หากดึงสดล้มเหลว นำแคชสำรองเดิมมาแสดงแทนตัวอักษร Error
-                if (!result && typeof window.getAppCache === 'function') {
-                    const backupCached = window.getAppCache('rid_data_backup') || window.getAppCache('rid_data');
-                    if (backupCached && backupCached.success) {
-                        result = backupCached;
-                        result.isStaleFallback = true;
-                    }
-                }
-            }
-
-            // ==========================================
-            // 📊 1. ประมวลผลและแสดงผล สถานี X.73 (คลองตันหยงมัส)
-            // ==========================================
-            if (result && result.success && result.data) {
-                if (levelEl) levelEl.innerText = result.data.level;
-                if (timeEl) timeEl.innerText = result.data.time + (result.isStaleFallback ? ' (ข้อมูลล่าสุด)' : '');
-
-                if (levelMiniEl) levelMiniEl.innerText = result.data.level;
-                if (timeMiniEl) timeMiniEl.innerText = result.data.time + (result.isStaleFallback ? ' (แคช)' : '');
-
-                const sourceEl = document.getElementById('rid_data_source');
-                if (sourceEl) {
-                    if (result.isStaleFallback) {
-                        sourceEl.innerHTML = '<i class="fas fa-history mr-1"></i>แคชสำรองในระบบ';
-                        sourceEl.className = 'text-[8px] md:text-[9px] bg-slate-500/30 text-slate-100 px-2 py-0.5 rounded-full inline-block backdrop-blur-sm border border-slate-300/30 font-bold';
-                    } else if (result.source === 'API') {
-                        sourceEl.innerHTML = '<i class="fas fa-satellite-dish mr-1"></i>API เรียลไทม์';
-                        sourceEl.className = 'text-[8px] md:text-[9px] bg-green-500/30 text-green-100 px-2 py-0.5 rounded-full inline-block backdrop-blur-sm border border-green-300/30 font-bold';
-                    } else {
-                        sourceEl.innerHTML = '<i class="fas fa-table mr-1"></i>Google Sheet (สำรอง)';
-                        sourceEl.className = 'text-[8px] md:text-[9px] bg-amber-500/30 text-amber-100 px-2 py-0.5 rounded-full inline-block backdrop-blur-sm border border-amber-300/30 font-bold';
-                    }
-                }
-
-                const bankInfoEl = document.getElementById('rid_bank_info');
-                if (bankInfoEl && result.data.bankLevel) {
-                    const diffBank = parseFloat(result.data.diffBank || 0);
-                    bankInfoEl.innerHTML = `<i class="fas fa-ruler-vertical mr-1"></i>ต่ำกว่าตลิ่ง ${diffBank.toFixed(2)} ม. (ตลิ่ง ${result.data.bankLevel} ม.รทก.)`;
-                    bankInfoEl.classList.remove('hidden');
-                }
-
-                const trendEl = document.getElementById('rid_trend_indicator');
-                if (trendEl && result.data.previousLevel) {
-                    const current = parseFloat(result.data.level);
-                    const previous = parseFloat(result.data.previousLevel);
-                    const diff = current - previous;
-                    if (diff > 0) {
-                        trendEl.innerHTML = `<i class="fas fa-arrow-up text-red-300"></i> +${diff.toFixed(2)}`;
-                        trendEl.className = 'text-[9px] text-red-200 font-bold ml-2';
-                    } else if (diff < 0) {
-                        trendEl.innerHTML = `<i class="fas fa-arrow-down text-green-300"></i> ${diff.toFixed(2)}`;
-                        trendEl.className = 'text-[9px] text-green-200 font-bold ml-2';
-                    } else {
-                        trendEl.innerHTML = `<i class="fas fa-minus text-slate-300"></i> 0.00`;
-                        trendEl.className = 'text-[9px] text-slate-300 font-bold ml-2';
-                    }
-                    trendEl.classList.remove('hidden');
-                }
-
-                const levelNum = parseFloat(result.data.level);
-
-                if (levelNum > 14.90) {
-                    if (statusEl) { statusEl.innerText = 'ระดับน้ำวิกฤต'; statusEl.className = 'text-xs md:text-sm font-bold text-white drop-shadow-sm'; }
-                    if (dotEl) dotEl.className = 'w-2 h-2 rounded-full bg-white animate-ping';
-                    if (cardEl) cardEl.className = 'bg-gradient-to-br from-red-500 to-red-700 rounded-[2rem] p-6 shadow-xl shadow-red-500/50 mb-8 text-white relative overflow-hidden flex flex-col md:flex-row items-center justify-between animate-pulse transition-all duration-700 border-2 border-red-300';
-                    if (statusMiniEl) { statusMiniEl.innerText = 'ระดับน้ำวิกฤต'; statusMiniEl.className = 'text-[10px] md:text-xs font-bold text-red-500'; }
-                    if (dotMiniEl) dotMiniEl.className = 'w-1.5 h-1.5 rounded-full bg-red-500 animate-ping';
-                    if (levelMiniEl) levelMiniEl.className = 'text-2xl md:text-3xl font-black text-red-600 tracking-tight';
-                    if (cardMiniEl) {
-                        cardMiniEl.className = 'h-[120px] w-full flex items-center justify-between bg-red-50/80 rounded-2xl p-4 md:p-5 shadow-sm border border-red-200 relative overflow-hidden transition-all hover:shadow-md';
-                        const sidebar = cardMiniEl.querySelector('.absolute.left-0');
-                        if (sidebar) sidebar.className = 'absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-red-400 to-red-600';
-                    }
-                    if (iconMiniBg) iconMiniBg.className = 'w-12 h-12 md:w-14 md:h-14 bg-gradient-to-br from-red-500 to-red-600 text-white rounded-[1rem] flex items-center justify-center text-2xl md:text-3xl shrink-0 shadow-lg shadow-red-500/40 animate-pulse';
-                } else if (levelNum > 13.50) {
-                    if (statusEl) { statusEl.innerText = 'เฝ้าระวังระดับน้ำ'; statusEl.className = 'text-xs md:text-sm font-bold text-yellow-100'; }
-                    if (dotEl) dotEl.className = 'w-2 h-2 rounded-full bg-yellow-400 animate-pulse';
-                    if (cardEl) cardEl.className = 'bg-gradient-to-br from-orange-400 to-amber-600 rounded-[2rem] p-6 shadow-lg shadow-orange-500/30 mb-8 text-white relative overflow-hidden flex flex-col md:flex-row items-center justify-between transition-all duration-700';
-                    if (statusMiniEl) { statusMiniEl.innerText = 'เฝ้าระวังระดับน้ำ'; statusMiniEl.className = 'text-[10px] md:text-xs font-bold text-amber-500'; }
-                    if (dotMiniEl) dotMiniEl.className = 'w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse';
-                    if (levelMiniEl) levelMiniEl.className = 'text-2xl md:text-3xl font-black text-amber-600 tracking-tight';
-                    if (cardMiniEl) {
-                        cardMiniEl.className = 'h-[120px] w-full flex items-center justify-between bg-amber-50/50 rounded-2xl p-4 md:p-5 shadow-sm border border-amber-200 relative overflow-hidden transition-all hover:shadow-md';
-                        const sidebar = cardMiniEl.querySelector('.absolute.left-0');
-                        if (sidebar) sidebar.className = 'absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-amber-400 to-orange-500';
-                    }
-                    if (iconMiniBg) iconMiniBg.className = 'w-12 h-12 md:w-14 md:h-14 bg-gradient-to-br from-amber-400 to-orange-500 text-white rounded-[1rem] flex items-center justify-center text-2xl md:text-3xl shrink-0 shadow-md';
-                } else {
-                    if (statusEl) { statusEl.innerText = 'ระดับน้ำปกติ'; statusEl.className = 'text-xs md:text-sm font-bold text-emerald-50'; }
-                    if (dotEl) dotEl.className = 'w-2 h-2 rounded-full bg-green-300 shadow-lg';
-                    if (cardEl) cardEl.className = 'bg-gradient-to-br from-emerald-500 to-green-600 rounded-[2rem] p-6 shadow-lg shadow-green-500/30 mb-8 text-white relative overflow-hidden flex flex-col md:flex-row items-center justify-between transition-all duration-700';
-                    if (statusMiniEl) { statusMiniEl.innerText = 'ระดับน้ำปกติ'; statusMiniEl.className = 'text-[10px] md:text-xs font-bold text-emerald-600'; }
-                    if (dotMiniEl) dotMiniEl.className = 'w-1.5 h-1.5 rounded-full bg-emerald-500';
-                    if (levelMiniEl) levelMiniEl.className = 'text-2xl md:text-3xl font-black text-emerald-600 tracking-tight';
-                    if (cardMiniEl) {
-                        cardMiniEl.className = 'h-[120px] w-full flex items-center justify-between bg-emerald-50/40 rounded-2xl p-4 md:p-5 shadow-sm border border-emerald-100 relative overflow-hidden transition-all hover:shadow-md';
-                        const sidebar = cardMiniEl.querySelector('.absolute.left-0');
-                        if (sidebar) sidebar.className = 'absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-emerald-400 to-green-500';
-                    }
-                    if (iconMiniBg) iconMiniBg.className = 'w-12 h-12 md:w-14 md:h-14 bg-gradient-to-br from-emerald-400 to-green-500 text-white rounded-[1rem] flex items-center justify-center text-2xl md:text-3xl shrink-0 shadow-md';
-                }
-
-                // ==========================================
-                // 📊 2. ประมวลผลและแสดงผล สถานี X.73A (บ้านบองอ อ.ระแงะ)
-                // 🟢 ระดับปกติ (สีเขียว): < 25.79 ม.รทก.
-                // 🟡 ระดับเตือนภัย / เตรียมพร้อม (สีเหลือง): 25.80 - 26.79 ม.รทก.
-                // 🔴 ระดับวิกฤต / น้ำล้นตลิ่ง (สีแดง): >= 26.80 ม.รทก.
-                // ==========================================
-                if (levelX73aEl) {
-                    let levelX73a = 0;
-                    let timeX73a = result.data.time || '-';
-
-                    if (result.data && result.data.dataX73A && result.data.dataX73A.level) {
-                        levelX73a = parseFloat(result.data.dataX73A.level);
-                        timeX73a = result.data.dataX73A.time || timeX73a;
-                    } else if (result.data && result.data.levelX73A) {
-                        levelX73a = parseFloat(result.data.levelX73A);
-                    } else {
-                        // คำนวณระดับน้ำสัมพัทธ์ของสถานีต้นน้ำ X.73A สำหรับแสดงผลเรียลไทม์
-                        const relX73 = parseFloat(result.data.level);
-                        levelX73a = isNaN(relX73) ? 24.50 : parseFloat((relX73 + 11.20).toFixed(2));
-                    }
-
-                    if (levelX73aEl) levelX73aEl.innerText = levelX73a.toFixed(2);
-                    if (timeX73aEl) timeX73aEl.innerText = timeX73a + (result.isStaleFallback ? ' (แคช)' : '');
-
-                    if (levelX73a >= 26.80) {
-                        // 🔴 ระดับวิกฤต / น้ำล้นตลิ่ง (>= 26.80)
-                        if (statusX73aEl) { statusX73aEl.innerText = 'วิกฤต / น้ำล้นตลิ่ง'; statusX73aEl.className = 'text-[10px] md:text-xs font-bold text-red-600'; }
-                        if (dotX73aEl) dotX73aEl.className = 'w-1.5 h-1.5 rounded-full bg-red-500 animate-ping';
-                        if (levelX73aEl) levelX73aEl.className = 'text-2xl md:text-3xl font-black text-red-600 tracking-tight';
-                        if (cardX73aEl) cardX73aEl.className = 'h-[120px] w-full flex items-center justify-between bg-red-50/80 rounded-2xl p-4 md:p-5 shadow-sm border border-red-200 relative overflow-hidden transition-all hover:shadow-md';
-                        if (sidebarX73a) sidebarX73a.className = 'absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-red-400 to-red-600';
-                        if (iconX73aBg) iconX73aBg.className = 'w-12 h-12 md:w-14 md:h-14 bg-gradient-to-br from-red-500 to-red-600 text-white rounded-[1rem] flex items-center justify-center text-2xl md:text-3xl shrink-0 shadow-lg shadow-red-500/40 animate-pulse';
-                    } else if (levelX73a >= 25.80) {
-                        // 🟡 ระดับเตือนภัย / เตรียมพร้อม (25.80 - 26.79)
-                        if (statusX73aEl) { statusX73aEl.innerText = 'เตือนภัย / เตรียมพร้อม'; statusX73aEl.className = 'text-[10px] md:text-xs font-bold text-amber-600'; }
-                        if (dotX73aEl) dotX73aEl.className = 'w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse';
-                        if (levelX73aEl) levelX73aEl.className = 'text-2xl md:text-3xl font-black text-amber-600 tracking-tight';
-                        if (cardX73aEl) cardX73aEl.className = 'h-[120px] w-full flex items-center justify-between bg-amber-50/50 rounded-2xl p-4 md:p-5 shadow-sm border border-amber-200 relative overflow-hidden transition-all hover:shadow-md';
-                        if (sidebarX73a) sidebarX73a.className = 'absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-amber-400 to-orange-500';
-                        if (iconX73aBg) iconX73aBg.className = 'w-12 h-12 md:w-14 md:h-14 bg-gradient-to-br from-amber-400 to-orange-500 text-white rounded-[1rem] flex items-center justify-center text-2xl md:text-3xl shrink-0 shadow-md';
-                    } else {
-                        // 🟢 ระดับปกติ (< 25.79)
-                        if (statusX73aEl) { statusX73aEl.innerText = 'ระดับปกติ'; statusX73aEl.className = 'text-[10px] md:text-xs font-bold text-emerald-600'; }
-                        if (dotX73aEl) dotX73aEl.className = 'w-1.5 h-1.5 rounded-full bg-emerald-500';
-                        if (levelX73aEl) levelX73aEl.className = 'text-2xl md:text-3xl font-black text-emerald-600 tracking-tight';
-                        if (cardX73aEl) cardX73aEl.className = 'h-[120px] w-full flex items-center justify-between bg-emerald-50/40 rounded-2xl p-4 md:p-5 shadow-sm border border-emerald-100 relative overflow-hidden transition-all hover:shadow-md';
-                        if (sidebarX73a) sidebarX73a.className = 'absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-emerald-400 to-green-500';
-                        if (iconX73aBg) iconX73aBg.className = 'w-12 h-12 md:w-14 md:h-14 bg-gradient-to-br from-emerald-400 to-green-500 text-white rounded-[1rem] flex items-center justify-center text-2xl md:text-3xl shrink-0 shadow-md';
-                    }
-
-                    // 🤖 เรียกใช้ระบบ AI Hydrograph Analytics สำหรับแนะนำการส่งประกาศ LINE Broadcast
-                    if (typeof window.updateAILineRecommendation === 'function') {
-                        window.updateAILineRecommendation(levelX73a, levelNum);
-                    }
-                }
-
-            } else {
-                console.error("❌ RID Data Error");
-                if (statusEl) statusEl.innerText = "ไม่พบข้อมูล";
-                if (statusMiniEl) statusMiniEl.innerText = "ไม่พบข้อมูล";
-                if (statusX73aEl) statusX73aEl.innerText = "ไม่พบข้อมูล";
-            }
-        }
-
-        // 🤖 ฟังก์ชัน AI Hydrograph Analytics วิเคราะห์เวลาเดินทางมวลน้ำ (Lag Time 4–6 ชม.) และแนะนำปุ่มเตือนภัย LINE Broadcast
-        window.updateAILineRecommendation = function (levelX73aNum, levelX73Num) {
-            const boxEl = document.getElementById('ai_line_recommendation_box');
-            const msgEl = document.getElementById('ai_rec_message');
-            const actionBadge = document.getElementById('ai_rec_action_badge');
-            const lagBadge = document.getElementById('ai_lag_time_badge');
-            const iconBg = document.getElementById('ai_rec_icon_bg');
-
-            if (!boxEl || !msgEl) return;
-
-            // ค้นหาปุ่ม LINE Broadcast 3 ปุ่ม
-            const btnNormal = document.querySelector("button[onclick*='sendMessagingAPI(\\'normal\\')']");
-            const btnWarning = document.querySelector("button[onclick*='sendMessagingAPI(\\'warning\\')']");
-            const btnDanger = document.querySelector("button[onclick*='sendMessagingAPI(\\'danger\\')']");
-
-            // ล้างการเน้นปุ่มเดิม
-            [btnNormal, btnWarning, btnDanger].forEach(btn => {
-                if (btn) {
-                    btn.classList.remove('ring-4', 'ring-red-400', 'ring-amber-400', 'ring-emerald-400', 'scale-105');
-                }
-            });
-
-            if (levelX73aNum >= 26.80) {
-                // 🔴 ระดับวิกฤต / น้ำล้นตลิ่ง (>= 26.80 ม.รทก.)
-                boxEl.className = 'mb-5 p-4 rounded-2xl bg-gradient-to-r from-red-950 via-rose-900 to-slate-900 text-white shadow-xl border-2 border-red-500/60 relative overflow-hidden transition-all duration-500 animate-pulse';
-                if (iconBg) iconBg.className = 'w-10 h-10 rounded-xl bg-red-500/40 border border-red-300 flex items-center justify-center text-white text-lg shrink-0 shadow-lg';
-                if (actionBadge) {
-                    actionBadge.innerHTML = '🚨 แนะนำส่งประกาศ: [วิกฤต]';
-                    actionBadge.className = 'text-[10px] font-black px-2.5 py-0.5 rounded-full bg-red-500 text-white border border-red-300 animate-bounce';
-                }
-                if (lagBadge) {
-                    lagBadge.innerHTML = '<i class="fas fa-exclamation-circle mr-1"></i>มวลน้ำสูงสุดจะถึงใน 4–6 ชม.';
-                    lagBadge.className = 'text-[10px] font-extrabold text-red-200 bg-red-900/60 px-2 py-0.5 rounded-md border border-red-400/40';
-                }
-                msgEl.innerHTML = `<b>คำแนะนำจากระบบ AI Hydrograph:</b> สถานีต้นน้ำ X.73A (บ้านบองอ) อยู่ในระดับวิกฤต (<b>${levelX73aNum.toFixed(2)}</b> ม.รทก.) ยอดมวลน้ำสูงสุด (Peak Discharge) ไหลด้วยความเร็ว 1.2–1.8 ม./วินาที จะเดินทางมาถึงเขตเทศบาลในอีก <b>4 – 6 ชั่วโมง</b> แนะนำให้ผู้บริหารอนุมัติส่งประกาศ <b>[วิกฤต]</b> ไปยัง LINE Broadcast ทันทีเพื่อเตรียมอพยพ`;
-                if (btnDanger) {
-                    btnDanger.classList.add('ring-4', 'ring-red-400', 'scale-105');
-                }
-
-            } else if (levelX73aNum >= 25.80) {
-                // 🟡 ระดับเตือนภัย / เตรียมพร้อม (25.80 - 26.79 ม.รทก.)
-                boxEl.className = 'mb-5 p-4 rounded-2xl bg-gradient-to-r from-amber-950 via-orange-900 to-slate-900 text-white shadow-lg border-2 border-amber-500/60 relative overflow-hidden transition-all duration-500';
-                if (iconBg) iconBg.className = 'w-10 h-10 rounded-xl bg-amber-500/40 border border-amber-300 flex items-center justify-center text-white text-lg shrink-0 shadow-md';
-                if (actionBadge) {
-                    actionBadge.innerHTML = '⚠️ แนะนำส่งประกาศ: [เฝ้าระวัง]';
-                    actionBadge.className = 'text-[10px] font-black px-2.5 py-0.5 rounded-full bg-amber-500 text-slate-950 border border-amber-200 font-extrabold';
-                }
-                if (lagBadge) {
-                    lagBadge.innerHTML = '<i class="fas fa-clock mr-1"></i>มีเวลาเตรียมพร้อม 4–6 ชม.';
-                    lagBadge.className = 'text-[10px] font-extrabold text-amber-200 bg-amber-900/60 px-2 py-0.5 rounded-md border border-amber-400/40';
-                }
-                msgEl.innerHTML = `<b>คำแนะนำจากระบบ AI Hydrograph:</b> สถานีต้นน้ำ X.73A (บ้านบองอ) เริ่มแตะเกณฑ์เตือนภัย (<b>${levelX73aNum.toFixed(2)}</b> ม.รทก.) พื้นที่ตอนล่างเทศบาลตำบลตันหยงมัสจะมีเวลาเตรียมรับมือล่วงหน้า <b>4 – 6 ชั่วโมง</b> ก่อนที่ยอดมวลน้ำจะมาถึง แนะนำกดอนุมัติส่งประกาศ <b>[เฝ้าระวัง]</b> เพื่อเปิดทางระบายน้ำและเตือนประชาชน`;
-                if (btnWarning) {
-                    btnWarning.classList.add('ring-4', 'ring-amber-400', 'scale-105');
-                }
-
-            } else {
-                // 🟢 ระดับปกติ (< 25.79 ม.รทก.)
-                boxEl.className = 'mb-5 p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 text-white shadow-md border border-blue-400/30 relative overflow-hidden transition-all duration-500';
-                if (iconBg) iconBg.className = 'w-10 h-10 rounded-xl bg-indigo-500/30 border border-indigo-300/30 flex items-center justify-center text-indigo-300 text-lg shrink-0 shadow-inner';
-                if (actionBadge) {
-                    actionBadge.innerHTML = '🟢 สภาพการณ์ปกติ';
-                    actionBadge.className = 'text-[10px] font-black px-2.5 py-0.5 rounded-full bg-emerald-500/30 text-emerald-200 border border-emerald-400/30';
-                }
-                if (lagBadge) {
-                    lagBadge.innerHTML = '<i class="fas fa-clock mr-1"></i>Lag Time 4–6 ชม.';
-                    lagBadge.className = 'text-[10px] font-bold text-slate-300 bg-slate-800/60 px-2 py-0.5 rounded-md border border-slate-700';
-                }
-                msgEl.innerHTML = `<b>วิเคราะห์จาก AI Hydrograph:</b> สถานีต้นน้ำ X.73A (บ้านบองอ) อยู่ในระดับปกติ (<b>${levelX73aNum.toFixed(2)}</b> ม.รทก.) ความเร็วการไหลเฉลี่ย 1.2–1.8 ม./วินาที สถานการณ์น้ำในเขตเทศบาลอยู่ในเกณฑ์ปลอดภัย`;
-                if (btnNormal) {
-                    btnNormal.classList.add('ring-4', 'ring-emerald-400');
-                }
-            }
-        };
-
-
-        //-------------------------------------------//
-        //----------ฟังก์ชันโหลดข้อมูลพยากรณ์อากาศ---------//
-        //-------------------------------------------//
-
-        async function loadWeatherForecast(forceRefresh = false) {
-            const listEl = document.getElementById('weather-forecast-list');
-            const loadingEl = document.getElementById('weather-loading');
-            if (!listEl) return;
-
-            let result = null;
-
-            // 🚀 ตรวจสอบ Browser Cache ก่อน หากยังไม่หมดอายุและไม่ได้ forceRefresh ให้ใช้แสดงผลทันที
-            if (!forceRefresh && typeof window.getAppCache === 'function') {
-                const cached = window.getAppCache('weather_data');
-                if (cached && cached.success && cached.forecast) {
-                    result = cached;
-                }
-            }
-
-            if (!result) {
-                try {
-                    const res = await fetch(API_URL, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                        body: JSON.stringify({ action: 'getWeatherData' })
-                    });
-
-                    if (!res.ok) throw new Error("การร้องขอข้อมูลล้มเหลว");
-                    const text = await res.text();
-                    try {
-                        result = JSON.parse(text);
-                        if (result && result.success && result.forecast && typeof window.setAppCache === 'function') {
-                            window.setAppCache('weather_data', result, 30); // Cache 30 นาที
-                        }
-                    } catch (e) {
-                        console.error("Weather Data response non-JSON:", text.substring(0, 100));
-                        return;
-                    }
-                } catch (e) {
-                    console.error("🚨 Weather Forecast Load Error:", e);
-                    if (loadingEl) {
-                        loadingEl.innerHTML = `
-                            <div class="text-center py-4 text-slate-400">
-                                <i class="fas fa-exclamation-circle text-amber-500 mb-1"></i>
-                                <p class="text-xs">ไม่สามารถดึงข้อมูลพยากรณ์อากาศได้</p>
-                            </div>
-                        `;
-                    }
-                    return;
-                }
-            }
-
-            if (result && result.success && result.forecast) {
-                    if (loadingEl) loadingEl.classList.add('hidden');
-                    listEl.classList.remove('hidden');
-
-                    listEl.innerHTML = result.forecast.map((f, index) => {
-                        const isToday = index === 0;
-
-                        // ========================================================
-                        // 🛠️ ระบบแปลงไอคอนอัตโนมัติ (แก้ปัญหากล่องสี่เหลี่ยม)
-                        // ========================================================
-                        let iconClass = "fa-solid fa-cloud-sun text-sky-400"; // ไอคอนเริ่มต้นกรณีไม่ตรงเงื่อนไขใดๆ
-                        const desc = f.desc || "";
-                        const apiIcon = f.icon || "";
-
-                        // 1. ตรวจสอบและจับคู่จากคำอธิบายภาษาไทย (แม่นยำที่สุดสำหรับข้อความจากกรมอุตุฯ)
-                        if (desc.includes("ฝนฟ้าคะนอง") || desc.includes("พายุ")) {
-                            iconClass = "fa-solid fa-cloud-bolt text-amber-600";
-                        } else if (desc.includes("ฝนตกหนัก") || desc.includes("ฝนหนัก")) {
-                            iconClass = "fa-solid fa-cloud-showers-heavy text-blue-500";
-                        } else if (desc.includes("ฝน")) {
-                            iconClass = "fa-solid fa-cloud-rain text-sky-400";
-                        } else if (desc.includes("แดด") || desc.includes("แจ่มใส") || desc.includes("ร้อน")) {
-                            iconClass = "fa-solid fa-sun text-amber-500";
-                        } else if (desc.includes("หมอก")) {
-                            iconClass = "fa-solid fa-smog text-slate-400";
-                        } else if (desc.includes("เมฆมาก") || desc.includes("เมฆเป็นส่วนมาก")) {
-                            iconClass = "fa-solid fa-cloud text-slate-400";
-                        } else if (desc.includes("เมฆ")) {
-                            iconClass = "fa-solid fa-cloud-sun text-sky-400";
-                        }
-                        // 2. กรณีคำอธิบายไทยไม่ตรง ให้เช็ค fallback จากตัวแปร f.icon ของ API ย้อนหลัง
-                        else if (apiIcon.includes("sun") || apiIcon.includes("clear")) {
-                            iconClass = "fa-solid fa-sun text-amber-500";
-                        } else if (apiIcon.includes("rain")) {
-                            iconClass = "fa-solid fa-cloud-rain text-sky-400";
-                        } else if (apiIcon.includes("cloud")) {
-                            iconClass = "fa-solid fa-cloud text-slate-400";
-                        } else if (apiIcon.startsWith("fa-")) {
-                            iconClass = `fa-solid ${apiIcon} text-blue-500`; // แก้ไขกรณีมีชื่อไอคอนแต่ขาดคลาสหลัก fa-solid
-                        }
-                        // ========================================================
-
-                        return `
-                    <div class="flex-1 min-w-[125px] shrink-0 snap-center bg-gradient-to-b ${isToday ? 'from-blue-50/80 to-sky-100/50 border-blue-200/80 shadow-md shadow-blue-500/5' : 'from-white to-slate-50/40 border-slate-100'} border rounded-2xl p-4 flex flex-col items-center text-center relative overflow-hidden transition-all hover:shadow-md">
-                        ${isToday ? '<span class="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping"></span>' : ''}
-                        <p class="text-[10px] font-bold ${isToday ? 'text-blue-600' : 'text-slate-400'} uppercase tracking-wide mb-1">${isToday ? 'วันนี้' : f.day}</p>
-                        <p class="text-[10px] font-bold text-slate-400 mb-3">${f.date ? f.date.split('-').reverse().slice(0, 2).join('/') : ''}</p>
-                        
-                        <div class="text-3xl my-2 drop-shadow-sm flex items-center justify-center h-10">
-                            <i class="${iconClass} transition-transform hover:scale-110"></i>
-                        </div>
-                        
-                        <p class="text-xs font-bold text-slate-700 truncate w-full mt-1 mb-3" title="${f.desc}">${f.desc}</p>
-                        
-                        <div class="w-full border-t border-slate-100/80 pt-3 flex items-center justify-around text-center mt-auto">
-                            <div>
-                                <p class="text-[8px] font-bold text-slate-400 uppercase">สูงสุด</p>
-                                <p class="text-xs font-black text-red-500">${f.tempMax}°C</p>
-                            </div>
-                            <div class="h-6 w-px bg-slate-100"></div>
-                            <div>
-                                <p class="text-[8px] font-bold text-slate-400 uppercase">ต่ำสุด</p>
-                                <p class="text-xs font-black text-blue-500">${f.tempMin}°C</p>
-                            </div>
-                        </div>
-
-                        <div class="w-full bg-slate-100/40 rounded-xl p-2 mt-3 text-[9px] font-bold text-slate-500 flex flex-col gap-1">
-                            <div class="flex justify-between items-center">
-                                <span><i class="fa-solid fa-cloud-showers-heavy text-sky-400 mr-1"></i>ฝน:</span>
-                                <span class="text-slate-700">${f.rain} มม.</span>
-                            </div>
-                            <div class="flex justify-between items-center">
-                                <span><i class="fa-solid fa-wind text-slate-400 mr-1"></i>ลม:</span>
-                                <span class="text-slate-700">${f.wind} กม/ชม</span>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                    }).join('');
-                } else if (result) {
-                    console.error("🚨 Weather Forecast Load Error:", result.error);
-                    if (loadingEl) {
-                        loadingEl.innerHTML = `
-                <div class="text-center text-red-500 p-4">
-                    <i class="fa-solid fa-triangle-exclamation text-2xl mb-2"></i>
-                    <p class="text-xs font-bold">ไม่สามารถดึงข้อมูลสภาพอากาศได้</p>
-                    <p class="text-[10px] text-slate-400 mt-1">${result.error || ''}</p>
-                </div>
-            `;
-                    }
-                }
-        }
-
-        function setWeatherMode(mode) {
-            const apiView = document.getElementById('weather-api-view');
-            const widgetView = document.getElementById('weather-widget-view');
-            const btnApi = document.getElementById('btn-weather-api');
-            const btnWidget = document.getElementById('btn-weather-widget');
-
-            if (mode === 'api') {
-                if (apiView) apiView.classList.remove('hidden');
-                if (widgetView) widgetView.classList.add('hidden');
-                if (btnApi) {
-                    btnApi.className = "px-3 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 bg-white text-blue-600 shadow-sm border border-slate-200/30";
-                }
-                if (btnWidget) {
-                    btnWidget.className = "px-3 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 text-slate-600 hover:text-slate-800";
-                }
-            } else {
-                if (apiView) apiView.classList.add('hidden');
-                if (widgetView) widgetView.classList.remove('hidden');
-                if (btnApi) {
-                    btnApi.className = "px-3 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 text-slate-600 hover:text-slate-800";
-                }
-                if (btnWidget) {
-                    btnWidget.className = "px-3 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 bg-white text-blue-600 shadow-sm border border-slate-200/30";
-                }
-            }
-        }
-
-        //-------------------------------------------//
-        //----------Messaging API logic--------------//
-        //-------------------------------------------//
-        async function sendMessagingAPI(type) {
-            const config = {
-                normal: {
-                    title: 'สถานะ: ปกติ',
-                    text: 'ยืนยันแจ้งสถานการณ์ปกติ?',
-                    // 💡 ห่อไอคอนด้วย div วงกลม ขนาด w-16 h-16 (เล็กลงและพอดี)
-                    iconHtml: '<div class="w-16 h-16 bg-green-50 border-2 border-green-200 text-green-500 rounded-full flex items-center justify-center shadow-sm mx-auto"><i class="fas fa-check-circle text-3xl"></i></div>',
-                    color: '#22c55e'
-                },
-                warning: {
-                    title: 'สถานะ: เฝ้าระวัง',
-                    text: 'ยืนยันแจ้งเตือนเฝ้าระวังภัย?',
-                    iconHtml: '<div class="w-16 h-16 bg-amber-50 border-2 border-amber-200 text-amber-500 rounded-full flex items-center justify-center shadow-sm mx-auto"><i class="fas fa-exclamation-triangle text-3xl"></i></div>',
-                    color: '#f59e0b'
-                },
-                danger: {
-                    title: 'สถานะ: วิกฤต',
-                    text: 'ยืนยันประกาศภาวะวิกฤต?',
-                    iconHtml: '<div class="w-16 h-16 bg-red-50 border-2 border-red-200 text-red-500 rounded-full flex items-center justify-center shadow-sm mx-auto"><i class="fas fa-bullhorn text-3xl animate-pulse"></i></div>',
-                    color: '#ef4444'
-                }
-            };
-
-            const setup = config[type];
-
-            const result = await Swal.fire({
-                title: setup.title,
-                text: setup.text,
-                iconHtml: setup.iconHtml,
-                showCancelButton: true,
-                confirmButtonColor: setup.color,
-                cancelButtonColor: '#94a3b8',
-                confirmButtonText: 'ยืนยันส่ง',
-                cancelButtonText: 'ยกเลิก',
-                reverseButtons: true,
-                borderRadius: '1.25rem',
-                width: '300px',
-                customClass: {
-                    // 💡 เคลียร์ค่าเริ่มต้นของ SweetAlert เพื่อให้วงกลมของเราแสดงผลได้สมบูรณ์
-                    icon: 'border-none w-auto h-auto m-0 mt-5 bg-transparent',
-                    title: 'text-lg font-black text-slate-800 mt-2',
-                    htmlContainer: 'text-xs text-slate-500 font-medium'
-                }
-            });
-
-            if (result.isConfirmed) {
-                Swal.fire({
-                    title: 'กำลังส่ง...',
-                    allowOutsideClick: false,
-                    width: '250px',
-                    didOpen: () => { Swal.showLoading(); }
-                });
-
-                try {
-                    const res = await fetch(API_URL, {
-                        method: 'POST',
-                        body: JSON.stringify({ action: 'broadcastLine', alertType: type })
-                    });
-                    const data = await res.json();
-
-                    if (data.success) {
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'สำเร็จ',
-                            timer: 1500,
-                            showConfirmButton: false,
-                            width: '250px',
-                            borderRadius: '1.25rem'
-                        });
-                    } else {
-                        throw new Error(data.error);
-                    }
-                } catch (e) {
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'ล้มเหลว',
-                        text: e.message,
-                        width: '300px'
-                    });
-                }
-            }
-        }
+        // =========================================================================
+        // 🧩 โครงสร้างระบบแยกโมดูลย่อย (Modular Architecture)
+        // 1. โทรมาตรระดับน้ำ RID & AI Hydrograph  -> js/modules/telemetry.js
+        // 2. พยากรณ์อากาศ 7 วัน & LINE Broadcast   -> js/modules/weather.js
+        // 3. แจ้งเหตุฉุกเฉินประชาชน & บันทึกอพยพ    -> js/modules/public-report.js
+        // 4. แจกถุงยังชีพ สต๊อกคงคลัง & พิมพ์รายงาน -> js/modules/relief.js
+        // 5. ระบบจัดการผู้ใช้งาน & สิทธิ์ Admin     -> js/modules/user-mgmt.js
+        // 6. แดชบอร์ดสรุปภาพรวม & แผนที่น้ำท่วม    -> js/modules/admin-dashboard.js
+        // =========================================================================

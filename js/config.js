@@ -35,3 +35,113 @@ function getCurrentDefaultPeriodInfo() {
     const curMonthPeriod = `${curYearBE}_${curMonthStr}`;
     return { curYearBE, curMonthStr, curMonthPeriod };
 }
+
+// ==========================================
+// 🏛️ พิกัดขอบเขตเทศบาลตำบลตันหยงมัส (Municipality Boundary)
+// ==========================================
+window.MUNICIPALITY_BOUNDARY = [
+    [6.287240427280289, 101.70468249509999],
+    [6.291291459811804, 101.70575515418483],
+    [6.302293051933469, 101.7045537760098],
+    [6.3029326722100345, 101.705669341458],
+    [6.3000756955363375, 101.70875859962234],
+    [6.30314587879364, 101.71751149775464],
+    [6.3022504105536505, 101.73686226764508],
+    [6.296152657166034, 101.73651901673792],
+    [6.282677647589206, 101.73939374308529],
+    [6.285620005430542, 101.7281093695128],
+    [6.280332277974188, 101.71691080866711]
+];
+
+/**
+ * ตรวจสอบว่าพิกัด (lat, lng) อยู่ภายในเขตเทศบาลตำบลตันหยงมัสหรือไม่ (Ray-Casting Algorithm)
+ */
+window.isInsideMunicipality = function (lat, lng) {
+    const latNum = parseFloat(lat);
+    const lngNum = parseFloat(lng);
+    if (isNaN(latNum) || isNaN(lngNum)) return false;
+
+    const poly = window.MUNICIPALITY_BOUNDARY;
+    let inside = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const xi = poly[i][0], yi = poly[i][1];
+        const xj = poly[j][0], yj = poly[j][1];
+        const intersect = ((yi > lngNum) !== (yj > lngNum)) &&
+            (latNum < (xj - xi) * (lngNum - yi) / (yj - yi) + xi);
+        if (intersect) inside = !inside;
+    }
+    return inside;
+};
+
+/**
+ * แสดงข้อความแจ้งเตือนเมื่อปักหมุดหรือคลิกนอกเขตเทศบาล
+ */
+window.showOutsideMunicipalityAlert = function (customMsg = null) {
+    const msg = customMsg || 'ตำแหน่งที่ท่านเลือกอยู่นอกเขตเทศบาลตำบลตันหยงมัส กรุณาปักหมุดหรือเลือกตำแหน่งภายในเขตเทศบาลเท่านั้น';
+    if (typeof Swal !== 'undefined') {
+        const toast = Swal.mixin({
+            toast: true,
+            position: 'top',
+            showConfirmButton: false,
+            timer: 3500,
+            timerProgressBar: true
+        });
+        toast.fire({
+            icon: 'warning',
+            title: '⚠️ อยู่นอกเขตเทศบาล',
+            text: msg
+        });
+    } else {
+        alert(msg);
+    }
+};
+
+/**
+ * ฟังก์ชันสร้าง Inverted Mask สีเทาปิดทับพื้นที่นอกเขตเทศบาล (Donut Polygon)
+ * และวาดเส้นขอบเขตเทศบาลตำบลตันหยงมัส
+ */
+window.addMunicipalityMaskToMap = function (mapInstance, options = {}) {
+    if (!mapInstance || typeof L === 'undefined') return null;
+
+    // กรอบพิกัดวงนอกสุด (ครอบคลุมทั้งโลก)
+    const worldOuterBounds = [
+        [-90, -180],
+        [-90, 180],
+        [90, 180],
+        [90, -180]
+    ];
+
+    // Donut Polygon: วงนอก (โลก) + วงในเจาะรู (ขอบเขตเทศบาล)
+    const maskCoords = [worldOuterBounds, window.MUNICIPALITY_BOUNDARY];
+
+    const maskLayer = L.polygon(maskCoords, {
+        color: options.borderColor || '#334155',
+        weight: options.borderWeight || 1.5,
+        opacity: options.borderOpacity || 0.6,
+        fillColor: options.fillColor || '#0f172a',
+        fillOpacity: options.fillOpacity !== undefined ? options.fillOpacity : 0.5,
+        interactive: options.interactive !== undefined ? options.interactive : true,
+        className: 'municipality-outer-mask'
+    }).addTo(mapInstance);
+
+    // ดักคลิกบนพื้นที่สีเทานอกเขต
+    maskLayer.on('click', function (e) {
+        if (options.onClickOutside) {
+            options.onClickOutside(e);
+        } else {
+            window.showOutsideMunicipalityAlert();
+        }
+    });
+
+    // เส้นขอบเขตเทศบาล (Boundary Line เด่นชัด สวยงาม)
+    const boundaryCoords = window.MUNICIPALITY_BOUNDARY.concat([window.MUNICIPALITY_BOUNDARY[0]]);
+    const outlineLayer = L.polyline(boundaryCoords, {
+        color: options.outlineColor || '#3b82f6',
+        weight: options.outlineWeight || 2.5,
+        dashArray: options.dashArray || '6, 6',
+        opacity: options.outlineOpacity || 0.9,
+        interactive: false
+    }).addTo(mapInstance);
+
+    return { maskLayer, outlineLayer };
+};

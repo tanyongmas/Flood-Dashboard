@@ -162,43 +162,141 @@ function handleLogout() {
     });
 }
 
-// ฟังก์ชันตรวจสอบรหัสผ่านดูข้อมูลส่วนบุคคล
-async function checkPasswordBeforeDetailByData(idCard, name) {
-    const { value: password } = await Swal.fire({
-        title: 'ระบบรักษาความปลอดภัย',
-        text: 'กรุณาระบุรหัสผ่านเพื่อดูข้อมูลส่วนตัว',
-        input: 'password',
-        inputPlaceholder: ' ',
-        confirmButtonText: 'ยืนยัน',
-        confirmButtonColor: '#2563eb',
+// ==========================================
+// 🛡️ ระบบรักษาความปลอดภัย PDPA Step-up Authentication (Security PIN)
+// ==========================================
+
+/**
+ * ขอรหัสผ่าน Security PIN ก่อนเข้าถึงข้อมูลส่วนบุคคลอ่อนไหว
+ * มี Session Cache 15 นาที เพื่อไม่ต้องกรอกซ้ำบ่อยเกินไป
+ */
+async function promptPdpaSecurityPin(targetDesc, onSuccess) {
+    const allowedRoles = ['admin', 'shelter', 'relief'];
+    const currentRole = (typeof userRole !== 'undefined' ? userRole : '').toLowerCase();
+    const staffName = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : 'เจ้าหน้าที่';
+
+    // 1. ตรวจสอบสิทธิ์ Role ขั้นแรก
+    if (!allowedRoles.includes(currentRole)) {
+        Swal.fire({
+            icon: 'error',
+            title: 'ไม่มีสิทธิ์เข้าถึงข้อมูล',
+            text: 'เฉพาะเจ้าหน้าที่ศูนย์พักพิงและผู้ดูแลระบบเท่านั้นที่สามารถดูข้อมูลส่วนบุคคลได้ (ตาม พ.ร.บ. คุ้มครองข้อมูลส่วนบุคคล PDPA)',
+            confirmButtonColor: '#e11d48'
+        });
+        return;
+    }
+
+    // 2. ตรวจสอบว่าเคยยืนยันรหัสผ่านใน Session นี้แล้วหรือยัง (Cache 15 นาที)
+    const unlockedAt = sessionStorage.getItem('pdpa_unlocked_at');
+    const isSessionActive = unlockedAt && (Date.now() - Number(unlockedAt) < 15 * 60 * 1000);
+
+    if (isSessionActive) {
+        if (typeof onSuccess === 'function') onSuccess();
+        return;
+    }
+
+    // 3. แสดงหน้าต่างยืนยัน PDPA พร้อมช่องกรอกรหัสผ่าน PIN
+    const { value: pin, isConfirmed } = await Swal.fire({
+        title: '<div class="text-blue-700 text-lg font-bold flex items-center justify-center gap-2"><i class="fas fa-shield-alt text-amber-500"></i>ยืนยันรหัสผ่าน PDPA PIN</div>',
+        html: `
+            <div class="text-left space-y-2 text-xs text-slate-600 bg-slate-50 p-3.5 rounded-2xl border border-slate-200 mt-2 mb-3">
+                <p><strong>ผู้ปฏิบัติงาน:</strong> <span class="text-blue-700 font-bold">${staffName}</span> (${currentRole.toUpperCase()})</p>
+                <p><strong>เป้าหมาย:</strong> <span class="text-slate-800 font-medium">${targetDesc || 'ข้อมูลส่วนบุคคล'}</span></p>
+                <div class="text-[11px] text-amber-800 bg-amber-50 p-2.5 rounded-xl border border-amber-200 mt-2">
+                    <i class="fas fa-exclamation-triangle mr-1 text-amber-600"></i>
+                    กรุณากรอกรหัสผ่านความปลอดภัย (PIN) เพื่อปลดล็อกข้อมูลตาม พ.ร.บ. คุ้มครองข้อมูลส่วนบุคคล พ.ศ. 2562
+                </div>
+            </div>
+            <div class="mt-2 text-left">
+                <label class="text-[11px] font-bold text-slate-500 block mb-1">รหัสผ่านความปลอดภัย (Security PIN)</label>
+                <input id="swal_pdpa_pin_input" type="password" maxlength="12" placeholder="••••" autocomplete="off"
+                    class="w-full p-3.5 text-center text-xl tracking-[0.3em] font-black border-2 border-slate-200 focus:border-blue-500 rounded-2xl outline-none transition-all bg-white text-slate-800">
+            </div>
+        `,
+        focusConfirm: false,
         showCancelButton: true,
-        cancelButtonText: 'ยกเลิก'
+        confirmButtonColor: '#2563eb',
+        cancelButtonColor: '#64748b',
+        confirmButtonText: '<i class="fas fa-unlock mr-1.5"></i> ยืนยันและเปิดดู',
+        cancelButtonText: 'ยกเลิก',
+        customClass: { popup: 'rounded-[2rem]' },
+        didOpen: () => {
+            const input = document.getElementById('swal_pdpa_pin_input');
+            if (input) {
+                input.focus();
+                input.addEventListener('keyup', (e) => {
+                    if (e.key === 'Enter') Swal.clickConfirm();
+                });
+            }
+        },
+        preConfirm: () => {
+            const val = document.getElementById('swal_pdpa_pin_input').value;
+            if (!val || val.trim().length === 0) {
+                Swal.showValidationMessage('กรุณาระบุรหัสผ่าน PDPA PIN');
+                return false;
+            }
+            return val.trim();
+        }
     });
 
-    if (password === '1111') {
-        showDetailsByData(idCard, name);
-    } else if (password) {
-        Swal.fire('รหัสผ่านไม่ถูกต้อง', 'คุณไม่ได้รับอนุญาตให้ดูข้อมูลนี้', 'error');
+    if (!isConfirmed || !pin) return;
+
+    // 4. ตรวจสอบรหัสผ่านกับ Supabase Service
+    Swal.fire({
+        title: 'กำลังตรวจสอบสิทธิ์...',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading()
+    });
+
+    try {
+        const isValid = typeof sbVerifyPdpaPin === 'function' ? await sbVerifyPdpaPin(pin) : (pin === '1111');
+        if (!isValid) {
+            Swal.fire({
+                icon: 'error',
+                title: 'รหัสผ่านไม่ถูกต้อง',
+                text: 'รหัสผ่าน PDPA PIN ไม่ถูกต้อง กรุณาติดต่อผู้ดูแลระบบหากท่านจำรหัสผ่านไม่ได้',
+                confirmButtonColor: '#e11d48',
+                customClass: { popup: 'rounded-2xl' }
+            });
+            return;
+        }
+
+        // ปลดล็อกสำเร็จ: บันทึกลง Session นาน 15 นาที
+        sessionStorage.setItem('pdpa_unlocked_at', Date.now());
+        Swal.close();
+
+        if (typeof onSuccess === 'function') {
+            onSuccess();
+        }
+    } catch (err) {
+        Swal.fire('เกิดข้อผิดพลาด', err.message || 'ไม่สามารถตรวจสอบรหัสผ่านได้', 'error');
     }
 }
 
-async function checkPasswordBeforeDetail(index) {
-    const { value: password } = await Swal.fire({
-        title: 'ระบบรักษาความปลอดภัย',
-        text: 'กรุณาระบุรหัสผ่านเพื่อดูข้อมูลส่วนตัว',
-        input: 'password',
-        inputPlaceholder: ' ',
-        confirmButtonText: 'ยืนยัน',
-        confirmButtonColor: '#2563eb',
-        showCancelButton: true,
-        cancelButtonText: 'ยกเลิก'
-    });
+// ฟังก์ชันตรวจสอบสิทธิ์และยืนยันการเข้าถึงข้อมูลส่วนบุคคลตามชื่อ/เลขบัตร
+async function checkPasswordBeforeDetailByData(idCard, name) {
+    const staffName = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : 'เจ้าหน้าที่';
+    const currentRole = (typeof userRole !== 'undefined' ? userRole : '').toLowerCase();
 
-    if (password === '1111') {
-        showDetails(index);
-    } else if (password) {
-        Swal.fire('รหัสผ่านไม่ถูกต้อง', 'คุณไม่ได้รับอนุญาตให้ดูข้อมูลนี้', 'error');
-    }
+    promptPdpaSecurityPin(`คุณ ${name || 'ผู้ประสบภัย'}`, () => {
+        console.log(`🔒 [PDPA Audit] ${new Date().toISOString()} - User: ${staffName} (${currentRole}) accessed details of: ${name}`);
+        if (typeof showDetailsByData === 'function') {
+            showDetailsByData(idCard, name);
+        }
+    });
+}
+
+// ฟังก์ชันตรวจสอบสิทธิ์และยืนยันการเข้าถึงข้อมูลส่วนบุคคลตาม index แถว
+async function checkPasswordBeforeDetail(index) {
+    const staffName = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : 'เจ้าหน้าที่';
+    const currentRole = (typeof userRole !== 'undefined' ? userRole : '').toLowerCase();
+
+    promptPdpaSecurityPin(`ผู้ประสบภัยลำดับที่ ${index + 1}`, () => {
+        console.log(`🔒 [PDPA Audit] ${new Date().toISOString()} - User: ${staffName} (${currentRole}) accessed details index #${index}`);
+        if (typeof showDetails === 'function') {
+            showDetails(index);
+        }
+    });
 }
 
 // ปิด Data Modal
@@ -252,3 +350,23 @@ window.clearAppCache = function (key) {
     } catch (e) { }
 };
 
+// สลับการแสดงผลข้อมูลส่วนบุคคลที่พรางไว้ (Data Masking Toggle)
+window.toggleModalMask = function (elementId, rawValue, maskedValue, btnElement) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+
+    const isCurrentlyMasked = el.innerText.trim() === maskedValue.trim();
+    if (isCurrentlyMasked) {
+        el.innerText = rawValue;
+        if (el.tagName === 'A') el.href = 'tel:' + rawValue;
+        if (btnElement) {
+            btnElement.innerHTML = '<i class="fas fa-eye-slash text-[10px]"></i> ซ่อนข้อมูล';
+        }
+    } else {
+        el.innerText = maskedValue;
+        if (el.tagName === 'A') el.href = 'tel:' + rawValue;
+        if (btnElement) {
+            btnElement.innerHTML = '<i class="fas fa-eye text-[10px]"></i> แสดงข้อมูลเต็ม';
+        }
+    }
+};
