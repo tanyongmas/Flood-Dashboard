@@ -371,26 +371,43 @@ function openEvacuationForm(status) {
 }
 
 window.showQRCode = function () {
-    const publicUrl = "https://tanyongmas.github.io/Dashboard_Flood/?mode=report";
+    // กำหนด URL ปัจจุบัน: ใช้ https://tanyongmas.github.io/Flood-Dashboard/?mode=report
+    let publicUrl = "https://tanyongmas.github.io/Flood-Dashboard/?mode=report";
+    if (window.location.hostname.includes('github.io')) {
+        let base = window.location.origin + window.location.pathname;
+        if (!base.endsWith('/')) base += '/';
+        publicUrl = base + "?mode=report";
+    }
+
     const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(publicUrl)}`;
 
     Swal.fire({
-        title: '<div class="text-indigo-700 font-black"><i class="fas fa-qrcode mr-2"></i> QR Code ประชาชน</div>',
+        title: '<div class="text-indigo-700 font-black text-base flex items-center justify-center gap-2"><i class="fas fa-qrcode"></i> QR Code โหมดประชาชน</div>',
         html: `
-            <p class="text-xs text-slate-500 mb-4">สแกนเพื่อรายงานสถานะน้ำท่วม (ไม่ต้องล็อคอิน)</p>
-            <div class="flex justify-center mb-4">
+            <p class="text-xs text-slate-500 mb-3">สแกนเพื่อเปิดหน้าโหมดประชาชน (ติดตามระดับน้ำ / แจ้งเหตุ / รายงานน้ำท่วม)</p>
+            <div class="flex justify-center mb-3">
                 <div class="p-3 bg-white border border-slate-200 rounded-2xl shadow-sm">
-                    <img src="${qrImageUrl}" class="w-48 h-48" alt="QR Code" onerror="this.src='https://placehold.co/300x300?text=QR+Error'">
+                    <img src="${qrImageUrl}" class="w-48 h-48 object-contain" alt="QR Code ประชาชน" onerror="this.src='https://placehold.co/300x300?text=QR+Error'">
                 </div>
             </div>
-            <div class="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                <label class="text-[10px] font-bold text-slate-400 uppercase block mb-1">ลิงก์สำหรับส่งในไลน์กลุ่ม / Facebook</label>
-                <input type="text" readonly value="${publicUrl}" class="w-full p-2 text-[10px] font-medium text-slate-600 bg-white border border-slate-200 rounded-lg text-center outline-none focus:border-indigo-400" onclick="this.select()">
+            <div class="bg-slate-50 p-3 rounded-2xl border border-slate-100 text-left mb-3">
+                <label class="text-[10px] font-bold text-slate-400 uppercase block mb-1">ลิงก์เว็บสำหรับประชาชน (LINE / Facebook)</label>
+                <div class="flex items-center gap-1.5">
+                    <input type="text" id="swal_public_url_input" readonly value="${publicUrl}" class="w-full p-2 text-[11px] font-mono font-medium text-slate-700 bg-white border border-slate-200 rounded-xl outline-none focus:border-indigo-400" onclick="this.select()">
+                    <button type="button" onclick="navigator.clipboard.writeText('${publicUrl}').then(() => { this.innerHTML='<i class=\\'fas fa-check text-emerald-500\\'></i>'; setTimeout(() => this.innerHTML='<i class=\\'fas fa-copy\\'></i>', 2000); })" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold shrink-0 transition" title="คัดลอกลิงก์">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="flex items-center justify-center gap-2">
+                <a href="${publicUrl}" target="_blank" class="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-1.5 active:scale-95">
+                    <i class="fas fa-external-link-alt"></i> เปิดหน้าเว็บประชาชนทันที
+                </a>
             </div>
         `,
-        confirmButtonText: 'ปิดหน้าต่าง',
-        confirmButtonColor: '#4f46e5',
-        customClass: { popup: 'rounded-[2rem]' }
+        showConfirmButton: false,
+        showCloseButton: true,
+        customClass: { popup: 'rounded-[2.5rem] max-w-sm p-5' }
     });
 };
 
