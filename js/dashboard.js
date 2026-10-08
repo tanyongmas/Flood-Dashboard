@@ -108,7 +108,7 @@ let dashLayerStates = {
                     ]);
 
                     let targetPage = 'water';
-                    if (userRole === 'admin') targetPage = 'dashboard';
+                    if (userRole === 'superadmin' || userRole === 'admin') targetPage = 'dashboard';
                     else if (userRole === 'shelter') targetPage = 'shelter';
                     else if (userRole === 'water_staff') targetPage = 'addWater';
                     else if (userRole === 'relief') targetPage = 'relief';
@@ -138,9 +138,10 @@ let dashLayerStates = {
             }
         });
 
-        // กำหนดว่าแต่ละสิทธิ์เข้าหน้าไหนได้บ้าง (แก้ dashboardPage เป็น dashboard)
+        // กำหนดว่าแต่ละสิทธิ์เข้าหน้าไหนได้บ้าง
         const PAGE_ACCESS = {
-            'admin': ['dashboard', 'water', 'addWater', 'shelter', 'evacuation', 'regis', 'relief', 'looker', 'userManagement'],
+            'superadmin': ['dashboard', 'water', 'addWater', 'shelter', 'evacuation', 'regis', 'relief', 'looker', 'userManagement'],
+            'admin': ['dashboard', 'water', 'addWater', 'shelter', 'evacuation', 'regis', 'relief', 'looker'],
             'shelter': ['shelter', 'regis', 'looker'],
             'water_staff': ['water', 'addWater', 'looker'],
             'relief': ['relief', 'looker'],
@@ -222,7 +223,7 @@ let dashLayerStates = {
                     }, delay);
                 });
             }
-            if (pageId === 'userManagement' && userRole === 'admin') loadUsers();
+            if (pageId === 'userManagement' && userRole === 'superadmin') loadUsers();
 
             if (pageId === 'looker') {
                 if (typeof initFloodReportMap === 'function') initFloodReportMap();
@@ -300,10 +301,83 @@ let dashLayerStates = {
                 }
 
                 if (data && data.success) {
+                    const detectedRole = (data.role || '').toLowerCase().trim();
+                    const isSuperAdmin = detectedRole === 'superadmin' || user.toLowerCase() === 'superadmin';
+
+                    // 🛡️ หากเป็นสิทธิ์ superadmin ให้ถามรหัสผ่านยืนยันตัวตนเพิ่มเติม
+                    if (isSuperAdmin) {
+                        btn.innerText = 'รอการยืนยันรหัสผ่าน...';
+                        const { value: adminPassword, isConfirmed } = await Swal.fire({
+                            title: '<div class="text-blue-900 font-black text-lg flex items-center justify-center gap-2"><i class="fas fa-user-shield text-blue-600"></i> ยืนยันรหัสผ่าน Superadmin</div>',
+                            html: `
+                                <p class="text-xs text-slate-500 mb-3">บัญชี <b>${user}</b> ได้รับสิทธิ์ผู้ดูแลระบบสูงสุด (Superadmin)<br>กรุณาระบุรหัสผ่านเพื่อเข้าใช้งาน</p>
+                                <div class="relative text-left mb-2">
+                                    <input id="swal_admin_password_input" type="password" placeholder="ระบุรหัสผ่าน Superadmin" maxlength="30"
+                                        class="w-full p-3.5 pr-11 text-center font-bold text-slate-700 border border-blue-200 rounded-2xl outline-none focus:ring-2 focus:ring-blue-400 bg-blue-50 text-base">
+                                    <button type="button" onclick="const p=document.getElementById('swal_admin_password_input'); const i=this.querySelector('i'); if(p.type==='password'){p.type='text'; i.className='fas fa-eye-slash text-slate-500';}else{p.type='password'; i.className='fas fa-eye text-slate-400';}" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                            `,
+                            focusConfirm: false,
+                            showCancelButton: true,
+                            confirmButtonText: '<i class="fas fa-sign-in-alt mr-1"></i> ยืนยันและเข้าสู่ระบบ',
+                            cancelButtonText: 'ยกเลิก',
+                            confirmButtonColor: '#2563eb',
+                            cancelButtonColor: '#94a3b8',
+                            customClass: { popup: 'rounded-[2rem] max-w-sm' },
+                            didOpen: () => {
+                                const input = document.getElementById('swal_admin_password_input');
+                                if (input) {
+                                    input.focus();
+                                    input.addEventListener('keydown', (e) => {
+                                        if (e.key === 'Enter') Swal.clickConfirm();
+                                    });
+                                }
+                            },
+                            preConfirm: () => {
+                                const pw = document.getElementById('swal_admin_password_input').value.trim();
+                                if (!pw) {
+                                    Swal.showValidationMessage('กรุณาระบุรหัสผ่าน Superadmin');
+                                    return false;
+                                }
+                                return pw;
+                            }
+                        });
+
+                        if (!isConfirmed || !adminPassword) {
+                            btn.innerText = 'เข้าสู่ระบบ';
+                            btn.disabled = false;
+                            return;
+                        }
+
+                        const isValid = typeof sbVerifyAdminPassword === 'function'
+                            ? await sbVerifyAdminPassword(adminPassword)
+                            : (adminPassword === '1122');
+
+                        if (!isValid) {
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'รหัสผ่านไม่ถูกต้อง',
+                                text: 'รหัสผ่านสำหรับผู้ดูแลระบบสูงสุด (Superadmin) ไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง',
+                                confirmButtonColor: '#ef4444',
+                                customClass: { popup: 'rounded-2xl' }
+                            });
+                            btn.innerText = 'เข้าสู่ระบบ';
+                            btn.disabled = false;
+                            return;
+                        }
+                    }
+
+                    // ปรับ role ตามที่ตรวจจับได้
+                    let finalRole = data.role;
+                    if (isSuperAdmin) finalRole = 'superadmin';
+                    else if (user.toLowerCase() === 'admin') finalRole = 'admin';
+
                     const userData = {
                         username: user,
                         name: data.name || user,
-                        role: data.role
+                        role: finalRole
                     };
 
                     localStorage.setItem('user_session', JSON.stringify(userData));
@@ -317,10 +391,10 @@ let dashLayerStates = {
                     if (typeof setupUserInterface === 'function') setupUserInterface(userData);
                     if (typeof updateMenuByRole === 'function') updateMenuByRole();
 
-                    // --- แก้ไขตรงนี้: เปลี่ยนจาก dashboardPage เป็น dashboard ---
+                    // กำหนดหน้าแรก
                     let firstPage = 'water';
 
-                    if (userRole === 'admin') firstPage = 'dashboard'; // <-- แก้ตรงนี้
+                    if (userRole === 'superadmin' || userRole === 'admin') firstPage = 'dashboard';
                     else if (userRole === 'shelter') firstPage = 'shelter';
                     else if (userRole === 'water_staff') firstPage = 'addWater';
                     else if (userRole === 'relief') firstPage = 'relief';
@@ -510,7 +584,7 @@ let dashLayerStates = {
                 }
 
                 // หลังจากโหลดข้อมูลหน้าอื่นๆ เสร็จหมดแล้ว ให้โหลดข้อมูลเข้าหน้าหลักด้วย
-                if (typeof userRole !== 'undefined' && userRole === 'admin') {
+                if (typeof userRole !== 'undefined' && (userRole === 'admin' || userRole === 'superadmin')) {
                     renderAdminDashboard();
                 }
                 if (typeof initDashOneMap === 'function') initDashOneMap();
@@ -593,6 +667,7 @@ let dashLayerStates = {
         }
 
         function openCreatePeriodModal() {
+            if (typeof checkAdminReadOnlyAction === 'function' && checkAdminReadOnlyAction()) return;
             Swal.fire({
                 title: 'สร้างช่วงเวลาข้อมูลใหม่',
                 html: `
@@ -1023,7 +1098,8 @@ let dashLayerStates = {
         }
 
         async function saveWater(e) {
-            e.preventDefault();
+            if (e && e.preventDefault) e.preventDefault();
+            if (typeof checkAdminReadOnlyAction === 'function' && checkAdminReadOnlyAction()) return;
             const btn = document.getElementById('saveWaterBtn');
             Swal.fire({ title: 'กำลังบันทึกข้อมูล...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
             try {
@@ -1637,6 +1713,7 @@ let dashLayerStates = {
 
         // ฟังก์ชันบันทึกพื้นที่น้ำท่วม
         async function saveFloodPolygonData(geoJsonStr, title, detail, riskLevel) {
+            if (typeof checkAdminReadOnlyAction === 'function' && checkAdminReadOnlyAction()) return;
             Swal.fire({
                 title: 'กำลังบันทึกพื้นที่ลง Google Sheets...',
                 allowOutsideClick: false,
@@ -2810,6 +2887,7 @@ let dashLayerStates = {
 
         async function deleteRoadClosure(id) {
             if (!id) return;
+            if (typeof checkAdminReadOnlyAction === 'function' && checkAdminReadOnlyAction()) return;
 
             const res = await Swal.fire({
                 title: 'ยืนยันการลบ?',
@@ -3538,7 +3616,8 @@ let dashLayerStates = {
             modal.classList.remove('hidden');
         }
         async function saveEvacuee(e) {
-            e.preventDefault();
+            if (e && e.preventDefault) e.preventDefault();
+            if (typeof checkAdminReadOnlyAction === 'function' && checkAdminReadOnlyAction()) return;
             const btn = document.getElementById('saveRegisBtn');
 
             // จัดการเรื่องเบอร์โทรศัพท์ (ใส่ ' นำหน้าเพื่อให้ Google Sheets มองเป็นข้อความและคงเลข 0 ไว้)

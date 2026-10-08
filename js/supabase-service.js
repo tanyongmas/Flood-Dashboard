@@ -55,6 +55,14 @@ async function sbLogin(username) {
                 name: data.username
             };
         }
+        // Fallback อัตโนมัติสำหรับ superadmin และ admin
+        const lowerUser = cleanUser.toLowerCase();
+        if (lowerUser === 'superadmin') {
+            return { success: true, role: 'superadmin', name: 'superadmin' };
+        }
+        if (lowerUser === 'admin') {
+            return { success: true, role: 'admin', name: 'admin' };
+        }
         return { success: false, error: 'ไม่พบชื่อผู้ใช้งานนี้ในระบบ' };
     } catch (err) {
         console.error("❌ [Supabase] Login exception:", err);
@@ -992,9 +1000,120 @@ async function sbUpdatePdpaPin(oldPin, newPin, isAdmin = false) {
     return { success: true };
 }
 
+// ==========================================
+// 🛡️ ระบบจัดการรหัสผ่านผู้ดูแลระบบ (Admin Login Password)
+// ==========================================
+const DEFAULT_ADMIN_PASSWORD = '1122';
+
+/**
+ * ดึงรหัสผ่าน Admin สำหรับเข้าสู่ระบบ
+ */
+async function sbGetAdminPassword() {
+    if (!isSupabaseReady()) {
+        return localStorage.getItem('admin_login_password') || DEFAULT_ADMIN_PASSWORD;
+    }
+
+    try {
+        // 1. ลองดึงจากตาราง system_settings (ถ้ามี)
+        const { data: setRow, error: setErr } = await sbClient
+            .from('system_settings')
+            .select('value')
+            .eq('key', 'admin_login_password')
+            .maybeSingle();
+
+        if (!setErr && setRow && setRow.value) {
+            localStorage.setItem('admin_login_password', String(setRow.value).trim());
+            return String(setRow.value).trim();
+        }
+
+        // 2. Fallback: ดึงจาก flood_polygons (system_config_admin_pw)
+        const { data: polyRow } = await sbClient
+            .from('flood_polygons')
+            .select('detail')
+            .eq('risk_level', 'system_config_admin_pw')
+            .maybeSingle();
+
+        if (polyRow && polyRow.detail) {
+            localStorage.setItem('admin_login_password', String(polyRow.detail).trim());
+            return String(polyRow.detail).trim();
+        }
+    } catch (err) {
+        console.warn("⚠️ [Supabase] ดึงรหัสผ่าน Admin ขัดข้อง ใช้ Local Cache:", err);
+    }
+
+    return localStorage.getItem('admin_login_password') || DEFAULT_ADMIN_PASSWORD;
+}
+
+/**
+ * ตรวจสอบรหัสผ่าน Admin
+ */
+async function sbVerifyAdminPassword(inputPassword) {
+    if (!inputPassword) return false;
+    const cleanInput = String(inputPassword).trim();
+    const currentPw = await sbGetAdminPassword();
+    return cleanInput === currentPw;
+}
+
+/**
+ * ปรับปรุง/เปลี่ยนรหัสผ่าน Admin
+ */
+async function sbUpdateAdminPassword(oldPassword, newPassword, isAdmin = true) {
+    if (!newPassword || String(newPassword).trim().length < 4) {
+        throw new Error('รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 4 ตัวอักษร');
+    }
+
+    const cleanNew = String(newPassword).trim();
+
+    // หากไม่ใช่ Admin ที่ Override ให้ตรวจสอบรหัสเดิมก่อน
+    if (!isAdmin) {
+        const isValid = await sbVerifyAdminPassword(oldPassword);
+        if (!isValid) {
+            throw new Error('รหัสผ่านเดิมไม่ถูกต้อง');
+        }
+    }
+
+    let saved = false;
+
+    if (isSupabaseReady()) {
+        // 1. ลองบันทึกลงตาราง system_settings
+        try {
+            const { error: upsertErr } = await sbClient
+                .from('system_settings')
+                .upsert([{ key: 'admin_login_password', value: cleanNew }], { onConflict: 'key' });
+            if (!upsertErr) saved = true;
+        } catch (e) {
+            // ละเว้นกรณีไม่มีตาราง system_settings
+        }
+
+        // 2. บันทึกสำรองลง flood_polygons เสมอ เพื่อความแน่นอน
+        try {
+            await sbClient.from('flood_polygons').delete().eq('risk_level', 'system_config_admin_pw');
+            const { error: insertErr } = await sbClient.from('flood_polygons').insert([{
+                title: '__SYSTEM_ADMIN_PASSWORD__',
+                detail: cleanNew,
+                risk_level: 'system_config_admin_pw',
+                reporter: 'admin',
+                period: 'all'
+            }]);
+            if (!insertErr) saved = true;
+        } catch (e) {
+            console.warn("⚠️ [Supabase] บันทึกรหัสผ่าน Admin สำรองขัดข้อง:", e);
+        }
+    }
+
+    // 3. บันทึกลง LocalStorage เสมอ
+    localStorage.setItem('admin_login_password', cleanNew);
+    console.log("⚡ [Supabase 100%] เปลี่ยนรหัสผ่าน Admin สำเร็จ!");
+
+    return { success: true };
+}
+
 window.sbGetPdpaPin = sbGetPdpaPin;
 window.sbVerifyPdpaPin = sbVerifyPdpaPin;
 window.sbUpdatePdpaPin = sbUpdatePdpaPin;
+window.sbGetAdminPassword = sbGetAdminPassword;
+window.sbVerifyAdminPassword = sbVerifyAdminPassword;
+window.sbUpdateAdminPassword = sbUpdateAdminPassword;
 window.sbSaveRoadClosure = sbSaveRoadClosure;
 window.sbDeleteRoadClosure = sbDeleteRoadClosure;
 window.sbFetchRoadClosures = sbFetchRoadClosures;

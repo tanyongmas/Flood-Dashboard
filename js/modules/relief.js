@@ -118,7 +118,8 @@ window.copyAddress = function (isChecked) {
 };
 
 window.saveReliefData = async function (e) {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
+    if (typeof checkAdminReadOnlyAction === 'function' && checkAdminReadOnlyAction()) return;
     const address = document.getElementById('rel_address_search').value.trim();
 
     if (!address) {
@@ -241,7 +242,8 @@ function closeStockModal() {
 }
 
 async function saveStock(e) {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
+    if (typeof checkAdminReadOnlyAction === 'function' && checkAdminReadOnlyAction()) return;
     const btn = e.target.querySelector('button');
     btn.innerText = "กำลังบันทึก..."; btn.disabled = true;
 

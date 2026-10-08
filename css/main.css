@@ -535,3 +535,27 @@ Responsive Layout: หน้าจอ PC / Laptop (ใหญ่กว่า 1366
     filter: drop-shadow(0 0 12px rgba(0, 0, 0, 0.25));
     cursor: not-allowed !important;
 }
+
+/* -------------------------------------------------------------
+   🔒 สไตล์สำหรับโหมดดูข้อมูลอย่างเดียว (Admin View-Only Mode)
+-------------------------------------------------------------- */
+body.view-only-mode #riskMapAdminUpload,
+body.view-only-mode #btnCreatePeriod,
+body.view-only-mode .leaflet-draw,
+body.view-only-mode .leaflet-draw-toolbar,
+body.view-only-mode form#userForm,
+body.view-only-mode button[type="submit"]:not(#loginBtn),
+body.view-only-mode .admin-write-only,
+body.view-only-mode .btn-action-delete,
+body.view-only-mode .btn-action-edit {
+    display: none !important;
+}
+
+body.view-only-mode input:not(#username):not(#swal_admin_password_input):not([type="search"]):not(.search-input):not(#swal_old_admin_pw):not(#swal_new_admin_pw):not(#swal_confirm_admin_pw),
+body.view-only-mode select:not(#periodSelector):not(#tableFilter):not(.filter-select),
+body.view-only-mode textarea {
+    pointer-events: none !important;
+    background-color: #f8fafc !important;
+    opacity: 0.8 !important;
+}
+

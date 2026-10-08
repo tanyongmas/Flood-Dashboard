@@ -101,7 +101,8 @@ function setupUserInterface(user) {
     if (nameDisplay) nameDisplay.innerText = user.name;
     if (roleDisplay) {
         const roleLabels = {
-            'admin': 'ADMIN',
+            'superadmin': 'SUPER ADMIN',
+            'admin': 'ADMIN (ดูข้อมูลอย่างเดียว)',
             'shelter': 'SHELTER',
             'water_staff': 'WATER STAFF',
             'relief': 'RELIEF',
@@ -122,8 +123,9 @@ function updateMenuByRole() {
         }
     });
 
+    // ปุ่มและเมนูภาพรวมสำหรับ Superadmin และ Admin
     document.querySelectorAll('.admin-only').forEach(el => {
-        if (userRole === 'admin') {
+        if (userRole === 'admin' || userRole === 'superadmin') {
             el.style.display = 'flex';
             el.classList.remove('hidden');
         } else {
@@ -132,9 +134,10 @@ function updateMenuByRole() {
         }
     });
 
+    // เมนูจัดการผู้ใช้งาน (User Management) เฉพาะ Superadmin เท่านั้น
     const adminBtn = document.getElementById('adminMenuBtn');
     if (adminBtn) {
-        if (userRole === 'admin') {
+        if (userRole === 'superadmin') {
             adminBtn.style.display = 'flex';
             adminBtn.classList.remove('hidden');
         } else {
@@ -142,7 +145,36 @@ function updateMenuByRole() {
             adminBtn.classList.add('hidden');
         }
     }
+
+    // จัดการโหมดดูข้อมูลอย่างเดียว (View-Only Mode) สำหรับ Admin
+    if (userRole === 'admin') {
+        document.body.classList.add('view-only-mode');
+        const badge = document.getElementById('viewOnlyBadge');
+        if (badge) badge.classList.remove('hidden');
+    } else {
+        document.body.classList.remove('view-only-mode');
+        const badge = document.getElementById('viewOnlyBadge');
+        if (badge) badge.classList.add('hidden');
+    }
 }
+
+/**
+ * ตรวจสอบและบล็อกการแก้ไข/ลบ/เพิ่มข้อมูลสำหรับสิทธิ์ Admin (View-Only)
+ */
+function checkAdminReadOnlyAction() {
+    if (typeof userRole !== 'undefined' && userRole === 'admin') {
+        Swal.fire({
+            icon: 'info',
+            title: 'สิทธิ์ดูข้อมูลเท่านั้น',
+            text: 'บัญชีผู้ใช้งาน Admin สามารถดูข้อมูลได้อย่างเดียว ไม่สามารถแก้ไข เพิ่ม หรือลบข้อมูลใดๆ ได้',
+            confirmButtonColor: '#3b82f6',
+            customClass: { popup: 'rounded-2xl' }
+        });
+        return true;
+    }
+    return false;
+}
+window.checkAdminReadOnlyAction = checkAdminReadOnlyAction;
 
 // ฟังก์ชันออกจากระบบ
 function handleLogout() {

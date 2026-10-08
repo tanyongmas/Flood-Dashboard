@@ -39,6 +39,7 @@
             <h1 class="text-2xl font-bold text-blue-900 mb-2">รายงานสถานการณ์น้ำท่วม<br>เทศบาลตำบลตันหยงมัส</h1>
             <p class="text-sm text-slate-500 mb-8">กรุณากรอกชื่อผู้ใช้เพื่อเข้าใช้งานระบบ</p>
             <input type="text" id="username" placeholder="ระบุชื่อผู้ใช้งาน"
+                onkeydown="if(event.key === 'Enter') doLogin()"
                 class="w-full p-4 border border-blue-100 rounded-2xl mb-4 text-center font-bold outline-none focus:ring-2 focus:ring-blue-400 bg-blue-50">
             <button onclick="doLogin()" id="loginBtn"
                 class="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold hover:bg-blue-700 transition-all active:scale-95 shadow-lg">เข้าสู่ระบบ</button>
@@ -124,8 +125,12 @@
                             </div>
                             <div class="overflow-hidden">
                                 <p id="displayUserName" class="text-[11px] font-black text-slate-700 truncate">Guest</p>
-                                <p id="displayUserRole"
-                                    class="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Staff</p>
+                                <div class="flex items-center gap-1.5 mt-0.5">
+                                    <p id="displayUserRole" class="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Staff</p>
+                                    <span id="viewOnlyBadge" class="hidden bg-amber-100 text-amber-800 text-[8px] font-black px-1.5 py-0.5 rounded-full border border-amber-200 shrink-0">
+                                        <i class="fas fa-eye mr-0.5"></i>ดูอย่างเดียว
+                                    </span>
+                                </div>
                             </div>
                         </div>
 
@@ -2392,7 +2397,12 @@
                             <h2 class="text-2xl font-black text-slate-800 tracking-tight">จัดการผู้ใช้งานระบบ</h2>
                             <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">User & Role Management</p>
                         </div>
-                        <div class="flex items-center gap-3">
+                        <div class="flex flex-wrap items-center gap-3">
+                            <button onclick="openChangeAdminPasswordModal()"
+                                class="px-5 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-2xl font-bold text-xs shadow-md shadow-blue-200 transition-all active:scale-95 flex items-center gap-2">
+                                <i class="fas fa-user-shield text-blue-200 text-sm"></i>
+                                <span>กำหนดรหัสผ่าน Superadmin</span>
+                            </button>
                             <button onclick="openChangePdpaPinModal()"
                                 class="px-5 py-3 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white rounded-2xl font-bold text-xs shadow-md shadow-amber-200 transition-all active:scale-95 flex items-center gap-2">
                                 <i class="fas fa-shield-alt text-amber-200 text-sm"></i>
@@ -2420,7 +2430,8 @@
                                         <select id="manage_role"
                                             class="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl outline-none text-sm font-bold text-slate-700"
                                             required>
-                                            <option value="admin">Admin (เข้าได้ทุกหน้า)</option>
+                                            <option value="superadmin">Superadmin (สิทธิ์สูงสุด เข้าได้ทุกหน้า แก้ไขได้ทุกอย่าง)</option>
+                                            <option value="admin">Admin (เข้าได้ทุกหน้า - ดูข้อมูลได้อย่างเดียว)</option>
                                             <option value="shelter">Shelter (เฉพาะศูนย์พักพิง)</option>
                                             <option value="water_staff">Water Staff (เฉพาะการจัดการระดับน้ำ)</option>
                                             <option value="relief">Relief Staff (เฉพาะการจัดการถุงยังชีพ)</option>
@@ -2431,6 +2442,27 @@
                                     <button type="submit"
                                         class="w-full bg-slate-800 text-white py-3 rounded-xl font-bold hover:bg-slate-900 transition-all shadow-md">บันทึกข้อมูล</button>
                                 </form>
+                            </div>
+
+                            <!-- การ์ดตั้งค่ารหัสผ่านเข้าสู่ระบบ Superadmin -->
+                            <div class="bg-gradient-to-br from-blue-600 to-indigo-700 p-6 rounded-[2rem] text-white shadow-lg shadow-blue-200">
+                                <div class="flex items-center gap-3 mb-3">
+                                    <div class="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-lg">
+                                        <i class="fas fa-user-shield"></i>
+                                    </div>
+                                    <div>
+                                        <h4 class="font-black text-sm">รหัสผ่านเข้าสู่ระบบ Superadmin</h4>
+                                        <p class="text-[10px] text-blue-100">Superadmin Login Password</p>
+                                    </div>
+                                </div>
+                                <p class="text-xs text-blue-100 mb-4 leading-relaxed">
+                                    ยืนยันตัวตนเฉพาะผู้ใช้งานระดับ Superadmin ป้องกันบุคคลภายนอกเข้าถึงระบบจัดการ
+                                </p>
+                                <button onclick="openChangeAdminPasswordModal()"
+                                    class="w-full py-2.5 bg-white text-blue-700 hover:bg-blue-50 rounded-xl font-bold text-xs transition-all shadow active:scale-95 flex items-center justify-center gap-2">
+                                    <i class="fas fa-key"></i>
+                                    <span>เปลี่ยนรหัสผ่าน Superadmin</span>
+                                </button>
                             </div>
 
                             <!-- การ์ดตั้งค่าความปลอดภัย PDPA PIN -->

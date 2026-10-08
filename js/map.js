@@ -53,7 +53,7 @@ function initEvacMap() {
     evacMap.addLayer(evacDrawnItems);
     evacMarkerLayer = L.layerGroup().addTo(evacMap);
 
-    if (userRole === 'admin') {
+    if (userRole === 'superadmin') {
         const drawControl = new L.Control.Draw({
             edit: {
                 featureGroup: evacDrawnItems,

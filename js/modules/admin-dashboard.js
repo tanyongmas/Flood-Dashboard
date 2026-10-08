@@ -606,7 +606,7 @@ window.renderFloodReportDashboard = function () {
 
     const uploadEl = document.getElementById('riskMapAdminUpload');
     if (uploadEl) {
-        if (typeof userRole !== 'undefined' && userRole === 'admin') {
+        if (typeof userRole !== 'undefined' && userRole === 'superadmin') {
             uploadEl.classList.remove('hidden');
         } else {
             uploadEl.classList.add('hidden');
