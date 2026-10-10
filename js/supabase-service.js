@@ -226,18 +226,19 @@ async function sbFetchInitialData(targetPeriod = '2569') {
                 r.note
             ]),
             evacuees: (evacRes.data || []).map(r => [
-                r.registered_at,
-                r.shelter,
-                r.address,
-                r.id_card,
-                r.name,
-                r.age,
-                r.gender,
-                r.phone,
-                r.health_type,
-                r.health_note,
-                r.status,
-                r.return_home_at
+                r.registered_at,     // 0
+                r.shelter,           // 1
+                r.address,           // 2
+                r.id_card,           // 3
+                r.name,              // 4
+                r.age,               // 5
+                r.gender,            // 6
+                r.phone,             // 7
+                r.health_type,       // 8
+                r.health_note,       // 9
+                r.status,            // 10
+                r.return_home_at,    // 11
+                r.id                 // 12 (Primary Key)
             ]),
             addresses: addresses,
             addressEvac: addressEvac,
@@ -379,20 +380,31 @@ async function sbSaveEvacuee(payload) {
     return { success: true };
 }
 
-async function sbMarkEvacueeReturnHome(idCard, name, period) {
+async function sbMarkEvacueeReturnHome(rowId, idCard, name, period) {
     if (!isSupabaseReady()) throw new Error('Supabase ไม่พร้อมใช้งาน');
     
-    const cleanId = String(idCard || '').replace(/'/g, '').trim();
     let query = sbClient.from('evacuees').update({
         status: 'กลับบ้านแล้ว',
         return_home_at: new Date().toISOString()
     });
 
-    if (cleanId) {
+    const cleanId = String(idCard || '').replace(/'/g, '').trim();
+    const cleanName = String(name || '').trim();
+
+    // 1. ระบุด้วย rowId (Primary Key) ปลอดภัยสูงสุด อัปเดตเฉพาะแถวเดียวแน่นอน 100%
+    if (rowId && String(rowId) !== 'undefined' && String(rowId) !== 'null' && String(rowId) !== '') {
+        query = query.eq('id', rowId);
+    } else if (cleanId && cleanId !== '-' && cleanId !== 'null' && cleanId !== 'undefined') {
+        // 2. ถ้ามีเลขบัตรประชาชนที่ไม่ใช่ขีด (-) ให้อัปเดตโดยจับคู่ทั้งเลขบัตรและชื่อ (เพื่อป้องกันเลขบัตรซ้ำ)
         query = query.eq('id_card', cleanId);
-    } else if (name) {
-        query = query.eq('name', String(name).trim());
+        if (cleanName) query = query.eq('name', cleanName);
+    } else if (cleanName) {
+        // 3. ถ้าไม่มีเลขบัตรประชาชน ให้จับคู่ด้วยชื่อ-นามสกุล
+        query = query.eq('name', cleanName);
+    } else {
+        throw new Error('ไม่พบข้อมูลระบุตัวตน (ID หรือชื่อ) ที่จะอัปเดตสถานะ ป้องกันการอัปเดตผิดพลาด');
     }
+
     if (period) {
         query = query.eq('period', period);
     }
@@ -403,6 +415,64 @@ async function sbMarkEvacueeReturnHome(idCard, name, period) {
         throw new Error(error.message);
     }
     console.log("⚡ [Supabase 100%] อัปเดตสถานะกลับบ้านสำเร็จ");
+    return { success: true };
+}
+
+/**
+ * 🔄 ฟังก์ชันยกเลิกสถานะกลับบ้านแล้ว (ย้ายกลับมาเป็น "พักพิงอยู่")
+ */
+async function sbRevertEvacueeToActive(rowId, idCard, name, period) {
+    if (!isSupabaseReady()) throw new Error('Supabase ไม่พร้อมใช้งาน');
+    
+    let query = sbClient.from('evacuees').update({
+        status: 'พักพิงอยู่',
+        return_home_at: null
+    });
+
+    const cleanId = String(idCard || '').replace(/'/g, '').trim();
+    const cleanName = String(name || '').trim();
+
+    if (rowId && String(rowId) !== 'undefined' && String(rowId) !== 'null' && String(rowId) !== '') {
+        query = query.eq('id', rowId);
+    } else if (cleanId && cleanId !== '-' && cleanId !== 'null' && cleanId !== 'undefined') {
+        query = query.eq('id_card', cleanId);
+        if (cleanName) query = query.eq('name', cleanName);
+    } else if (cleanName) {
+        query = query.eq('name', cleanName);
+    } else {
+        throw new Error('ไม่พบข้อมูลระบุตัวตนที่จะเปลี่ยนสถานะ');
+    }
+
+    if (period) {
+        query = query.eq('period', period);
+    }
+
+    const { error } = await query;
+    if (error) {
+        console.error("❌ [Supabase] revertReturnHome error:", error);
+        throw new Error(error.message);
+    }
+    console.log("⚡ [Supabase 100%] ย้ายผู้ประสบภัยกลับมาพักพิงอยู่สำเร็จ");
+    return { success: true };
+}
+
+/**
+ * 🛠️ ฟังก์ชันรีเซ็ตสถานะผู้ประสบภัยทั้งหมดของปีที่ระบุ ให้กลับมาเป็น "พักพิงอยู่" (กรณีเกิดการกดผิดพลาดทั้งตาราง)
+ */
+async function sbResetAllEvacueesToActive(period) {
+    if (!isSupabaseReady()) throw new Error('Supabase ไม่พร้อมใช้งาน');
+    if (!period) throw new Error('กรุณาระบุปี (period) ที่ต้องการรีเซ็ต');
+
+    const { error } = await sbClient.from('evacuees').update({
+        status: 'พักพิงอยู่',
+        return_home_at: null
+    }).eq('period', period);
+
+    if (error) {
+        console.error("❌ [Supabase] resetAllEvacuees error:", error);
+        throw new Error(error.message);
+    }
+    console.log(`⚡ [Supabase 100%] รีเซ็ตสถานะผู้ประสบภัยปี ${period} ทั้งหมดกลับมาพักพิงอยู่เรียบร้อย`);
     return { success: true };
 }
 

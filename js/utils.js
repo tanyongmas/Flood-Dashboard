@@ -114,14 +114,85 @@ function setupUserInterface(user) {
 }
 
 function updateMenuByRole() {
-    const allowed = PAGE_ACCESS[userRole] || ['shelter'];
+    let currentRole = (typeof userRole !== 'undefined' && userRole) ? userRole : '';
+    if (!currentRole) {
+        try {
+            const saved = localStorage.getItem('user_session');
+            if (saved) currentRole = JSON.parse(saved).role || '';
+        } catch (e) {}
+    }
+
+    const roleAccessMap = {
+        'superadmin': ['dashboard', 'water', 'addWater', 'shelter', 'evacuation', 'regis', 'relief', 'looker', 'userManagement'],
+        'admin': ['dashboard', 'water', 'addWater', 'shelter', 'evacuation', 'regis', 'relief', 'looker'],
+        'shelter': ['shelter', 'regis', 'looker'],
+        'water_staff': ['water', 'addWater', 'looker'],
+        'relief': ['relief', 'looker'],
+        'community': ['water', 'addWater', 'evacuation', 'looker'],
+        'flood_report': ['looker']
+    };
+    const accessMap = (typeof PAGE_ACCESS !== 'undefined') ? PAGE_ACCESS : roleAccessMap;
+    const allowed = accessMap[currentRole] || ['shelter'];
 
     document.querySelectorAll('.nav-btn, .mobile-nav-btn').forEach(btn => {
         const page = btn.getAttribute('data-page');
         if (page) {
-            btn.style.display = allowed.includes(page) ? 'flex' : 'none';
+            if (allowed.includes(page)) {
+                btn.style.display = 'flex';
+                btn.classList.remove('hidden');
+            } else {
+                btn.style.setProperty('display', 'none', 'important');
+                btn.classList.add('hidden');
+            }
         }
     });
+
+    // 📊 ควบคุมปุ่ม looker บนแถบ Bottom Navigation:
+    // แสดงเฉพาะกรณีเข้าสู่ระบบด้วยสิทธิ์ flood_report เท่านั้น (สิทธิ์อื่นจะเข้าถึงผ่านเมนู 3 ขีดด้านบน)
+    const mobileLookerBtn = document.querySelector('.bottom-nav-mobile .mobile-nav-btn[data-page="looker"]');
+    if (mobileLookerBtn) {
+        if (currentRole === 'flood_report') {
+            mobileLookerBtn.style.display = 'flex';
+            mobileLookerBtn.classList.remove('hidden');
+        } else {
+            mobileLookerBtn.style.setProperty('display', 'none', 'important');
+            mobileLookerBtn.classList.add('hidden');
+        }
+    }
+
+    // 🎯 ปรับตำแหน่งไอคอนบน Bottom Navigation: กรณีมีเพียง 1 ไอคอน ให้แสดงตรงกลางหน้าจออย่างสมบูรณ์
+    const bottomNav = document.querySelector('.bottom-nav-mobile');
+    if (bottomNav) {
+        const visibleBtns = Array.from(bottomNav.querySelectorAll('.mobile-nav-btn')).filter(btn => {
+            return !btn.classList.contains('hidden') && btn.style.display !== 'none';
+        });
+        const groups = bottomNav.querySelectorAll('.mobile-nav-group');
+
+        if (visibleBtns.length === 1) {
+            bottomNav.classList.add('single-nav-mode');
+            groups.forEach(group => {
+                const hasVisible = Array.from(group.querySelectorAll('.mobile-nav-btn')).some(btn => {
+                    return !btn.classList.contains('hidden') && btn.style.display !== 'none';
+                });
+                if (hasVisible) {
+                    group.style.display = 'flex';
+                    group.style.flex = 'none';
+                    group.style.width = 'auto';
+                    group.style.justifyContent = 'center';
+                } else {
+                    group.style.setProperty('display', 'none', 'important');
+                }
+            });
+        } else {
+            bottomNav.classList.remove('single-nav-mode');
+            groups.forEach(group => {
+                group.style.display = '';
+                group.style.flex = '';
+                group.style.width = '';
+                group.style.justifyContent = '';
+            });
+        }
+    }
 
     // ปุ่มและเมนูภาพรวมสำหรับ Superadmin และ Admin
     document.querySelectorAll('.admin-only').forEach(el => {
@@ -203,8 +274,14 @@ function handleLogout() {
  * มี Session Cache 15 นาที เพื่อไม่ต้องกรอกซ้ำบ่อยเกินไป
  */
 async function promptPdpaSecurityPin(targetDesc, onSuccess) {
-    const allowedRoles = ['admin', 'shelter', 'relief'];
-    const currentRole = (typeof userRole !== 'undefined' ? userRole : '').toLowerCase();
+    const allowedRoles = ['superadmin', 'admin', 'shelter', 'relief'];
+    let currentRole = (typeof userRole !== 'undefined' && userRole) ? userRole.toLowerCase() : '';
+    if (!currentRole) {
+        try {
+            const saved = localStorage.getItem('user_session');
+            if (saved) currentRole = (JSON.parse(saved).role || '').toLowerCase();
+        } catch(e) {}
+    }
     const staffName = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : 'เจ้าหน้าที่';
 
     // 1. ตรวจสอบสิทธิ์ Role ขั้นแรก

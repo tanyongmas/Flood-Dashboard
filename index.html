@@ -152,50 +152,50 @@
 
         <!-- ================= เมนูสำหรับมือถือ (Bottom Navigation) ================= -->
         <div
-            class="bottom-nav-mobile lg:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-slate-100 flex justify-between items-center px-2 z-50 h-[65px]">
+            class="bottom-nav-mobile lg:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-100 flex justify-between items-center px-2 z-50 h-[65px] shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
 
-            <!-- ฝั่งซ้าย (2 ปุ่ม) -->
-            <div class="flex flex-1 justify-around items-center h-full pt-1">
+            <!-- ฝั่งซ้าย (2 ปุ่ม: สถานการณ์ระดับน้ำ, ศูนย์พักพิง) -->
+            <div class="mobile-nav-group flex flex-1 justify-around items-center h-full">
                 <button onclick="showPage('water')"
-                    class="mobile-nav-btn flex flex-col items-center text-slate-400 w-full" data-page="water">
-                    <i class="fas fa-tint text-[20px] mb-1"></i>
-                    <span class="text-[9px] font-bold">สถานการณ์ระดับน้ำ</span>
+                    class="mobile-nav-btn flex items-center justify-center text-slate-400 hover:text-blue-600 transition-colors w-full h-full"
+                    data-page="water" title="สถานการณ์ระดับน้ำ">
+                    <i class="fas fa-tint text-[22px]"></i>
                 </button>
                 <button onclick="showPage('shelter')"
-                    class="mobile-nav-btn flex flex-col items-center text-slate-400 w-full" data-page="shelter">
-                    <i class="fas fa-hotel text-[20px] mb-1"></i>
-                    <span class="text-[9px] font-bold">ศูนย์พักพิง</span>
+                    class="mobile-nav-btn flex items-center justify-center text-slate-400 hover:text-blue-600 transition-colors w-full h-full"
+                    data-page="shelter" title="ศูนย์พักพิง">
+                    <i class="fas fa-hotel text-[22px]"></i>
                 </button>
             </div>
 
-            <!-- 🌟 ปุ่มหน้าหลักตรงกลาง (ลอยเด่นขึ้นมา) แสดงเฉพาะ Admin -->
-            <div class="admin-only hidden relative w-[75px] h-full flex justify-center shrink-0">
+            <!-- 🌟 ปุ่มหน้าหลักตรงกลาง (Floating Center: ปุ่มกลมเด่นลอยขึ้นมา ไม่มีตัวหนังสือ) -->
+            <div class="mobile-nav-group relative w-[70px] h-full flex justify-center shrink-0">
                 <button onclick="showPage('dashboard')"
-                    class="mobile-nav-btn absolute -top-5 flex flex-col items-center group" data-page="dashboard">
+                    class="mobile-nav-btn absolute -top-4 flex items-center justify-center group"
+                    data-page="dashboard" title="หน้าหลัก">
                     <div
-                        class="w-[56px] h-[56px] bg-gradient-to-br from-indigo-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg shadow-blue-300 border-[3px] border-white text-white transition-transform group-active:scale-95">
-                        <i class="fas fa-home text-2xl mb-0.5"></i>
+                        class="w-[54px] h-[54px] bg-gradient-to-br from-indigo-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg shadow-blue-300 border-[3px] border-white text-white transition-all group-active:scale-95 group-hover:scale-105">
+                        <i class="fas fa-home text-2xl"></i>
                     </div>
-                    <span class="text-[10px] mt-1.5 font-black text-blue-600 drop-shadow-sm">หน้าหลัก</span>
                 </button>
             </div>
 
-            <!-- ฝั่งขวา (2 ปุ่ม) -->
-            <div class="flex flex-1 justify-around items-center h-full pt-1">
+            <!-- ฝั่งขวา (2 ปุ่ม: รายงานสถานะ, ถุงยังชีพ และปุ่มรายงานน้ำท่วมสำหรับสิทธิ flood_report) -->
+            <div class="mobile-nav-group flex flex-1 justify-around items-center h-full">
                 <button onclick="showPage('evacuation')"
-                    class="mobile-nav-btn flex flex-col items-center text-slate-400 w-full" data-page="evacuation">
-                    <i class="fas fa-map-marked-alt text-[20px] mb-1"></i>
-                    <span class="text-[9px] font-bold">รายงานสถานะ</span>
+                    class="mobile-nav-btn flex items-center justify-center text-slate-400 hover:text-blue-600 transition-colors w-full h-full"
+                    data-page="evacuation" title="รายงานสถานะ">
+                    <i class="fas fa-map-marked-alt text-[22px]"></i>
                 </button>
                 <button onclick="showPage('relief')"
-                    class="mobile-nav-btn flex flex-col items-center text-slate-400 w-full" data-page="relief">
-                    <i class="fas fa-box-open text-[20px] mb-1"></i>
-                    <span class="text-[9px] font-bold">ถุงยังชีพ</span>
+                    class="mobile-nav-btn flex items-center justify-center text-slate-400 hover:text-blue-600 transition-colors w-full h-full"
+                    data-page="relief" title="ถุงยังชีพ">
+                    <i class="fas fa-box-open text-[22px]"></i>
                 </button>
                 <button onclick="showPage('looker')"
-                    class="mobile-nav-btn flex flex-col items-center text-slate-400 w-full" data-page="looker">
-                    <i class="fas fa-chart-pie text-[20px] mb-1"></i>
-                    <span class="text-[9px] font-bold">รายงานน้ำท่วม</span>
+                    class="mobile-nav-btn hidden items-center justify-center text-slate-400 hover:text-blue-600 transition-colors w-full h-full"
+                    data-page="looker" title="รายงานสรุปข้อมูลน้ำท่วม">
+                    <i class="fas fa-chart-pie text-[22px]"></i>
                 </button>
             </div>
         </div>
@@ -208,15 +208,15 @@
                 <h4 class="text-xs font-black text-slate-400 mb-2 border-b pb-2 uppercase tracking-wider">เมนูเพิ่มเติม
                 </h4>
 
-                <!-- รายงานข้อมูลน้ำท่วม -->
+                <!-- 📊 รายงานสรุปข้อมูลน้ำท่วม -->
                 <button onclick="showPage('looker'); toggleMoreMenu();"
                     class="w-full flex items-center space-x-4 p-3 hover:bg-blue-50 rounded-2xl text-slate-700 transition-colors">
                     <div class="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center"><i
                             class="fas fa-chart-pie"></i></div>
-                    <span class="font-bold text-sm">รายงานสรุปข้อมูล</span>
+                    <span class="font-bold text-sm">รายงานสรุปข้อมูลน้ำท่วม</span>
                 </button>
 
-                <!-- จัดการผู้ใช้ (Admin Only) -->
+                <!-- ⚙️ จัดการผู้ใช้งานระบบ (Admin Only) -->
                 <button onclick="showPage('userManagement'); toggleMoreMenu();"
                     class="admin-only hidden w-full flex items-center space-x-4 p-3 hover:bg-slate-100 rounded-2xl text-slate-700 transition-colors">
                     <div class="w-8 h-8 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center"><i
@@ -226,7 +226,7 @@
 
                 <div class="border-t border-slate-100 my-2 pt-2"></div>
 
-                <!-- ปุ่มออกจากระบบ -->
+                <!-- 🚪 ปุ่มออกจากระบบ -->
                 <button onclick="handleLogout()"
                     class="w-full flex items-center space-x-4 p-3 hover:bg-rose-50 rounded-2xl text-rose-600 transition-colors">
                     <div class="w-8 h-8 rounded-full bg-rose-100 text-rose-500 flex items-center justify-center"><i

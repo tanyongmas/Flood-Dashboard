@@ -3331,7 +3331,7 @@ let dashLayerStates = {
                             </td>
                             <td class="p-3 text-center">
                                 <div class="flex items-center justify-center gap-1.5">
-                                    <button type="button" onclick="confirmReturnHome('${idCard}', '${name.replace(/'/g, "\\'")}')" 
+                                    <button type="button" onclick="confirmReturnHome('${r[12] || ''}', '${idCard}', '${name.replace(/'/g, "\\'")}')" 
                                             title="แจ้งเดินทางกลับบ้านแล้ว"
                                             class="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-200 text-[10px] font-bold rounded-xl transition-all shadow-sm active:scale-95 flex items-center gap-1 whitespace-nowrap">
                                         <i class="fas fa-house-chimney-user text-emerald-500"></i> กลับบ้านแล้ว
@@ -3378,11 +3378,18 @@ let dashLayerStates = {
                                     </span>
                                 </td>
                                 <td class="p-3 text-center">
-                                    <button onclick="checkPasswordBeforeDetailByData('${idCard}', '${name.replace(/'/g, "\\'")}')" 
-                                            class="bg-white border border-emerald-200 text-emerald-600 w-8 h-8 rounded-full shadow-sm hover:bg-emerald-600 hover:text-white transition-all active:scale-90"
-                                            title="ดูรายละเอียดส่วนตัว">
-                                        <i class="fas fa-search-plus text-xs"></i>
-                                    </button>
+                                    <div class="flex items-center justify-center gap-1.5">
+                                        <button type="button" onclick="confirmRevertToActive('${r[12] || ''}', '${idCard}', '${name.replace(/'/g, "\\'")}')" 
+                                                title="ย้ายกลับมาเข้าพักพิง"
+                                                class="px-2.5 py-1 bg-amber-50 hover:bg-amber-600 text-amber-700 hover:text-white border border-amber-200 text-[10px] font-bold rounded-xl transition-all shadow-sm active:scale-95 flex items-center gap-1 whitespace-nowrap">
+                                            <i class="fas fa-undo"></i> ย้ายกลับมาพักพิง
+                                        </button>
+                                        <button onclick="checkPasswordBeforeDetailByData('${idCard}', '${name.replace(/'/g, "\\'")}')" 
+                                                class="bg-white border border-emerald-200 text-emerald-600 w-8 h-8 rounded-full shadow-sm hover:bg-emerald-600 hover:text-white transition-all active:scale-90"
+                                                title="ดูรายละเอียดส่วนตัว">
+                                            <i class="fas fa-search-plus text-xs"></i>
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         `;
@@ -3392,7 +3399,7 @@ let dashLayerStates = {
         }
 
         // ฟังก์ชันยืนยันสถานะผู้ประสบภัยกลับบ้านแล้ว
-        async function confirmReturnHome(idCard, name) {
+        async function confirmReturnHome(rowId, idCard, name) {
             const result = await Swal.fire({
                 title: 'ยืนยันการเดินทางกลับบ้าน',
                 html: `ต้องการเปลี่ยนสถานะของคุณ <b>${name}</b> เป็น <span class="text-emerald-600 font-bold">"กลับบ้านแล้ว"</span> ใช่หรือไม่?`,
@@ -3413,15 +3420,8 @@ let dashLayerStates = {
             });
 
             try {
-                const payload = {
-                    action: 'markEvacueeReturnHome',
-                    idCard: idCard,
-                    name: name,
-                    period: typeof currentPeriod !== 'undefined' ? currentPeriod : ''
-                };
-
                 if (typeof sbMarkEvacueeReturnHome === 'function') {
-                    await sbMarkEvacueeReturnHome(idCard, name, currentPeriod);
+                    await sbMarkEvacueeReturnHome(rowId, idCard, name, currentPeriod);
                 } else {
                     throw new Error('Supabase Service ไม่พร้อมทำงาน');
                 }
@@ -3435,9 +3435,11 @@ let dashLayerStates = {
 
                     // อัปเดตใน store.evacuees ทันที
                     const target = (store.evacuees || []).find(r => {
+                        if (rowId && r[12] && String(r[12]) === String(rowId)) return true;
                         const rCard = String(r[3] || '').replace(/'/g, '').trim();
                         const rName = String(r[4] || '').trim();
-                        return (idCard && rCard === idCard) || (name && rName === name);
+                        if (idCard && idCard !== '-' && rCard === idCard) return true;
+                        return (name && rName === name);
                     });
                     if (target) {
                         target[10] = 'กลับบ้านแล้ว';
@@ -3453,6 +3455,80 @@ let dashLayerStates = {
                 Swal.fire('เกิดข้อผิดพลาด', err.message, 'error');
             }
         }
+
+        // 🔄 ฟังก์ชันยกเลิกสถานะกลับบ้านแล้ว (ย้ายกลับมาเข้าพักพิง)
+        async function confirmRevertToActive(rowId, idCard, name) {
+            const result = await Swal.fire({
+                title: 'ย้ายกลับมาเข้าพักพิง',
+                html: `ต้องการเปลี่ยนสถานะของคุณ <b>${name}</b> กลับมาเป็น <span class="text-blue-600 font-bold">"พักพิงอยู่"</span> ใช่หรือไม่?`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'ยืนยันย้ายกลับมาพักพิง',
+                cancelButtonText: 'ยกเลิก',
+                confirmButtonColor: '#2563eb',
+                customClass: { popup: 'rounded-[2rem]' }
+            });
+
+            if (!result.isConfirmed) return;
+
+            Swal.fire({
+                title: 'กำลังอัปเดตสถานะ...',
+                allowOutsideClick: false,
+                didOpen: () => Swal.showLoading()
+            });
+
+            try {
+                if (typeof sbRevertEvacueeToActive === 'function') {
+                    await sbRevertEvacueeToActive(rowId, idCard, name, currentPeriod);
+                } else {
+                    throw new Error('Supabase Service ไม่พร้อมทำงาน');
+                }
+
+                Swal.fire({
+                    title: 'สำเร็จ!',
+                    text: `ย้ายคุณ ${name} กลับมาพักพิงอยู่เรียบร้อย`,
+                    icon: 'success',
+                    timer: 1500
+                });
+
+                await loadData();
+                const activeBtn = document.querySelector('.shelter-filter-btn.active-shelter-btn');
+                const centerName = activeBtn ? activeBtn.getAttribute('data-center') : 'all';
+                if (typeof filterShelter === 'function') filterShelter(centerName);
+                if (typeof renderDashOneMapLayers === 'function') renderDashOneMapLayers();
+                if (typeof window.loadEvacuationMarkers === 'function') window.loadEvacuationMarkers();
+            } catch (err) {
+                Swal.fire('เกิดข้อผิดพลาด', err.message, 'error');
+            }
+        }
+
+        // 🛠️ ฟังก์ชันสำหรับกู้คืน/รีเซ็ตสถานะทุกคนของปีที่เลือกให้กลับมาเป็น "พักพิงอยู่" ทั้งหมด (เผื่อกรณีข้อมูลผิดพลาด)
+        window.resetAllEvacueesToActive = async function(period) {
+            const targetPeriod = period || currentPeriod || '2568';
+            const confirm = await Swal.fire({
+                title: `รีเซ็ตผู้ประสบภัยปี ${targetPeriod}`,
+                text: `ต้องการเปลี่ยนสถานะผู้ประสบภัยทั้งหมดของปี ${targetPeriod} ให้กลับมาเป็น "พักพิงอยู่" ใช่หรือไม่?`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'ยืนยันรีเซ็ตทุกคน',
+                cancelButtonText: 'ยกเลิก',
+                confirmButtonColor: '#d97706',
+                customClass: { popup: 'rounded-[2rem]' }
+            });
+            if (!confirm.isConfirmed) return;
+
+            Swal.fire({ title: 'กำลังรีเซ็ต...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            try {
+                if (typeof sbResetAllEvacueesToActive === 'function') {
+                    await sbResetAllEvacueesToActive(targetPeriod);
+                }
+                Swal.fire('สำเร็จ', `รีเซ็ตสถานะผู้ประสบภัยปี ${targetPeriod} ทั้งหมดกลับมาเป็น "พักพิงอยู่" เรียบร้อย`, 'success');
+                await loadData();
+                if (typeof filterShelter === 'function') filterShelter('all');
+            } catch(e) {
+                Swal.fire('ผิดพลาด', e.message, 'error');
+            }
+        };
 
         // ฟังก์ชันตรวจสอบสิทธิ์และยืนยันการเข้าถึงข้อมูลส่วนบุคคล (PDPA Security PIN)
         async function checkPasswordBeforeDetailByData(idCard, name) {

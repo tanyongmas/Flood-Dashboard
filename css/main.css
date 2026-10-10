@@ -272,19 +272,61 @@ Responsive Layout: หน้าจอ PC / Laptop (ใหญ่กว่า 1366
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     color: #94a3b8;
-    font-size: 10px;
-    font-weight: 800;
     transition: all 0.2s;
 }
 
-.mobile-nav-btn.active {
-    color: #2563eb;
+.mobile-nav-btn.active,
+.mobile-nav-btn.active-menu-mobile {
+    color: #2563eb !important;
 }
 
 .mobile-nav-btn i {
-    font-size: 18px;
-    margin-bottom: 4px;
+    font-size: 22px;
+    margin-bottom: 0;
+}
+
+/* ==============================================================
+   Single Icon Mode: จัดตำแหน่งตรงกลางเมื่อเข้าด้วยสิทธิ์ที่มีไอคอนเดียว
+   ============================================================== */
+.bottom-nav-mobile.single-nav-mode {
+    justify-content: center !important;
+}
+
+.bottom-nav-mobile.single-nav-mode .mobile-nav-group {
+    flex: none !important;
+    width: auto !important;
+    justify-content: center !important;
+    align-items: center !important;
+    margin: 0 auto !important;
+}
+
+.bottom-nav-mobile.single-nav-mode .mobile-nav-btn:not(.hidden):not([style*="display: none"]) {
+    width: 52px !important;
+    height: 52px !important;
+    border-radius: 9999px;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: #f1f5f9;
+    color: #2563eb !important;
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.12);
+    transition: all 0.2s ease;
+}
+
+.bottom-nav-mobile.single-nav-mode .mobile-nav-btn:not(.hidden):not([style*="display: none"]):active {
+    transform: scale(0.95);
+}
+
+.bottom-nav-mobile.single-nav-mode .mobile-nav-btn[data-page="dashboard"] {
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+.bottom-nav-mobile .mobile-nav-btn.hidden,
+.bottom-nav-mobile .mobile-nav-btn[style*="display: none"] {
+    display: none !important;
 }
 
 @keyframes pulse-red {
