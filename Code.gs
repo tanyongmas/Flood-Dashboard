@@ -1791,16 +1791,84 @@ function getDirectRoadImageUrl(r) {
 }
 
 /**
+ * 🎨 กำหนดชุดสี ไอคอน และข้อความสถานะการสัญจรตามเกณฑ์เทศบาลตำบลตันหยงมัส:
+ * - แดง > ปิดการจราจรทุกชนิด
+ * - ส้ม > รถเล็กไม่สามารถผ่านได้
+ * - เหลือง > เฝ้าระวังน้ำท่วมผิวทาง
+ * - เขียว > เปิดสัญจรได้ตามปกติ
+ */
+function getRoadStatusTheme(statusStr) {
+  const s = String(statusStr || "").toLowerCase();
+
+  // 1. 🔴 แดง > ปิดการจราจรทุกชนิด
+  if (s.includes("ทุกชนิด") || s.includes("ปิดการจราจร") || s.includes("ผ่านไม่ได้")) {
+    return {
+      label: "ปิดการจราจรทุกชนิด",
+      icon: "⛔",
+      badgeColor: "#dc2626", // สีแดง
+      textColor: "#dc2626"
+    };
+  }
+
+  // 2. 🟠 ส้ม > รถเล็กไม่สามารถผ่านได้
+  if (s.includes("รถเล็ก") || s.includes("ยกสูง") || s.includes("ส้ม")) {
+    return {
+      label: "รถเล็กไม่สามารถผ่านได้",
+      icon: "⚠️",
+      badgeColor: "#ea580c", // สีส้ม
+      textColor: "#ea580c"
+    };
+  }
+
+  // 3. 🟡 เหลือง > เฝ้าระวังน้ำท่วมผิวทาง
+  if (s.includes("เฝ้าระวัง") || s.includes("ผิวทาง") || s.includes("สัญจรได้บ้าง") || s.includes("ท่วมขัง") || s.includes("เหลือง")) {
+    return {
+      label: "เฝ้าระวังน้ำท่วมผิวทาง",
+      icon: "🟡",
+      badgeColor: "#d97706", // สีเหลือง/อำพัน
+      textColor: "#d97706"
+    };
+  }
+
+  // 4. 🟢 เขียว > เปิดสัญจรได้ตามปกติ
+  if (s.includes("เปิด") || s.includes("ปกติ") || s.includes("ลดแล้ว") || s.includes("เขียว")) {
+    return {
+      label: "เปิดสัญจรได้ตามปกติ",
+      icon: "✅",
+      badgeColor: "#059669", // สีเขียว
+      textColor: "#059669"
+    };
+  }
+
+  // ค่าสำรองกรณีมีคำว่าปิด
+  if (s.includes("ปิด")) {
+    return {
+      label: "ปิดการจราจรทุกชนิด",
+      icon: "⛔",
+      badgeColor: "#dc2626",
+      textColor: "#dc2626"
+    };
+  }
+
+  return {
+    label: statusStr || "เฝ้าระวังน้ำท่วมผิวทาง",
+    icon: "🟡",
+    badgeColor: "#d97706",
+    textColor: "#d97706"
+  };
+}
+
+/**
  * 🚧 สร้าง Flex Message ตรวจสอบเส้นทาง (ถ้าไม่มีเส้นทางปิด จะขึ้นว่าสัญจรได้ตามปกติ, ถ้ามีหลายจุดแสดงเป็น Carousel)
  */
 function getRoadClosuresFlexMessage() {
   const roads = getRoadClosuresFromSupabase();
 
-  // กรณีไม่มีเส้นทางปิด สัญจรได้ตามปกติ
+  // กรณีไม่มีเส้นทางปิด สัญจรได้ตามปกติ (สีเขียว)
   if (!roads || roads.length === 0) {
     return {
       "type": "flex",
-      "altText": "🟢 ตรวจสอบเส้นทาง: สัญจรได้ตามปกติทุกเส้นทาง",
+      "altText": "🟢 ตรวจสอบเส้นทาง: เปิดสัญจรได้ตามปกติทุกเส้นทาง",
       "contents": {
         "type": "bubble",
         "size": "mega",
@@ -1812,14 +1880,14 @@ function getRoadClosuresFlexMessage() {
           "contents": [
             {
               "type": "text",
-              "text": "🚧 รายงานสภาพการจราจรและเส้นทาง",
+              "text": "🚧 ตรวจสอบเส้นทาง",
               "color": "#ffffff",
               "size": "xs",
               "weight": "bold"
             },
             {
               "type": "text",
-              "text": "สัญจรได้ปกติทุกเส้นทาง 🟢",
+              "text": "เปิดสัญจรได้ตามปกติ ✅",
               "color": "#ffffff",
               "size": "lg",
               "weight": "bold",
@@ -1833,6 +1901,15 @@ function getRoadClosuresFlexMessage() {
           "paddingAll": "20px",
           "spacing": "md",
           "contents": [
+            {
+              "type": "box",
+              "layout": "baseline",
+              "spacing": "xs",
+              "contents": [
+                { "type": "text", "text": "🚦", "size": "xs", "flex": 1 },
+                { "type": "text", "text": "สถานะ: เปิดสัญจรได้ตามปกติ", "size": "xs", "color": "#059669", "weight": "bold", "flex": 9, "wrap": true }
+              ]
+            },
             {
               "type": "text",
               "text": "ขณะนี้ไม่มีรายงานเส้นทางปิดสัญจร หรือน้ำท่วมขังบนผิวจราจรในเขตเทศบาลตำบลตันหยงมัส รถทุกชนิดสามารถสัญจรได้ตามปกติ",
@@ -1879,9 +1956,10 @@ function getRoadClosuresFlexMessage() {
     };
   }
 
-  // กรณีมีเส้นทางปิด นำมาสร้างการ์ด Carousel ให้ครบทุกจุด
+  // กรณีมีเส้นทางปิด นำมาสร้างการ์ด Carousel ให้ครบทุกจุด พร้อมสีหัวการ์ดและสถานะตามเกณฑ์
   const bubbles = roads.slice(0, 10).map(r => {
     const title = r.title || "เส้นทางปิดสัญจร";
+    const statusTheme = getRoadStatusTheme(r.status);
     const waterDepthVal = (r.water_depth !== undefined && r.water_depth !== null && r.water_depth !== '') 
       ? (r.water_depth + (isNaN(r.water_depth) ? '' : ' ซม.')) 
       : (r.waterDepth || r.water_level || "มีน้ำท่วมขังบนผิวทาง");
@@ -1902,15 +1980,31 @@ function getRoadClosuresFlexMessage() {
       "header": {
         "type": "box",
         "layout": "vertical",
-        "backgroundColor": "#dc2626",
+        "backgroundColor": statusTheme.badgeColor,
         "paddingAll": "12px",
         "contents": [
           {
-            "type": "text",
-            "text": "⛔ เส้นทางปิด / สัญจรไม่ได้",
-            "color": "#ffffff",
-            "size": "xs",
-            "weight": "bold"
+            "type": "box",
+            "layout": "horizontal",
+            "contents": [
+              {
+                "type": "text",
+                "text": "🚧 ตรวจสอบเส้นทาง",
+                "color": "#ffffff",
+                "size": "xs",
+                "weight": "bold",
+                "flex": 5
+              },
+              {
+                "type": "text",
+                "text": statusTheme.icon + " " + statusTheme.label,
+                "color": "#ffffff",
+                "size": "xxs",
+                "weight": "bold",
+                "align": "end",
+                "flex": 6
+              }
+            ]
           }
         ]
       },
@@ -1927,6 +2021,15 @@ function getRoadClosuresFlexMessage() {
             "size": "sm",
             "wrap": true,
             "color": "#0f172a"
+          },
+          {
+            "type": "box",
+            "layout": "baseline",
+            "spacing": "xs",
+            "contents": [
+              { "type": "text", "text": "🚦", "size": "xs", "flex": 1 },
+              { "type": "text", "text": "สถานะ: " + statusTheme.label, "size": "xs", "color": statusTheme.textColor, "weight": "bold", "flex": 9, "wrap": true }
+            ]
           },
           {
             "type": "box",
