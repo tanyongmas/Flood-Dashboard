@@ -559,3 +559,45 @@ body.view-only-mode textarea {
     opacity: 0.8 !important;
 }
 
+/* -------------------------------------------------------------
+   📱 Responsive Scrollbar & SweetAlert Mobile Enhancements
+-------------------------------------------------------------- */
+.custom-scrollbar::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 9999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+.swal2-title:empty,
+.swal2-header:empty {
+    display: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    height: 0 !important;
+}
+
+.swal2-popup .swal2-html-container {
+    margin-top: 0 !important;
+}
+
+@media (max-width: 640px) {
+    .swal2-container {
+        padding: 0.5rem !important;
+    }
+    .swal2-container.swal2-center > .swal2-popup {
+        margin: auto !important;
+        max-height: 94vh !important;
+    }
+    .swal2-popup .swal2-title {
+        font-size: 1rem !important;
+    }
+}

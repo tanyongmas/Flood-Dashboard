@@ -1079,6 +1079,15 @@ window.renderPublicPortal = async function () {
     setTimeout(() => {
         initPublicMiniMap(latestLevel);
     }, 200);
+
+    // 4. ตรวจสอบพารามิเตอร์เปิดหน้าต่างรายงานระดับน้ำอัตโนมัติ (จาก LINE OA Quick Reply หรือลิงก์ภายนอก)
+    if (window.location.href.includes('open=water_report') || window.location.href.includes('action=water_report')) {
+        setTimeout(() => {
+            if (typeof openCitizenWaterReportModal === 'function') {
+                openCitizenWaterReportModal();
+            }
+        }, 500);
+    }
 };
 
 /**
@@ -1307,9 +1316,13 @@ function initPublicMiniMap(currentWaterLevel = 14.20) {
                     </div>
                 `;
 
-                L.marker([lat, lng], { icon: roadIcon })
+                const roadMarker = L.marker([lat, lng], { icon: roadIcon })
                     .bindPopup(roadPopupHtml, { maxWidth: 280, className: 'clean-popup' })
                     .addTo(publicMiniMapInstance);
+
+                if (!window._publicRoadMarkersMap) window._publicRoadMarkersMap = {};
+                if (rc.id) window._publicRoadMarkersMap[String(rc.id)] = roadMarker;
+                window._publicRoadMarkersMap[`${lat.toFixed(4)},${lng.toFixed(4)}`] = roadMarker;
             });
         }
 
@@ -1366,6 +1379,44 @@ function initPublicMiniMap(currentWaterLevel = 14.20) {
 
                 L.marker([lat, lng], { icon: cIcon }).bindPopup(cPopup, { maxWidth: 260, className: 'clean-popup' }).addTo(publicMiniMapInstance);
             });
+        }
+
+        // 6. ตรวจสอบพารามิเตอร์หมุดเส้นทางปิด (road_id หรือ lat/lng) ที่ส่งต่อมาจาก LINE OA
+        try {
+            const urlParams = new URLSearchParams(window.location.search);
+            const focusRoadId = urlParams.get('road_id') || urlParams.get('roadId');
+            const focusLat = parseFloat(urlParams.get('lat') || urlParams.get('road_lat'));
+            const focusLng = parseFloat(urlParams.get('lng') || urlParams.get('road_lng'));
+
+            if (focusRoadId || (!isNaN(focusLat) && !isNaN(focusLng) && focusLat !== 0 && focusLng !== 0)) {
+                setTimeout(() => {
+                    const mapEl = document.getElementById('publicMiniMap');
+                    if (mapEl) {
+                        mapEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                    if (publicMiniMapInstance) {
+                        publicMiniMapInstance.invalidateSize();
+                        let targetMarker = null;
+                        if (window._publicRoadMarkersMap) {
+                            if (focusRoadId && window._publicRoadMarkersMap[String(focusRoadId)]) {
+                                targetMarker = window._publicRoadMarkersMap[String(focusRoadId)];
+                            } else if (!isNaN(focusLat) && !isNaN(focusLng)) {
+                                targetMarker = window._publicRoadMarkersMap[`${focusLat.toFixed(4)},${focusLng.toFixed(4)}`];
+                            }
+                        }
+
+                        if (targetMarker) {
+                            const mLatLng = targetMarker.getLatLng();
+                            publicMiniMapInstance.setView(mLatLng, 16, { animate: true });
+                            targetMarker.openPopup();
+                        } else if (!isNaN(focusLat) && !isNaN(focusLng) && focusLat !== 0 && focusLng !== 0) {
+                            publicMiniMapInstance.setView([focusLat, focusLng], 16, { animate: true });
+                        }
+                    }
+                }, 500);
+            }
+        } catch (urlErr) {
+            console.warn("URL param focus map pin error:", urlErr);
         }
 
         setTimeout(() => {
@@ -1482,108 +1533,131 @@ window.openCitizenWaterReportModal = function () {
     ];
 
     Swal.fire({
-        title: `
-            <div class="flex items-center justify-center gap-2.5 text-blue-700 font-black text-lg">
-                <div class="w-9 h-9 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center text-base">
-                    <i class="fas fa-droplet"></i>
-                </div>
-                <span>รายงานระดับน้ำในพื้นที่</span>
-            </div>
-        `,
+        width: 'min(95vw, 520px)',
         html: `
-            <div class="text-left space-y-4 mt-2 font-prompt text-xs">
-                <!-- 1. ตำแหน่ง (GPS หรือ แผนที่) -->
-                <div>
-                    <div class="flex items-center justify-between mb-1.5">
-                        <label class="font-black text-slate-800">
-                            <i class="fas fa-map-pin text-rose-500 mr-1.5"></i> 1. ตำแหน่งที่เกิดเหตุ / พิกัด *
-                        </label>
-                        <button type="button" onclick="getCitizenWaterGps()" class="px-2.5 py-1 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-bold text-[10px] flex items-center gap-1 transition-all active:scale-95 shadow-sm">
-                            <i class="fas fa-crosshairs"></i>
-                            <span>ใช้พิกัดปัจจุบัน (GPS)</span>
-                        </button>
-                    </div>
-
-                    <input type="text" id="cwater_loc_name" class="w-full p-2.5 border border-slate-200 rounded-xl outline-none text-xs bg-slate-50 font-bold focus:border-blue-400 mb-2" placeholder="ชื่อถนน / ซอย / ชุมชน / จุดสังเกตใกล้เคียง">
-
-                    <div class="grid grid-cols-2 gap-2 mb-2">
-                        <input type="text" id="cwater_lat" value="${defaultLat.toFixed(6)}" class="p-2 border border-slate-200 rounded-xl outline-none text-xs font-mono bg-slate-50 focus:border-blue-400" placeholder="Latitude">
-                        <input type="text" id="cwater_lng" value="${defaultLng.toFixed(6)}" class="p-2 border border-slate-200 rounded-xl outline-none text-xs font-mono bg-slate-50 focus:border-blue-400" placeholder="Longitude">
-                    </div>
-
-                    <!-- Interactive Map Picker -->
-                    <div class="rounded-2xl overflow-hidden border border-slate-200 relative">
-                        <div id="swal_cwater_map" class="w-full h-36 bg-slate-100"></div>
-                        <div class="absolute bottom-2 left-2 right-2 bg-white/90 backdrop-blur-sm px-2.5 py-1 rounded-lg text-[9px] text-slate-600 font-bold border border-slate-200 shadow-sm pointer-events-none flex items-center justify-between">
-                            <span>👆 แตะบนแผนที่หรือลากหมุด เพื่อเลือกตำแหน่ง</span>
-                            <span class="text-blue-600 font-mono" id="cwater_coords_preview">${defaultLat.toFixed(4)}, ${defaultLng.toFixed(4)}</span>
+            <div class="text-left font-prompt text-xs">
+                <!-- ส่วนหัวกะทัดรัด สมส่วน ไร้ช่องว่างส่วนเกิน -->
+                <div class="flex items-center justify-between pb-2.5 mb-2.5 border-b border-slate-100">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center text-sm shrink-0">
+                            <i class="fas fa-droplet"></i>
+                        </div>
+                        <div>
+                            <h3 class="font-black text-slate-800 text-sm sm:text-base leading-tight">รายงานระดับน้ำในพื้นที่</h3>
+                            <p class="text-[10px] text-slate-400 font-medium">ระบบแจ้งเตือนระดับน้ำภาคประชาชน</p>
                         </div>
                     </div>
+                    <button type="button" onclick="Swal.close()" class="w-7 h-7 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-400 hover:text-slate-600 flex items-center justify-center text-xs transition-colors shrink-0" title="ปิด">
+                        <i class="fas fa-times"></i>
+                    </button>
                 </div>
 
-                <!-- 2. ระดับน้ำ (ปุ่มเลือก 6 ระดับ) -->
-                <div>
-                    <label class="font-black text-slate-800 block mb-1.5 flex items-center justify-between">
-                        <span><i class="fas fa-ruler-vertical text-blue-500 mr-1.5"></i> 2. ระดับน้ำ *</span>
-                        <span id="cwater_level_badge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 border border-sky-200">ข้อเท้า - เข่า (10-50 ซม.)</span>
-                    </label>
-                    <input type="hidden" id="cwater_level_val" value="ข้อเท้า - เข่า (10-50 ซม.)">
-                    <input type="hidden" id="cwater_level_cm" value="10-50">
-
-                    <div class="grid grid-cols-2 md:grid-cols-3 gap-2">
-                        ${WATER_LEVEL_OPTIONS.map((opt, i) => `
-                            <button type="button" onclick="selectCitizenWaterLevel('${opt.title} (${opt.range})', '${opt.range}', this)" 
-                                class="cwater-level-btn p-2.5 rounded-2xl border text-left transition-all flex flex-col justify-between ${i === 1 ? opt.activeClass : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'}">
-                                <div class="flex items-center justify-between mb-1">
-                                    <span class="font-black text-xs leading-tight">${opt.title}</span>
-                                    <i class="fas ${opt.icon} text-xs text-${opt.color}-500"></i>
-                                </div>
-                                <span class="text-[10px] font-extrabold text-${opt.color}-600 block">${opt.range}</span>
-                                <span class="text-[9px] text-slate-400 mt-0.5 line-clamp-1">${opt.desc}</span>
+                <div class="space-y-3 sm:space-y-3.5 pb-1">
+                    <!-- 1. ตำแหน่ง (GPS หรือ แผนที่) -->
+                    <div>
+                        <div class="flex flex-wrap items-center justify-between gap-1.5 mb-1.5">
+                            <label class="font-black text-slate-800 text-xs flex items-center gap-1.5">
+                                <i class="fas fa-map-pin text-rose-500"></i> 1. ตำแหน่งที่เกิดเหตุ / พิกัด *
+                            </label>
+                            <button type="button" onclick="getCitizenWaterGps()" class="px-2.5 py-1 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-bold text-[10px] flex items-center gap-1 transition-all active:scale-95 shadow-xs">
+                                <i class="fas fa-crosshairs text-[10px]"></i>
+                                <span>ใช้พิกัดปัจจุบัน (GPS)</span>
                             </button>
-                        `).join('')}
+                        </div>
+
+                        <input type="text" id="cwater_loc_name" class="w-full p-2.5 border border-slate-200 rounded-xl outline-none text-xs bg-slate-50/80 font-bold focus:border-blue-400 focus:bg-white transition-all mb-2" placeholder="ชื่อถนน / ซอย / ชุมชน / จุดสังเกตใกล้เคียง">
+
+                        <!-- Compact Lat/Lng Badge Inputs -->
+                        <div class="grid grid-cols-2 gap-2 mb-2">
+                            <div class="relative">
+                                <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-[9px] font-black text-slate-400">LAT</span>
+                                <input type="text" id="cwater_lat" value="${defaultLat.toFixed(6)}" class="w-full pl-9 pr-2 py-1.5 border border-slate-200 rounded-xl outline-none text-[11px] font-mono bg-slate-50 focus:border-blue-400 focus:bg-white" placeholder="Latitude">
+                            </div>
+                            <div class="relative">
+                                <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-[9px] font-black text-slate-400">LNG</span>
+                                <input type="text" id="cwater_lng" value="${defaultLng.toFixed(6)}" class="w-full pl-9 pr-2 py-1.5 border border-slate-200 rounded-xl outline-none text-[11px] font-mono bg-slate-50 focus:border-blue-400 focus:bg-white" placeholder="Longitude">
+                            </div>
+                        </div>
+
+                        <!-- Interactive Map Picker -->
+                        <div class="rounded-2xl overflow-hidden border border-slate-200 relative shadow-inner">
+                            <div id="swal_cwater_map" class="w-full h-32 sm:h-36 bg-slate-100"></div>
+                            <div class="absolute bottom-1.5 left-1.5 right-1.5 bg-white/95 backdrop-blur-sm px-2.5 py-1 rounded-xl text-[9px] text-slate-600 font-bold border border-slate-200 shadow-xs pointer-events-none flex items-center justify-between gap-1">
+                                <span class="truncate"><i class="fas fa-hand-pointer text-blue-500 mr-1"></i>แตะแผนที่หรือลากหมุด</span>
+                                <span class="text-blue-600 font-mono shrink-0 font-bold" id="cwater_coords_preview">${defaultLat.toFixed(4)}, ${defaultLng.toFixed(4)}</span>
+                            </div>
+                        </div>
                     </div>
-                </div>
 
-                <!-- 3. แนวโน้มระดับน้ำ -->
-                <div>
-                    <label class="font-black text-slate-800 block mb-1.5">
-                        <i class="fas fa-chart-line text-blue-500 mr-1.5"></i> 3. แนวโน้มระดับน้ำ *
-                    </label>
-                    <input type="hidden" id="cwater_trend_val" value="ทรงตัว">
-                    <div class="grid grid-cols-3 gap-2">
-                        <button type="button" onclick="selectCitizenWaterTrend('กำลังขึ้น', this)" class="cwater-trend-btn py-2 px-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-slate-100 transition-all">
-                            <i class="fas fa-arrow-trend-up text-rose-500"></i>
-                            <span>กำลังขึ้น</span>
-                        </button>
-                        <button type="button" onclick="selectCitizenWaterTrend('ทรงตัว', this)" class="cwater-trend-btn py-2 px-3 rounded-xl border-2 border-amber-500 bg-amber-50 text-amber-800 font-black text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all">
-                            <i class="fas fa-minus text-amber-500"></i>
-                            <span>ทรงตัว</span>
-                        </button>
-                        <button type="button" onclick="selectCitizenWaterTrend('กำลังลด', this)" class="cwater-trend-btn py-2 px-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-slate-100 transition-all">
-                            <i class="fas fa-arrow-trend-down text-emerald-500"></i>
-                            <span>กำลังลด</span>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- 4. หมายเหตุอื่น ๆ (ถ้ามี) -->
-                <div>
-                    <label class="font-bold text-slate-700 block mb-1">
-                        <i class="far fa-comment-dots text-slate-400 mr-1.5"></i> 4. หมายเหตุอื่น ๆ (ถ้ามี)
-                    </label>
-                    <textarea id="cwater_note" class="w-full p-2.5 border border-slate-200 rounded-xl outline-none text-xs bg-slate-50 h-16 focus:border-blue-400" placeholder="เช่น น้ำไหลเชี่ยว, น้ำเริ่มเข้าบ้าน, ซอยนี้รถเล็กห้ามเข้า..."></textarea>
-                </div>
-
-                <!-- 5. ข้อมูลผู้รายงาน (ไม่บังคับ) -->
-                <div class="grid grid-cols-2 gap-2">
+                    <!-- 2. ระดับน้ำ (ปุ่มเลือก 6 ระดับ) -->
                     <div>
-                        <label class="text-[10px] text-slate-500 font-bold block mb-1">ชื่อผู้รายงาน (ไม่บังคับ)</label>
-                        <input type="text" id="cwater_reporter_name" class="w-full p-2 border border-slate-200 rounded-xl text-xs bg-slate-50" placeholder="ชื่อประชาชน / ชุมชน">
+                        <label class="font-black text-slate-800 block mb-1.5 flex items-center justify-between gap-1 text-xs">
+                            <span><i class="fas fa-ruler-vertical text-blue-500 mr-1.5"></i> 2. ระดับน้ำ *</span>
+                            <span id="cwater_level_badge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 border border-sky-200 truncate max-w-[190px]">ข้อเท้า - เข่า (10-50 ซม.)</span>
+                        </label>
+                        <input type="hidden" id="cwater_level_val" value="ข้อเท้า - เข่า (10-50 ซม.)">
+                        <input type="hidden" id="cwater_level_cm" value="10-50">
+
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-1.5 sm:gap-2">
+                            ${WATER_LEVEL_OPTIONS.map((opt, i) => `
+                                <button type="button" 
+                                    data-level="${opt.title} (${opt.range})" 
+                                    data-range="${opt.range}"
+                                    data-active-class="${opt.activeClass}"
+                                    data-inactive-class="border-slate-200 bg-slate-50/80 text-slate-700 hover:bg-slate-100"
+                                    onclick="selectCitizenWaterLevel('${opt.title} (${opt.range})', '${opt.range}', this)" 
+                                    class="cwater-level-btn p-2 sm:p-2.5 rounded-2xl border text-left transition-all flex flex-col justify-between ${i === 1 ? opt.activeClass : 'border-slate-200 bg-slate-50/80 text-slate-700 hover:bg-slate-100'}">
+                                    <div class="flex items-center justify-between mb-0.5">
+                                        <span class="font-bold text-[11px] sm:text-xs leading-tight">${opt.title}</span>
+                                        <i class="fas ${opt.icon} text-xs text-${opt.color}-500 shrink-0"></i>
+                                    </div>
+                                    <span class="text-[10px] font-black text-${opt.color}-600 block">${opt.range}</span>
+                                    <span class="text-[8.5px] sm:text-[9px] text-slate-400 mt-0.5 line-clamp-1 leading-tight">${opt.desc}</span>
+                                </button>
+                            `).join('')}
+                        </div>
                     </div>
+
+                    <!-- 3. แนวโน้มระดับน้ำ -->
                     <div>
-                        <label class="text-[10px] text-slate-500 font-bold block mb-1">เบอร์ติดต่อ (ไม่บังคับ)</label>
-                        <input type="tel" id="cwater_reporter_phone" class="w-full p-2 border border-slate-200 rounded-xl text-xs bg-slate-50" placeholder="08x-xxx-xxxx">
+                        <label class="font-black text-slate-800 block mb-1.5 text-xs">
+                            <i class="fas fa-chart-line text-blue-500 mr-1.5"></i> 3. แนวโน้มระดับน้ำ *
+                        </label>
+                        <input type="hidden" id="cwater_trend_val" value="ทรงตัว">
+                        <div class="grid grid-cols-3 gap-1.5 sm:gap-2">
+                            <button type="button" onclick="selectCitizenWaterTrend('กำลังขึ้น', this)" class="cwater-trend-btn py-2 px-1.5 sm:px-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 font-bold text-[11px] sm:text-xs flex items-center justify-center gap-1 hover:bg-slate-100 transition-all">
+                                <i class="fas fa-arrow-trend-up text-rose-500 text-xs"></i>
+                                <span>กำลังขึ้น</span>
+                            </button>
+                            <button type="button" onclick="selectCitizenWaterTrend('ทรงตัว', this)" class="cwater-trend-btn py-2 px-1.5 sm:px-3 rounded-xl border-2 border-amber-500 bg-amber-50 text-amber-800 font-black text-[11px] sm:text-xs flex items-center justify-center gap-1 shadow-xs transition-all">
+                                <i class="fas fa-minus text-amber-500 text-xs"></i>
+                                <span>ทรงตัว</span>
+                            </button>
+                            <button type="button" onclick="selectCitizenWaterTrend('กำลังลด', this)" class="cwater-trend-btn py-2 px-1.5 sm:px-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 font-bold text-[11px] sm:text-xs flex items-center justify-center gap-1 hover:bg-slate-100 transition-all">
+                                <i class="fas fa-arrow-trend-down text-emerald-500 text-xs"></i>
+                                <span>กำลังลด</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 4. หมายเหตุอื่น ๆ (ถ้ามี) -->
+                    <div>
+                        <label class="font-bold text-slate-700 block mb-1 text-xs">
+                            <i class="far fa-comment-dots text-slate-400 mr-1.5"></i> 4. หมายเหตุอื่น ๆ (ถ้ามี)
+                        </label>
+                        <textarea id="cwater_note" class="w-full p-2.5 border border-slate-200 rounded-xl outline-none text-xs bg-slate-50/80 h-14 sm:h-16 focus:border-blue-400 focus:bg-white transition-all" placeholder="เช่น น้ำไหลเชี่ยว, น้ำเริ่มเข้าบ้าน, ซอยนี้รถเล็กห้ามเข้า..."></textarea>
+                    </div>
+
+                    <!-- 5. ข้อมูลผู้รายงาน (ไม่บังคับ) -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div>
+                            <label class="text-[10px] text-slate-500 font-bold block mb-1">ชื่อผู้รายงาน (ไม่บังคับ)</label>
+                            <input type="text" id="cwater_reporter_name" class="w-full p-2 border border-slate-200 rounded-xl text-xs bg-slate-50/80 focus:border-blue-400 focus:bg-white" placeholder="ชื่อประชาชน / ชุมชน">
+                        </div>
+                        <div>
+                            <label class="text-[10px] text-slate-500 font-bold block mb-1">เบอร์ติดต่อ (ไม่บังคับ)</label>
+                            <input type="tel" id="cwater_reporter_phone" class="w-full p-2 border border-slate-200 rounded-xl text-xs bg-slate-50/80 focus:border-blue-400 focus:bg-white" placeholder="08x-xxx-xxxx">
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1593,7 +1667,13 @@ window.openCitizenWaterReportModal = function () {
         cancelButtonText: 'ยกเลิก',
         confirmButtonColor: '#2563eb',
         cancelButtonColor: '#64748b',
-        customClass: { popup: 'rounded-[2.5rem] max-w-lg p-5' },
+        customClass: {
+            popup: 'rounded-3xl sm:rounded-[2rem] !p-3 sm:!p-4 max-w-lg w-full shadow-2xl border border-slate-100 !flex !flex-col my-auto',
+            htmlContainer: '!m-0 !p-0 !overflow-y-auto max-h-[70vh] sm:max-h-[74vh] custom-scrollbar touch-pan-y',
+            actions: 'w-full !mt-2.5 !mb-0 px-1 sm:px-2 flex flex-col-reverse sm:flex-row gap-2 justify-end',
+            confirmButton: 'w-full sm:w-auto !m-0 py-2.5 px-5 rounded-2xl font-bold text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-sky-600 hover:from-blue-700 hover:to-sky-700 text-white shadow-md shadow-blue-500/25 active:scale-95 transition-all order-2 sm:order-1',
+            cancelButton: 'w-full sm:w-auto !m-0 py-2.5 px-4 rounded-2xl font-bold text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 active:scale-95 transition-all order-1 sm:order-2'
+        },
         didOpen: () => {
             initCitizenWaterModalMap(defaultLat, defaultLng);
         },
@@ -1674,9 +1754,16 @@ window.initCitizenWaterModalMap = function (initialLat, initialLng) {
         const mapContainer = document.getElementById('swal_cwater_map');
         if (!mapContainer) return;
 
+        // ล้าง map instance เดิมถ้ามี เพื่อป้องกัน container is already initialized
+        if (window._citizenModalMap) {
+            try { window._citizenModalMap.remove(); } catch (e) { }
+            window._citizenModalMap = null;
+        }
+
         const map = L.map('swal_cwater_map', {
             zoomControl: false,
-            attributionControl: false
+            attributionControl: false,
+            scrollWheelZoom: false
         }).setView([initialLat, initialLng], 15);
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -1747,6 +1834,7 @@ window.initCitizenWaterModalMap = function (initialLat, initialLng) {
         window._citizenModalMarker = marker;
 
         setTimeout(() => { map.invalidateSize(); }, 200);
+        setTimeout(() => { map.invalidateSize(); }, 400);
     }, 150);
 };
 
@@ -1800,10 +1888,12 @@ window.selectCitizenWaterLevel = function (titleWithRange, range, btn) {
     if (badge) badge.innerText = titleWithRange;
 
     document.querySelectorAll('.cwater-level-btn').forEach(b => {
-        b.className = "cwater-level-btn p-2.5 rounded-2xl border text-left transition-all flex flex-col justify-between border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100";
+        const inactive = b.getAttribute('data-inactive-class') || 'border-slate-200 bg-slate-50/80 text-slate-700 hover:bg-slate-100';
+        b.className = `cwater-level-btn p-2 sm:p-2.5 rounded-2xl border text-left transition-all flex flex-col justify-between ${inactive}`;
     });
 
-    btn.className = "cwater-level-btn p-2.5 rounded-2xl border text-left transition-all flex flex-col justify-between border-blue-500 bg-blue-50 text-blue-900 ring-2 ring-blue-400";
+    const active = btn.getAttribute('data-active-class') || 'border-blue-500 bg-blue-50 text-blue-900 ring-2 ring-blue-400';
+    btn.className = `cwater-level-btn p-2 sm:p-2.5 rounded-2xl border text-left transition-all flex flex-col justify-between ${active}`;
 };
 
 window.selectCitizenWaterTrend = function (trend, btn) {
@@ -1811,15 +1901,15 @@ window.selectCitizenWaterTrend = function (trend, btn) {
     if (valInput) valInput.value = trend;
 
     document.querySelectorAll('.cwater-trend-btn').forEach(b => {
-        b.className = "cwater-trend-btn py-2 px-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-slate-100 transition-all";
+        b.className = "cwater-trend-btn py-2 px-1.5 sm:px-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 font-bold text-[11px] sm:text-xs flex items-center justify-center gap-1 hover:bg-slate-100 transition-all";
     });
 
     if (trend === 'กำลังขึ้น') {
-        btn.className = "cwater-trend-btn py-2 px-3 rounded-xl border-2 border-rose-500 bg-rose-50 text-rose-800 font-black text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all";
+        btn.className = "cwater-trend-btn py-2 px-1.5 sm:px-3 rounded-xl border-2 border-rose-500 bg-rose-50 text-rose-800 font-black text-[11px] sm:text-xs flex items-center justify-center gap-1 shadow-xs transition-all";
     } else if (trend === 'ทรงตัว') {
-        btn.className = "cwater-trend-btn py-2 px-3 rounded-xl border-2 border-amber-500 bg-amber-50 text-amber-800 font-black text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all";
+        btn.className = "cwater-trend-btn py-2 px-1.5 sm:px-3 rounded-xl border-2 border-amber-500 bg-amber-50 text-amber-800 font-black text-[11px] sm:text-xs flex items-center justify-center gap-1 shadow-xs transition-all";
     } else {
-        btn.className = "cwater-trend-btn py-2 px-3 rounded-xl border-2 border-emerald-500 bg-emerald-50 text-emerald-800 font-black text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all";
+        btn.className = "cwater-trend-btn py-2 px-1.5 sm:px-3 rounded-xl border-2 border-emerald-500 bg-emerald-50 text-emerald-800 font-black text-[11px] sm:text-xs flex items-center justify-center gap-1 shadow-xs transition-all";
     }
 };
 

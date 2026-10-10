@@ -907,6 +907,18 @@ function createNewTab(ss, baseSheetName, suffix) {
 // 🟢 ดึงข้อมูลระดับน้ำปัจจุบันจาก API คลังน้ำแห่งชาติเป็นหลัก (พร้อมระบบสำรองแคชในระบบ)
 // ==========================================
 function getRIDWaterLevelFromAPI() {
+  // ⚡ 0. ตรวจสอบ High-Speed In-Memory Cache เพื่อการตอบกลับทันที (< 50ms)
+  try {
+    const memCache = CacheService.getScriptCache();
+    const cachedFast = memCache.get("FAST_RID_WATER_DATA");
+    if (cachedFast) {
+      const parsedFast = JSON.parse(cachedFast);
+      if (parsedFast && parsedFast.success) {
+        return parsedFast;
+      }
+    }
+  } catch (memErr) {}
+
   const cacheKey = "LAST_SUCCESSFUL_RID_DATA";
   const scriptProperties = PropertiesService.getScriptProperties();
 
@@ -1003,9 +1015,10 @@ function getRIDWaterLevelFromAPI() {
               }
             };
 
-            // 💾 บันทึกข้อมูลล่าสุดลง ScriptProperties
+            // 💾 บันทึกข้อมูลล่าสุดลง ScriptProperties และ CacheService (TTL 3 นาที)
             try {
               scriptProperties.setProperty(cacheKey, JSON.stringify(result));
+              CacheService.getScriptCache().put("FAST_RID_WATER_DATA", JSON.stringify(result), 180);
             } catch(cacheErr) {}
 
             return result;
@@ -1206,13 +1219,124 @@ function getWeatherData() {
 /**
  * จัดการ Webhook Events ที่ส่งมาจาก LINE OA
  */
+/**
+ * จัดการ Webhook Events ที่ส่งมาจาก LINE OA
+ */
 function handleLineWebhook(events) {
   for (const event of events) {
     if (event.type === 'message' && event.message && event.message.type === 'text') {
       const replyToken = event.replyToken;
       const userText = event.message.text.trim();
       
-      if (userText.includes("ระดับน้ำบองอ") || userText.includes("ระดับน้ำ X.73A") || userText.includes("ระดับน้ำX.73A") || userText.includes("บองอ") || userText.includes("X.73A")) {
+      // ==========================================
+      // 1. ภาพรวมสถานการณ์ (ปุ่มใหญ่) -> เด้ง Quick Reply 3 ปุ่ม
+      // ==========================================
+      if (userText === "ภาพรวมสถานการณ์" || userText === "สถานการณ์" || userText === "ภาพรวม" || userText === "เมนูภาพรวม") {
+        const overviewQuickReply = {
+          type: "text",
+          text: "📢 ภาพรวมสถานการณ์น้ำท่วม เทศบาลตำบลตันหยงมัส\nกรุณาเลือกข้อมูลที่ต้องการตรวจสอบด้านล่างนี้ได้เลยครับ 👇",
+          quickReply: {
+            items: [
+              {
+                type: "action",
+                action: {
+                  type: "message",
+                  label: "🏕️ ศูนย์พักพิง",
+                  text: "ศูนย์พักพิง"
+                }
+              },
+              {
+                type: "action",
+                action: {
+                  type: "message",
+                  label: "🚧 ตรวจสอบเส้นทาง",
+                  text: "ตรวจสอบเส้นทาง"
+                }
+              },
+              {
+                type: "action",
+                action: {
+                  type: "uri",
+                  label: "💧 รายงานระดับน้ำ",
+                  uri: "https://tanyongmas.github.io/Flood-Dashboard/?mode=report&open=water_report"
+                }
+              }
+            ]
+          }
+        };
+        sendLineReply(replyToken, overviewQuickReply);
+      }
+      
+      // ==========================================
+      // 1.1 ศูนย์พักพิง -> แสดง Carousel 3 ศูนย์ พร้อมปุ่มนำทาง
+      // ==========================================
+      else if (userText.includes("ศูนย์พักพิง") || userText.includes("จุดอพยพ") || userText.includes("ที่พักพิง")) {
+        try {
+          const flexShelters = getSheltersCarouselFlexMessage();
+          sendLineReply(replyToken, flexShelters);
+        } catch (err) {
+          console.error("🚨 Shelters Carousel error: " + err.toString());
+          sendLineReply(replyToken, "⚠️ เกิดข้อผิดพลาดในการโหลดข้อมูลศูนย์พักพิง: " + err.toString());
+        }
+      }
+
+      // ==========================================
+      // 1.2 ตรวจสอบเส้นทาง -> ดึงข้อมูลเส้นทางปิดจาก Supabase (ถ้าไม่มีแจ้งสัญจรปกติ)
+      // ==========================================
+      else if (userText.includes("ตรวจสอบเส้นทาง") || userText.includes("เส้นทางปิด") || userText.includes("เส้นทาง") || userText.includes("ถนนปิด") || userText.includes("การจราจร")) {
+        try {
+          const flexRoads = getRoadClosuresFlexMessage();
+          sendLineReply(replyToken, flexRoads);
+        } catch (err) {
+          console.error("🚨 Road Closures Flex error: " + err.toString());
+          sendLineReply(replyToken, "⚠️ เกิดข้อผิดพลาดในการตรวจสอบเส้นทาง: " + err.toString());
+        }
+      }
+
+      // ==========================================
+      // 2. เมนูระดับน้ำ (Quick Reply หลัก) -> ตอบกลับทันทีโดยไม่ต้องรอ API ภายนอก (< 50ms)
+      // ป้ายกำกับ (Label) ทุกปุ่มยาวไม่เกิน 20 ตัวอักษรตามมาตรฐาน LINE Messaging API 100%
+      // ==========================================
+      else if (userText === "ระดับน้ำ" || userText === "เช็คระดับน้ำ" || userText === "ดูระดับน้ำ" || userText === "สถานการณ์น้ำ" || userText === "เมนูระดับน้ำ" || userText === "น้ำ") {
+        const waterQuickReply = {
+          type: "text",
+          text: "💧 รายงานระดับน้ำคลองตันหยงมัส เรียลไทม์\nกรุณาเลือกสถานีที่ต้องการตรวจสอบด้านล่างนี้ได้เลยครับ 👇",
+          quickReply: {
+            items: [
+              {
+                type: "action",
+                action: {
+                  type: "message",
+                  label: "🌊 X.73 ตันหยงมัส",
+                  text: "สะพานตันหยงมัส (X.73)"
+                }
+              },
+              {
+                type: "action",
+                action: {
+                  type: "message",
+                  label: "🌊 X.73A บ้านบองอ",
+                  text: "บ้านบองอ (X.73A)"
+                }
+              },
+              {
+                type: "action",
+                action: {
+                  type: "message",
+                  label: "📊 สรุปทุกสถานี",
+                  text: "สรุปทุกสถานี"
+                }
+              }
+            ]
+          }
+        };
+        sendLineReply(replyToken, waterQuickReply);
+      }
+
+      // ==========================================
+      // 2.1 ระดับน้ำ X.73A (บ้านบองอ)
+      // ==========================================
+      else if (userText.includes("ระดับน้ำบองอ") || userText.includes("ระดับน้ำ X.73A") || userText.includes("ระดับน้ำX.73A") || userText.includes("บองอ") || userText.includes("X.73A")) {
         try {
           const waterRes = getRIDWaterLevelFromAPI();
           if (waterRes && waterRes.success) {
@@ -1221,11 +1345,10 @@ function handleLineWebhook(events) {
               const flexMsg = getWaterLevelFlexMessage(waterRes, 'X.73A');
               flexSent = sendLineReply(replyToken, flexMsg);
             } catch (flexErr) {
-              console.error("🚨 Failed to generate or send X.73A water level Flex Message: " + flexErr.toString());
+              console.error("🚨 Failed to generate X.73A Flex: " + flexErr.toString());
             }
 
             if (!flexSent) {
-              console.warn("⚠️ X.73A Water level Flex Message failed. Falling back to plain text water report.");
               const textReport = formatWaterLevelAsText(waterRes, 'X.73A');
               sendLineReply(replyToken, textReport);
             }
@@ -1233,10 +1356,43 @@ function handleLineWebhook(events) {
             sendLineReply(replyToken, "⚠️ ขออภัย ไม่สามารถดึงข้อมูลระดับน้ำสถานี X.73A (บ้านบองอ) ได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง");
           }
         } catch (err) {
-          console.error("🚨 Water level X.73A webhook controller error: " + err.toString());
+          console.error("🚨 Water level X.73A error: " + err.toString());
           sendLineReply(replyToken, "⚠️ เกิดข้อผิดพลาดในการดึงข้อมูลระดับน้ำสถานี X.73A: " + err.toString());
         }
-      } else if (userText.includes("ระดับน้ำ")) {
+      }
+
+      // ==========================================
+      // 2.2 สรุปทุกสถานี (Carousel 2 สถานี)
+      // ==========================================
+      else if (userText.includes("สรุปทุกสถานี") || userText.includes("สรุประดับน้ำ") || userText.includes("ทุกสถานี")) {
+        try {
+          const waterRes = getRIDWaterLevelFromAPI();
+          if (waterRes && waterRes.success) {
+            let flexSent = false;
+            try {
+              const flexCarousel = getWaterLevelCarouselFlexMessage(waterRes);
+              flexSent = sendLineReply(replyToken, flexCarousel);
+            } catch (flexErr) {
+              console.error("🚨 Failed to generate Water Carousel: " + flexErr.toString());
+            }
+
+            if (!flexSent) {
+              const textReport = formatWaterLevelAsText(waterRes, 'X.73') + "\n\n" + formatWaterLevelAsText(waterRes, 'X.73A');
+              sendLineReply(replyToken, textReport);
+            }
+          } else {
+            sendLineReply(replyToken, "⚠️ ขออภัย ไม่สามารถดึงข้อมูลระดับน้ำได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง");
+          }
+        } catch (err) {
+          console.error("🚨 Water Carousel error: " + err.toString());
+          sendLineReply(replyToken, "⚠️ เกิดข้อผิดพลาดในการดึงข้อมูลระดับน้ำ: " + err.toString());
+        }
+      }
+
+      // ==========================================
+      // 2.3 ระดับน้ำ X.73 (สะพานตันหยงมัส)
+      // ==========================================
+      else if (userText.includes("สะพานตันหยงมัส") || userText.includes("X.73")) {
         try {
           const waterRes = getRIDWaterLevelFromAPI();
           if (waterRes && waterRes.success) {
@@ -1245,12 +1401,10 @@ function handleLineWebhook(events) {
               const flexMsg = getWaterLevelFlexMessage(waterRes, 'X.73');
               flexSent = sendLineReply(replyToken, flexMsg);
             } catch (flexErr) {
-              console.error("🚨 Failed to generate or send water level Flex Message: " + flexErr.toString());
+              console.error("🚨 Failed to generate X.73 Flex: " + flexErr.toString());
             }
 
-            // ถ้าส่ง Flex Message ไม่สำเร็จ (เช่น โดน LINE ปฏิเสธ หรือโครงสร้างผิดพลาด) ให้ส่งข้อความแบบธรรมดาสำรองทันที
             if (!flexSent) {
-              console.warn("⚠️ Water level Flex Message failed. Falling back to plain text water report.");
               const textReport = formatWaterLevelAsText(waterRes, 'X.73');
               sendLineReply(replyToken, textReport);
             }
@@ -1258,10 +1412,54 @@ function handleLineWebhook(events) {
             sendLineReply(replyToken, "⚠️ ขออภัย ไม่สามารถดึงข้อมูลระดับน้ำคลองตันหยงมัสได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง");
           }
         } catch (err) {
-          console.error("🚨 Water level webhook controller error: " + err.toString());
+          console.error("🚨 Water level X.73 error: " + err.toString());
           sendLineReply(replyToken, "⚠️ เกิดข้อผิดพลาดในการดึงข้อมูลระดับน้ำ: " + err.toString());
         }
-      } else if (userText.includes("พยากรณ์อากาศ")) {
+      }
+
+      // ==========================================
+      // 2.4 ข้อความอื่นๆ ที่มีคำว่า ระดับน้ำ (Fallback Quick Reply)
+      // ==========================================
+      else if (userText.includes("ระดับน้ำ")) {
+        const waterQuickReply = {
+          type: "text",
+          text: "💧 รายงานระดับน้ำคลองตันหยงมัส เรียลไทม์\nกรุณาเลือกสถานีที่ต้องการตรวจสอบด้านล่างนี้ได้เลยครับ 👇",
+          quickReply: {
+            items: [
+              {
+                type: "action",
+                action: {
+                  type: "message",
+                  label: "🌊 X.73 ตันหยงมัส",
+                  text: "สะพานตันหยงมัส (X.73)"
+                }
+              },
+              {
+                type: "action",
+                action: {
+                  type: "message",
+                  label: "🌊 X.73A บ้านบองอ",
+                  text: "บ้านบองอ (X.73A)"
+                }
+              },
+              {
+                type: "action",
+                action: {
+                  type: "message",
+                  label: "📊 สรุปทุกสถานี",
+                  text: "สรุปทุกสถานี"
+                }
+              }
+            ]
+          }
+        };
+        sendLineReply(replyToken, waterQuickReply);
+      }
+
+      // ==========================================
+      // 3. พยากรณ์อากาศ 7 วันล่วงหน้า
+      // ==========================================
+      else if (userText.includes("พยากรณ์อากาศ") || userText.includes("สภาพอากาศ") || userText.includes("ฝน")) {
         try {
           const weatherRes = getWeatherData();
           if (weatherRes && weatherRes.success && weatherRes.forecast && weatherRes.forecast.length > 0) {
@@ -1270,23 +1468,26 @@ function handleLineWebhook(events) {
               const flexMsg = getWeatherForecastFlexMessage(weatherRes);
               flexSent = sendLineReply(replyToken, flexMsg);
             } catch (flexErr) {
-              console.error("🚨 Failed to generate or send weather Flex Message: " + flexErr.toString());
+              console.error("🚨 Failed to generate weather Flex Message: " + flexErr.toString());
             }
 
-            // ถ้าส่ง Flex Message ไม่สำเร็จ ให้ส่งแบบข้อความธรรมดาทันที
             if (!flexSent) {
-              console.warn("⚠️ Weather Flex Message failed. Falling back to plain text weather report.");
               const textReport = formatWeatherAsText(weatherRes);
               sendLineReply(replyToken, textReport);
             }
           } else {
-            sendLineReply(replyToken, "⚠️ ขออภัย ไม่สามารถดึงข้อมูลพยากรณ์อากาศได้ในขณะนี้ (ไม่มีข้อมูลพยากรณ์อากาศตอบกลับจาก API)");
+            sendLineReply(replyToken, "⚠️ ขออภัย ไม่สามารถดึงข้อมูลพยากรณ์อากาศได้ในขณะนี้");
           }
         } catch (err) {
           console.error("🚨 Weather webhook controller error: " + err.toString());
           sendLineReply(replyToken, "⚠️ เกิดข้อผิดพลาดทางเทคนิคในการพยากรณ์อากาศ: " + err.toString());
         }
-      } else if (
+      }
+
+      // ==========================================
+      // 4. เบอร์ติดต่อฉุกเฉิน
+      // ==========================================
+      else if (
         userText.includes("เบอร์ติดต่อฉุกเฉิน") || 
         userText.includes("ติดต่อฉุกเฉิน") || 
         userText.includes("เบอร์ติดต่อ") || 
@@ -1315,17 +1516,497 @@ function handleLineWebhook(events) {
                               "📢 แจ้งเหตุหรือขอความช่วยเหลือได้ตลอด 24 ชั่วโมง";
         sendLineReply(replyToken, emergencyText);
       } else {
-        // ข้อความต้อนรับและให้ข้อมูลแนะนำการใช้งานแก่ประชาชน
-        const helpText = "🤖 ยินดีต้อนรับสู่ LINE OA เทศบาลตำบลตันหยงมัส\n\n" +
-                          "ท่านสามารถกดปุ่มบน Rich Menu หรือพิมพ์คีย์เวิร์ดต่อไปนี้:\n" +
-                          "📊 พิมพ์ 'ระดับน้ำ' เพื่อดูข้อมูลระดับน้ำคลองตันหยงมัส (X.73)\n" +
-                          "🌤️ พิมพ์ 'พยากรณ์อากาศ' เพื่อดูพยากรณ์อากาศล่วงหน้า 7 วัน\n" +
-                          "📢 หรือกดปุ่มรายงานสถานะเพื่อเข้าหน้าเว็บรายงานภัยพิบัติ";
-        sendLineReply(replyToken, helpText);
+        // ข้อความต้อนรับและปุ่มนำทางหลัก
+        const welcomeMessage = {
+          type: "text",
+          text: "🤖 ยินดีต้อนรับสู่ LINE OA เทศบาลตำบลตันหยงมัส\nท่านสามารถแตะเลือกเมนูที่ต้องการตรวจสอบด้านล่างนี้ได้เลยครับ 👇",
+          quickReply: {
+            items: [
+              {
+                type: "action",
+                action: {
+                  type: "message",
+                  label: "📢 ภาพรวมสถานการณ์",
+                  text: "ภาพรวมสถานการณ์"
+                }
+              },
+              {
+                type: "action",
+                action: {
+                  type: "message",
+                  label: "💧 ระดับน้ำ",
+                  text: "ระดับน้ำ"
+                }
+              },
+              {
+                type: "action",
+                action: {
+                  type: "message",
+                  label: "🌤️ พยากรณ์อากาศ",
+                  text: "พยากรณ์อากาศ"
+                }
+              },
+              {
+                type: "action",
+                action: {
+                  type: "message",
+                  label: "📞 ติดต่อฉุกเฉิน",
+                  text: "เบอร์ติดต่อฉุกเฉิน"
+                }
+              }
+            ]
+          }
+        };
+        sendLineReply(replyToken, welcomeMessage);
       }
     }
   }
   return createResponse({ success: true });
+}
+
+/**
+ * 🏕️ สร้าง Flex Carousel แสดงข้อมูลศูนย์พักพิงชั่วคราวทั้ง 3 แห่ง พร้อมปุ่มนำทาง Google Maps
+ */
+function getSheltersCarouselFlexMessage() {
+  const shelters = [
+    {
+      name: "ศูนย์เทศบาลตำบลตันหยงมัส",
+      desc: "อาคารอเนกประสงค์ เทศบาลตำบลตันหยงมัส",
+      cap: "80 คน",
+      badge: "ศูนย์หลัก 🏛️",
+      badgeBg: "#059669",
+      lat: 6.294247,
+      lng: 101.722027,
+      phone: "073671364",
+      note: "เปิดทำการ 24 ชม. มีอาหารและน้ำดื่ม"
+    },
+    {
+      name: "ศูนย์มัสยิดตันหยงมัส",
+      desc: "บริเวณมัสยิดกลางตันหยงมัส ชุมชนตลาด",
+      cap: "80 คน",
+      badge: "เปิดรองรับ 🟢",
+      badgeBg: "#0284c7",
+      lat: 6.297781,
+      lng: 101.729905,
+      phone: "073671364",
+      note: "เหมาะสำหรับประชาชนชุมชนตลาด"
+    },
+    {
+      name: "ศูนย์โรงเรียนบ้านเขาพระ",
+      desc: "อาคารเรียน โรงเรียนบ้านเขาพระ",
+      cap: "60 คน",
+      badge: "เปิดรองรับ 🟢",
+      badgeBg: "#0284c7",
+      lat: 6.298263,
+      lng: 101.710773,
+      phone: "073671364",
+      note: "พื้นที่สูง ปลอดภัยจากน้ำท่วมขัง"
+    }
+  ];
+
+  const bubbles = shelters.map(s => ({
+    "type": "bubble",
+    "size": "kilo",
+    "header": {
+      "type": "box",
+      "layout": "vertical",
+      "backgroundColor": s.badgeBg,
+      "paddingAll": "15px",
+      "contents": [
+        {
+          "type": "box",
+          "layout": "horizontal",
+          "contents": [
+            {
+              "type": "text",
+              "text": "🏕️ ศูนย์พักพิงชั่วคราว",
+              "color": "#ffffff",
+              "size": "xxs",
+              "weight": "bold"
+            },
+            {
+              "type": "text",
+              "text": s.badge,
+              "color": "#ffffff",
+              "size": "xxs",
+              "weight": "bold",
+              "align": "end"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": s.name,
+          "color": "#ffffff",
+          "size": "md",
+          "weight": "bold",
+          "wrap": true,
+          "margin": "sm"
+        }
+      ]
+    },
+    "body": {
+      "type": "box",
+      "layout": "vertical",
+      "paddingAll": "15px",
+      "spacing": "sm",
+      "contents": [
+        {
+          "type": "box",
+          "layout": "baseline",
+          "spacing": "sm",
+          "contents": [
+            { "type": "text", "text": "📍", "size": "xs", "flex": 1 },
+            { "type": "text", "text": s.desc, "size": "xs", "color": "#475569", "flex": 9, "wrap": true }
+          ]
+        },
+        {
+          "type": "box",
+          "layout": "baseline",
+          "spacing": "sm",
+          "contents": [
+            { "type": "text", "text": "👥", "size": "xs", "flex": 1 },
+            { "type": "text", "text": "ความจุรองรับ: " + s.cap, "size": "xs", "color": "#0f172a", "weight": "bold", "flex": 9 }
+          ]
+        },
+        {
+          "type": "box",
+          "layout": "baseline",
+          "spacing": "sm",
+          "contents": [
+            { "type": "text", "text": "ℹ️", "size": "xs", "flex": 1 },
+            { "type": "text", "text": s.note, "size": "xxs", "color": "#64748b", "flex": 9, "wrap": true }
+          ]
+        }
+      ]
+    },
+    "footer": {
+      "type": "box",
+      "layout": "vertical",
+      "spacing": "sm",
+      "paddingAll": "15px",
+      "paddingTop": "0px",
+      "contents": [
+        {
+          "type": "button",
+          "style": "primary",
+          "color": "#0284c7",
+          "height": "sm",
+          "action": {
+            "type": "uri",
+            "label": "📍 นำทาง Google Maps",
+            "uri": "https://www.google.com/maps/dir/?api=1&destination=" + s.lat + "," + s.lng
+          }
+        },
+        {
+          "type": "button",
+          "style": "secondary",
+          "height": "sm",
+          "action": {
+            "type": "uri",
+            "label": "📞 โทร 073-671364",
+            "uri": "tel:" + s.phone
+          }
+        }
+      ]
+    }
+  }));
+
+  return {
+    "type": "flex",
+    "altText": "🏕️ รายชื่อศูนย์พักพิงชั่วคราว เทศบาลตำบลตันหยงมัส (3 ศูนย์)",
+    "contents": {
+      "type": "carousel",
+      "contents": bubbles
+    }
+  };
+}
+
+/**
+ * 🚧 ดึงข้อมูลเส้นทางปิดจาก Supabase REST API
+ */
+function getRoadClosuresFromSupabase() {
+  try {
+    const url = "https://wixjaufsizqurdiovjdf.supabase.co/rest/v1/road_closures?select=*&order=created_at.desc&limit=10";
+    const options = {
+      method: "get",
+      headers: {
+        "apikey": "sb_publishable_cGgfJgxM5zQ1tqmvH9i2qQ_RgI9pING",
+        "Authorization": "Bearer sb_publishable_cGgfJgxM5zQ1tqmvH9i2qQ_RgI9pING"
+      },
+      muteHttpExceptions: true
+    };
+    const response = UrlFetchApp.fetch(url, options);
+    if (response.getResponseCode() === 200) {
+      return JSON.parse(response.getContentText());
+    }
+    return [];
+  } catch (e) {
+    console.error("🚨 getRoadClosuresFromSupabase error: " + e.toString());
+    return [];
+  }
+}
+
+/**
+ * 🖼️ ดึงหรือแปลง URL รูปภาพของเส้นทางปิดให้อยู่ในรูปแบบ Direct HTTPS URL สำหรับ LINE Flex Message
+ */
+function getDirectRoadImageUrl(r) {
+  const raw = r.image || r.photo_url || r.photo || "";
+  if (!raw) {
+    return "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=600&q=80";
+  }
+  if (raw.startsWith("http://") || raw.startsWith("https://")) {
+    return raw;
+  }
+  if (raw.startsWith("data:image")) {
+    try {
+      let folder;
+      if (DRIVE_FOLDER_ID) {
+        try { folder = DriveApp.getFolderById(DRIVE_FOLDER_ID); } catch(e) {}
+      }
+      if (!folder) {
+        const folders = DriveApp.getFoldersByName('Flood_Images');
+        folder = folders.hasNext() ? folders.next() : DriveApp.createFolder('Flood_Images');
+      }
+      const parts = raw.split(",");
+      const mimeMatch = parts[0].match(/:(.*?);/);
+      const mime = mimeMatch ? mimeMatch[1] : "image/jpeg";
+      const blob = Utilities.newBlob(Utilities.base64Decode(parts[1]), mime, "road_" + (r.id || Date.now()) + ".jpg");
+      const file = folder.createFile(blob);
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      const directUrl = "https://lh3.googleusercontent.com/d/" + file.getId();
+
+      // บันทึก URL ที่แปลงแล้วกลับไปยัง Supabase road_closures อัตโนมัติ เพื่อไม่ต้องแปลงซ้ำ
+      if (r.id) {
+        try {
+          UrlFetchApp.fetch("https://wixjaufsizqurdiovjdf.supabase.co/rest/v1/road_closures?id=eq." + r.id, {
+            method: "patch",
+            headers: {
+              "apikey": "sb_publishable_cGgfJgxM5zQ1tqmvH9i2qQ_RgI9pING",
+              "Authorization": "Bearer sb_publishable_cGgfJgxM5zQ1tqmvH9i2qQ_RgI9pING",
+              "Content-Type": "application/json"
+            },
+            payload: JSON.stringify({ image: directUrl }),
+            muteHttpExceptions: true
+          });
+        } catch (patchErr) {
+          console.warn("Patch Supabase road_closures failed: " + patchErr.toString());
+        }
+      }
+      return directUrl;
+    } catch(err) {
+      console.error("🚨 Convert base64 road image error: " + err.toString());
+      return "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=600&q=80";
+    }
+  }
+  return "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=600&q=80";
+}
+
+/**
+ * 🚧 สร้าง Flex Message ตรวจสอบเส้นทาง (ถ้าไม่มีเส้นทางปิด จะขึ้นว่าสัญจรได้ตามปกติ, ถ้ามีหลายจุดแสดงเป็น Carousel)
+ */
+function getRoadClosuresFlexMessage() {
+  const roads = getRoadClosuresFromSupabase();
+
+  // กรณีไม่มีเส้นทางปิด สัญจรได้ตามปกติ
+  if (!roads || roads.length === 0) {
+    return {
+      "type": "flex",
+      "altText": "🟢 ตรวจสอบเส้นทาง: สัญจรได้ตามปกติทุกเส้นทาง",
+      "contents": {
+        "type": "bubble",
+        "size": "mega",
+        "header": {
+          "type": "box",
+          "layout": "vertical",
+          "backgroundColor": "#059669",
+          "paddingAll": "20px",
+          "contents": [
+            {
+              "type": "text",
+              "text": "🚧 รายงานสภาพการจราจรและเส้นทาง",
+              "color": "#ffffff",
+              "size": "xs",
+              "weight": "bold"
+            },
+            {
+              "type": "text",
+              "text": "สัญจรได้ปกติทุกเส้นทาง 🟢",
+              "color": "#ffffff",
+              "size": "lg",
+              "weight": "bold",
+              "margin": "sm"
+            }
+          ]
+        },
+        "body": {
+          "type": "box",
+          "layout": "vertical",
+          "paddingAll": "20px",
+          "spacing": "md",
+          "contents": [
+            {
+              "type": "text",
+              "text": "ขณะนี้ไม่มีรายงานเส้นทางปิดสัญจร หรือน้ำท่วมขังบนผิวจราจรในเขตเทศบาลตำบลตันหยงมัส รถทุกชนิดสามารถสัญจรได้ตามปกติ",
+              "size": "sm",
+              "color": "#334155",
+              "wrap": true
+            },
+            {
+              "type": "box",
+              "layout": "vertical",
+              "backgroundColor": "#f0fdf4",
+              "cornerRadius": "12px",
+              "paddingAll": "12px",
+              "contents": [
+                {
+                  "type": "text",
+                  "text": "✅ ถนนสายหลักและซอยเทศบาลทุกสาย สัญจรปลอดภัย",
+                  "size": "xs",
+                  "color": "#166534",
+                  "weight": "bold"
+                }
+              ]
+            }
+          ]
+        },
+        "footer": {
+          "type": "box",
+          "layout": "vertical",
+          "paddingAll": "15px",
+          "contents": [
+            {
+              "type": "button",
+              "style": "primary",
+              "color": "#059669",
+              "action": {
+                "type": "uri",
+                "label": "🗺️ เปิดดูแผนที่ One Map",
+                "uri": "https://tanyongmas.github.io/Flood-Dashboard/?mode=report"
+              }
+            }
+          ]
+        }
+      }
+    };
+  }
+
+  // กรณีมีเส้นทางปิด นำมาสร้างการ์ด Carousel ให้ครบทุกจุด
+  const bubbles = roads.slice(0, 10).map(r => {
+    const title = r.title || "เส้นทางปิดสัญจร";
+    const waterDepthVal = (r.water_depth !== undefined && r.water_depth !== null && r.water_depth !== '') 
+      ? (r.water_depth + (isNaN(r.water_depth) ? '' : ' ซม.')) 
+      : (r.waterDepth || r.water_level || "มีน้ำท่วมขังบนผิวทาง");
+    const detour = r.detour || "ไม่มีเส้นทางเลี่ยง (โปรดระมัดระวัง)";
+    const photoUrl = getDirectRoadImageUrl(r);
+    const mapUri = "https://tanyongmas.github.io/Flood-Dashboard/?mode=report&road_id=" + (r.id || '') + "&lat=" + (r.lat || '') + "&lng=" + (r.lng || '');
+
+    return {
+      "type": "bubble",
+      "size": "kilo",
+      "hero": {
+        "type": "image",
+        "url": photoUrl,
+        "size": "full",
+        "aspectRatio": "20:13",
+        "aspectMode": "cover"
+      },
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": "#dc2626",
+        "paddingAll": "12px",
+        "contents": [
+          {
+            "type": "text",
+            "text": "⛔ เส้นทางปิด / สัญจรไม่ได้",
+            "color": "#ffffff",
+            "size": "xs",
+            "weight": "bold"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "paddingAll": "15px",
+        "spacing": "sm",
+        "contents": [
+          {
+            "type": "text",
+            "text": title,
+            "weight": "bold",
+            "size": "sm",
+            "wrap": true,
+            "color": "#0f172a"
+          },
+          {
+            "type": "box",
+            "layout": "baseline",
+            "spacing": "xs",
+            "contents": [
+              { "type": "text", "text": "🌊", "size": "xs", "flex": 1 },
+              { "type": "text", "text": "ระดับน้ำ: " + waterDepthVal, "size": "xs", "color": "#dc2626", "weight": "bold", "flex": 9, "wrap": true }
+            ]
+          },
+          {
+            "type": "box",
+            "layout": "baseline",
+            "spacing": "xs",
+            "contents": [
+              { "type": "text", "text": "↪️", "size": "xs", "flex": 1 },
+              { "type": "text", "text": "เส้นทางเลี่ยง: " + detour, "size": "xs", "color": "#0369a1", "flex": 9, "wrap": true }
+            ]
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "paddingAll": "15px",
+        "paddingTop": "0px",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "color": "#2563eb",
+            "height": "sm",
+            "action": {
+              "type": "uri",
+              "label": "🗺️ ดูหมุดบนแผนที่",
+              "uri": mapUri
+            }
+          }
+        ]
+      }
+    };
+  });
+
+  return {
+    "type": "flex",
+    "altText": "⚠️ รายงานเส้นทางปิดสัญจร (" + roads.length + " เส้นทาง)",
+    "contents": {
+      "type": "carousel",
+      "contents": bubbles
+    }
+  };
+}
+
+/**
+ * 📊 สร้าง Flex Carousel รวมระดับน้ำทั้ง 2 สถานี (X.73A ต้นน้ำ และ X.73 ตัวเมืองตันหยงมัส)
+ */
+function getWaterLevelCarouselFlexMessage(waterRes) {
+  const cardX73A = getWaterLevelFlexMessage(waterRes, 'X.73A').contents;
+  const cardX73 = getWaterLevelFlexMessage(waterRes, 'X.73').contents;
+
+  return {
+    "type": "flex",
+    "altText": "📊 สรุประดับน้ำคลองตันหยงมัส ทุกสถานี (Carousel)",
+    "contents": {
+      "type": "carousel",
+      "contents": [cardX73A, cardX73]
+    }
+  };
 }
 
 /**
@@ -1367,10 +2048,18 @@ function sendLineReply(replyToken, messages) {
   const url = 'https://api.line.me/v2/bot/message/reply';
   let messagesArray = Array.isArray(messages) ? messages : [messages];
   
-  // แปลง String เป็น Text Message Object อัตโนมัติ
+  // แปลง String เป็น Text Message Object อัตโนมัติ พร้อมตรวจสอบความยาว Label ไม่ให้เกิน 20 ตัวอักษร
   messagesArray = messagesArray.map(m => {
     if (typeof m === 'string') {
       return { type: 'text', text: m };
+    }
+    // ป้องกันความผิดพลาดของ Quick Reply Actions ที่ Label อาจยาวเกิน 20 ตัวอักษร
+    if (m && m.quickReply && Array.isArray(m.quickReply.items)) {
+      m.quickReply.items.forEach(item => {
+        if (item && item.action && item.action.label && item.action.label.length > 20) {
+          item.action.label = item.action.label.substring(0, 20);
+        }
+      });
     }
     return m;
   });
@@ -1379,11 +2068,12 @@ function sendLineReply(replyToken, messages) {
     replyToken: replyToken,
     messages: messagesArray
   };
+  const token = getScriptProperty('LINE_CHANNEL_ACCESS_TOKEN', LINE_CHANNEL_ACCESS_TOKEN);
   const options = {
     method: 'post',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + LINE_CHANNEL_ACCESS_TOKEN
+      'Authorization': 'Bearer ' + token
     },
     payload: JSON.stringify(payload),
     muteHttpExceptions: true
