@@ -1577,19 +1577,17 @@ function getSheltersCarouselFlexMessage() {
       badgeBg: "#059669",
       lat: 6.294247,
       lng: 101.722027,
-      phone: "073671364",
-      note: "เปิดทำการ 24 ชม. มีอาหารและน้ำดื่ม"
+      phone: "073671364"
     },
     {
       name: "ศูนย์มัสยิดตันหยงมัส",
-      desc: "บริเวณมัสยิดกลางตันหยงมัส ชุมชนตลาด",
+      desc: "บริเวณอาคารมัสยิดตันหยงมัส",
       cap: "80 คน",
       badge: "เปิดรองรับ 🟢",
       badgeBg: "#0284c7",
       lat: 6.297781,
       lng: 101.729905,
-      phone: "073671364",
-      note: "เหมาะสำหรับประชาชนชุมชนตลาด"
+      phone: "073671364"
     },
     {
       name: "ศูนย์โรงเรียนบ้านเขาพระ",
@@ -1599,8 +1597,7 @@ function getSheltersCarouselFlexMessage() {
       badgeBg: "#0284c7",
       lat: 6.298263,
       lng: 101.710773,
-      phone: "073671364",
-      note: "พื้นที่สูง ปลอดภัยจากน้ำท่วมขัง"
+      phone: "073671364"
     }
   ];
 
@@ -1667,15 +1664,6 @@ function getSheltersCarouselFlexMessage() {
           "contents": [
             { "type": "text", "text": "👥", "size": "xs", "flex": 1 },
             { "type": "text", "text": "ความจุรองรับ: " + s.cap, "size": "xs", "color": "#0f172a", "weight": "bold", "flex": 9 }
-          ]
-        },
-        {
-          "type": "box",
-          "layout": "baseline",
-          "spacing": "sm",
-          "contents": [
-            { "type": "text", "text": "ℹ️", "size": "xs", "flex": 1 },
-            { "type": "text", "text": s.note, "size": "xxs", "color": "#64748b", "flex": 9, "wrap": true }
           ]
         }
       ]
