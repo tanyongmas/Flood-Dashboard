@@ -351,6 +351,11 @@ Responsive Layout: หน้าจอ PC / Laptop (ใหญ่กว่า 1366
     border-radius: 50%;
 }
 
+.custom-flood-marker {
+    background: transparent !important;
+    border: none !important;
+}
+
 .leaflet-popup-content-wrapper {
     border-radius: 1.5rem;
     padding: 0;

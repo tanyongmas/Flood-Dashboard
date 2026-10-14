@@ -303,6 +303,83 @@ function doPost(e) {
       return createResponse({ success: true, url: fileUrl });
     }
 
+    // 4.4.6 บันทึก / แก้ไข ข้อมูลผู้ประสบภัยน้ำท่วม (Flood_DATA)
+    if (params.action === 'saveFloodData') {
+      const p = params.period || '2569';
+      let sheetName = 'Flood_DATA';
+      if (p) {
+        if (ss.getSheetByName('Flood_DATA_' + p)) {
+          sheetName = 'Flood_DATA_' + p;
+        } else if (ss.getSheetByName('FLOOD_DATA_' + p)) {
+          sheetName = 'FLOOD_DATA_' + p;
+        }
+      }
+      let sheet = ss.getSheetByName(sheetName) || ss.getSheetByName('Flood_DATA') || ss.getSheetByName('FLOOD_DATA');
+      if (!sheet) {
+        sheet = createNewTab(ss, 'Flood_DATA', p);
+      }
+
+      const rec = params.record || {};
+      const rowData = [
+        rec['ถนน'] || '',
+        rec['ที่อยู่'] || '',
+        rec['ชื่อ-สกุล'] || '',
+        rec['สถานะ'] || 'ปกติ',
+        rec['จำนวนผู้อาศัย'] || '1',
+        rec['ติดต่อ'] || '',
+        rec['Latitude'] || '',
+        rec['Longtitude'] || '',
+        rec['ความเสี่ยง'] || 'ปกติ',
+        rec['รายละเอียด'] || ''
+      ];
+
+      const data = sheet.getDataRange().getValues();
+      let rowIndex = -1;
+
+      // ค้นหาแถวเดิมถ้าเป็นการแก้ไข
+      if (params.oldName && params.oldAddress) {
+        for (let i = 1; i < data.length; i++) {
+          if (String(data[i][2] || '').trim() === String(params.oldName).trim() &&
+              String(data[i][1] || '').trim() === String(params.oldAddress).trim()) {
+            rowIndex = i + 1;
+            break;
+          }
+        }
+      }
+
+      if (rowIndex > 1) {
+        sheet.getRange(rowIndex, 1, 1, rowData.length).setValues([rowData]);
+      } else {
+        sheet.appendRow(rowData);
+      }
+      return createResponse({ success: true });
+    }
+
+    // 4.4.7 ลบข้อมูลผู้ประสบภัยน้ำท่วม (Flood_DATA)
+    if (params.action === 'deleteFloodData') {
+      const p = params.period || '2569';
+      let sheetName = 'Flood_DATA';
+      if (p) {
+        if (ss.getSheetByName('Flood_DATA_' + p)) {
+          sheetName = 'Flood_DATA_' + p;
+        } else if (ss.getSheetByName('FLOOD_DATA_' + p)) {
+          sheetName = 'FLOOD_DATA_' + p;
+        }
+      }
+      const sheet = ss.getSheetByName(sheetName) || ss.getSheetByName('Flood_DATA') || ss.getSheetByName('FLOOD_DATA');
+      if (sheet && sheet.getLastRow() > 1) {
+        const data = sheet.getDataRange().getValues();
+        for (let i = 1; i < data.length; i++) {
+          if (String(data[i][2] || '').trim() === String(params.name || '').trim() &&
+              (!params.address || String(data[i][1] || '').trim() === String(params.address || '').trim())) {
+            sheet.deleteRow(i + 1);
+            break;
+          }
+        }
+      }
+      return createResponse({ success: true });
+    }
+
    // ==========================================
     // ส่วนรับคำสั่งสแกนบัตรประชาชน (OCR)
     // ==========================================

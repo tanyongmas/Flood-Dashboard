@@ -217,6 +217,19 @@ function updateMenuByRole() {
         }
     }
 
+    // ปุ่มและหัวตารางจัดการข้อมูลน้ำท่วมเฉพาะ Superadmin เท่านั้น
+    const isSuperadminRole = (typeof userRole !== 'undefined' && userRole === 'superadmin');
+    const btnAddFloodData = document.getElementById('btnOpenAddFloodDataModal');
+    if (btnAddFloodData) {
+        if (isSuperadminRole) btnAddFloodData.classList.remove('hidden');
+        else btnAddFloodData.classList.add('hidden');
+    }
+    const thActions = document.getElementById('thFloodDataActions');
+    if (thActions) {
+        if (isSuperadminRole) thActions.classList.remove('hidden');
+        else thActions.classList.add('hidden');
+    }
+
     // จัดการโหมดดูข้อมูลอย่างเดียว (View-Only Mode) สำหรับ Admin
     if (userRole === 'admin') {
         document.body.classList.add('view-only-mode');

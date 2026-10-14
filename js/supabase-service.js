@@ -94,7 +94,7 @@ async function sbFetchInitialData(targetPeriod = '2569') {
             sbClient.from('Address').select('*'),
             sbClient.from('relief_distribution').select('*').eq('period', period).order('distributed_at', { ascending: false }),
             sbClient.from('relief_stock').select('*').eq('period', period).order('logged_at', { ascending: false }),
-            sbClient.from('flood_polygons').select('*').eq('period', period).order('created_at', { ascending: false }),
+            sbClient.from('flood_polygons').select('*').or(`period.eq.${period},period.eq.all`).order('created_at', { ascending: false }),
             sbClient.from('evacuation_reports').select('*').eq('period', period).order('reported_at', { ascending: false }),
             sbClient.from('users').select('username, role')
         ]);
@@ -160,11 +160,13 @@ async function sbFetchInitialData(targetPeriod = '2569') {
                 const fRes = await query;
                 if (!fRes.error && Array.isArray(fRes.data)) {
                     if (fRes.data.length > 0) {
+                        window.activeFloodDataTable = tbl;
                         const cols = Object.keys(fRes.data[0]);
                         floodDataRows = [cols, ...fRes.data.map(item => cols.map(c => (item[c] !== null && item[c] !== undefined) ? item[c] : ''))];
                         console.log(`⚡ [Supabase] โหลด ${tbl} (ปี ${period}) สำเร็จ: พบข้อมูลจริง ${fRes.data.length} รายการ`);
                         break;
                     } else {
+                        window.activeFloodDataTable = tbl;
                         console.warn(`⚠️ [Supabase] เข้าถึงตาราง ${tbl} ได้แต่พบ 0 รายการ (หากใน Supabase มีข้อมูล ให้ตรวจสอบการตั้งค่า RLS Policy)`);
                         floodDataRows = [[
                             'ถนน', 'ที่อยู่', 'ชื่อ-สกุล', 'สถานะ', 'จำนวนผู้อาศัย',
@@ -942,7 +944,7 @@ async function sbCreateNewPeriod(newPeriod) {
 async function sbSaveRiskMapUrl(url) {
     if (!isSupabaseReady() || !url) return false;
     try {
-        await sbClient.from('flood_polygons').delete().eq('risk_level', 'system_config');
+        await sbClient.from('flood_polygons').delete().or('risk_level.eq.system_config,title.eq.__SYSTEM_RISK_MAP__');
         const { error } = await sbClient.from('flood_polygons').insert([{
             title: '__SYSTEM_RISK_MAP__',
             detail: url,
@@ -1178,6 +1180,164 @@ async function sbUpdateAdminPassword(oldPassword, newPassword, isAdmin = true) {
     return { success: true };
 }
 
+// ==========================================
+// 🌊 ระบบจัดการข้อมูลผู้ประสบภัยน้ำท่วม (Flood Data CRUD - Superadmin)
+// ==========================================
+async function sbSaveFloodDataRecord(payload, period = '2569') {
+    const p = period || (typeof currentPeriod !== 'undefined' && currentPeriod ? currentPeriod : '2569');
+    const targetTable = window.activeFloodDataTable || `Flood_DATA_${p}`;
+
+    const lat = payload.lat !== undefined && payload.lat !== null && payload.lat !== '' ? parseFloat(payload.lat) : null;
+    const lng = payload.lng !== undefined && payload.lng !== null && payload.lng !== '' ? parseFloat(payload.lng) : null;
+    const residents = parseInt(payload.residents) || 1;
+
+    // โครงสร้าง record สอดคล้องกับคอลัมน์ใน Supabase
+    const record = {
+        "ถนน": payload.road || '',
+        "ที่อยู่": payload.address || '',
+        "ชื่อ-สกุล": payload.name || '',
+        "สถานะ": payload.status || 'ปกติ',
+        "จำนวนผู้อาศัย": String(residents),
+        "ติดต่อ": payload.contact || '',
+        "Latitude": (!isNaN(lat) && lat !== null) ? lat : null,
+        "Longtitude": (!isNaN(lng) && lng !== null) ? lng : null,
+        "ความเสี่ยง": payload.risk || 'ปกติ',
+        "รายละเอียด": payload.details || ''
+    };
+
+    if (targetTable === 'Flood_DATA' || targetTable === 'flood_data') {
+        record['period'] = p;
+    }
+
+    let savedData = null;
+    if (isSupabaseReady()) {
+        try {
+            if (payload.id) {
+                // อัปเดตตาม Primary Key 'id'
+                const { data, error } = await sbClient
+                    .from(targetTable)
+                    .update(record)
+                    .eq('id', payload.id)
+                    .select();
+
+                if (error) {
+                    // หาก column id ไม่มีในตาราง (เช่น Flood_DATA_2568) ให้อัปเดตตาม ชื่อ-สกุล และ ที่อยู่
+                    if (error.code === '42703' || String(error.message).includes('id')) {
+                        const { data: fbData, error: fbErr } = await sbClient
+                            .from(targetTable)
+                            .update(record)
+                            .eq('ชื่อ-สกุล', payload.oldName || payload.name)
+                            .eq('ที่อยู่', payload.oldAddress || payload.address)
+                            .select();
+                        if (fbErr) throw fbErr;
+                        savedData = fbData ? fbData[0] : record;
+                    } else {
+                        throw error;
+                    }
+                } else {
+                    savedData = data ? data[0] : record;
+                }
+                console.log("⚡ [Supabase 100%] อัปเดตข้อมูลผู้ประสบภัยสำเร็จ:", savedData);
+            } else if (payload.oldName && payload.oldAddress) {
+                // แก้ไขกรณีไม่มี id แต่อ้างอิงชื่อ-สกุลเดิม
+                const { data, error } = await sbClient
+                    .from(targetTable)
+                    .update(record)
+                    .eq('ชื่อ-สกุล', payload.oldName)
+                    .eq('ที่อยู่', payload.oldAddress)
+                    .select();
+
+                if (error) throw error;
+                savedData = data ? data[0] : record;
+                console.log("⚡ [Supabase 100%] แก้ไขข้อมูลผู้ประสบภัยสำเร็จ:", savedData);
+            } else {
+                // เพิ่มข้อมูลใหม่ (Insert)
+                const { data, error } = await sbClient
+                    .from(targetTable)
+                    .insert([record])
+                    .select();
+
+                if (error) throw error;
+                savedData = data ? data[0] : record;
+                console.log("⚡ [Supabase 100%] เพิ่มข้อมูลผู้ประสบภัยใหม่สำเร็จ:", savedData);
+            }
+        } catch (sbErr) {
+            console.error("❌ [Supabase] sbSaveFloodDataRecord error:", sbErr);
+            throw new Error('บันทึกข้อมูลเข้า Supabase ไม่สำเร็จ: ' + sbErr.message);
+        }
+    }
+
+    // Dual-write หรือ Fallback ไปยัง Google Apps Script หากเปิดใช้งาน
+    if (typeof DUAL_WRITE_MODE !== 'undefined' && DUAL_WRITE_MODE && typeof API_URL !== 'undefined') {
+        try {
+            fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'saveFloodData',
+                    period: p,
+                    record: record,
+                    id: payload.id || null,
+                    oldName: payload.oldName || null,
+                    oldAddress: payload.oldAddress || null
+                })
+            }).catch(e => console.warn("Dual-write GAS notice:", e));
+        } catch (e) {}
+    }
+
+    return { success: true, data: savedData || record };
+}
+
+async function sbDeleteFloodDataRecord(target, period = '2569') {
+    const p = period || (typeof currentPeriod !== 'undefined' && currentPeriod ? currentPeriod : '2569');
+    const targetTable = window.activeFloodDataTable || `Flood_DATA_${p}`;
+
+    if (isSupabaseReady()) {
+        try {
+            if (target.id) {
+                const { error } = await sbClient.from(targetTable).delete().eq('id', target.id);
+                if (error) {
+                    if (error.code === '42703' || String(error.message).includes('id')) {
+                        const { error: fbErr } = await sbClient.from(targetTable).delete().eq('ชื่อ-สกุล', target.name).eq('ที่อยู่', target.address);
+                        if (fbErr) throw fbErr;
+                    } else {
+                        throw error;
+                    }
+                }
+            } else if (target.name && target.address) {
+                const { error } = await sbClient.from(targetTable).delete().eq('ชื่อ-สกุล', target.name).eq('ที่อยู่', target.address);
+                if (error) throw error;
+            } else if (target.name) {
+                const { error } = await sbClient.from(targetTable).delete().eq('ชื่อ-สกุล', target.name);
+                if (error) throw error;
+            }
+            console.log("⚡ [Supabase 100%] ลบข้อมูลผู้ประสบภัยสำเร็จ");
+        } catch (sbErr) {
+            console.error("❌ [Supabase] sbDeleteFloodDataRecord error:", sbErr);
+            throw new Error('ลบข้อมูลใน Supabase ไม่สำเร็จ: ' + sbErr.message);
+        }
+    }
+
+    // Dual-write หรือ Fallback ไปยัง Google Apps Script หากเปิดใช้งาน
+    if (typeof DUAL_WRITE_MODE !== 'undefined' && DUAL_WRITE_MODE && typeof API_URL !== 'undefined') {
+        try {
+            fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'deleteFloodData',
+                    period: p,
+                    id: target.id || null,
+                    name: target.name || null,
+                    address: target.address || null
+                })
+            }).catch(e => console.warn("Dual-write GAS delete notice:", e));
+        } catch (e) {}
+    }
+
+    return { success: true };
+}
+
 window.sbGetPdpaPin = sbGetPdpaPin;
 window.sbVerifyPdpaPin = sbVerifyPdpaPin;
 window.sbUpdatePdpaPin = sbUpdatePdpaPin;
@@ -1189,6 +1349,8 @@ window.sbDeleteRoadClosure = sbDeleteRoadClosure;
 window.sbFetchRoadClosures = sbFetchRoadClosures;
 window.sbSaveCitizenWaterReport = sbSaveCitizenWaterReport;
 window.sbFetchCitizenWaterReports = sbFetchCitizenWaterReports;
+window.sbSaveFloodDataRecord = sbSaveFloodDataRecord;
+window.sbDeleteFloodDataRecord = sbDeleteFloodDataRecord;
 
 // Initialize ทันที
 initSupabase();
