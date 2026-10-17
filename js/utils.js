@@ -123,13 +123,13 @@ function updateMenuByRole() {
     }
 
     const roleAccessMap = {
-        'superadmin': ['dashboard', 'water', 'addWater', 'shelter', 'evacuation', 'regis', 'relief', 'looker', 'userManagement'],
-        'admin': ['dashboard', 'water', 'addWater', 'shelter', 'evacuation', 'regis', 'relief', 'looker'],
-        'shelter': ['shelter', 'regis', 'looker'],
-        'water_staff': ['water', 'addWater', 'looker'],
-        'relief': ['relief', 'looker'],
-        'community': ['water', 'addWater', 'evacuation', 'looker'],
-        'flood_report': ['looker']
+        'superadmin': ['dashboard', 'water', 'addWater', 'shelter', 'evacuation', 'regis', 'relief', 'looker', 'cctv', 'userManagement'],
+        'admin': ['dashboard', 'water', 'addWater', 'shelter', 'evacuation', 'regis', 'relief', 'looker', 'cctv', 'userManagement'],
+        'shelter': ['shelter', 'regis', 'looker', 'cctv'],
+        'water_staff': ['water', 'addWater', 'looker', 'cctv'],
+        'relief': ['relief', 'looker', 'cctv'],
+        'community': ['water', 'addWater', 'evacuation', 'looker', 'cctv'],
+        'flood_report': ['looker', 'cctv']
     };
     const accessMap = (typeof PAGE_ACCESS !== 'undefined') ? PAGE_ACCESS : roleAccessMap;
     const allowed = accessMap[currentRole] || ['shelter'];
@@ -198,6 +198,16 @@ function updateMenuByRole() {
     document.querySelectorAll('.admin-only').forEach(el => {
         if (userRole === 'admin' || userRole === 'superadmin') {
             el.style.display = 'flex';
+            el.classList.remove('hidden');
+        } else {
+            el.style.display = 'none';
+            el.classList.add('hidden');
+        }
+    });
+    const isSuperAdminOnly = (currentRole === 'superadmin' || userRole === 'superadmin');
+    document.querySelectorAll('.superadmin-only').forEach(el => {
+        if (isSuperAdminOnly) {
+            el.style.display = '';
             el.classList.remove('hidden');
         } else {
             el.style.display = 'none';

@@ -981,6 +981,48 @@ window.renderPublicPortal = async function () {
             `}
         </section>
 
+        
+        <!-- 3.8. กล่องกล้อง CCTV เฝ้าระวังระดับน้ำสด (Live CCTV Stream) -->
+        <section class="bg-white rounded-[2.5rem] p-6 shadow-sm border border-slate-100 space-y-4">
+            <div class="flex items-center justify-between flex-wrap gap-2">
+                <div class="flex items-center gap-3">
+                    <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 text-white flex items-center justify-center text-lg shadow-md shadow-sky-500/20">
+                        <i class="fas fa-video"></i>
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 class="font-bold text-slate-800 text-base">กล้อง CCTV เฝ้าระวังระดับน้ำสด</h3>
+                            <span class="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-mono font-bold flex items-center gap-1">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> LIVE
+                            </span>
+                        </div>
+                        <p class="text-[11px] text-slate-400">ถ่ายทอดสัญญาณภาพสด & ระดับน้ำตามจุดสำคัญในเขตเทศบาลตำบลตันหยงมัส</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="refreshPublicCctvFeeds()" id="publicCctvRefreshBtn"
+                        class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95">
+                        <i class="fas fa-rotate text-xs"></i>
+                        <span>รีเฟรชภาพ</span>
+                    </button>
+                    ${(window.cctvCameras && window.cctvCameras.length > 0) ? `
+                        <span class="px-3 py-1 rounded-full text-[11px] font-bold bg-sky-50 text-sky-700 border border-sky-200">
+                            ออนไลน์ ${window.cctvCameras.filter(c => c.status === 'online').length}/${window.cctvCameras.length} จุด
+                        </span>
+                    ` : `
+                        <span class="px-3 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
+                            ระบบพร้อมเชื่อมต่อ
+                        </span>
+                    `}
+                </div>
+            </div>
+
+            <div id="publicCctvContainer">
+                ${renderPublicCctvCardsHtml()}
+            </div>
+        </section>
+
+
         <!-- 4. รายชื่อศูนย์พักพิงชั่วคราว พร้อมพิกัดและความจุ & ปุ่มนำทาง Google Maps -->
         <section class="bg-white rounded-[2.5rem] p-6 shadow-sm border border-slate-100 space-y-4">
             <div class="flex items-center justify-between">
@@ -1063,6 +1105,10 @@ window.renderPublicPortal = async function () {
                     <span class="w-3 h-3 rounded-full bg-sky-500"></span>
                     <span>รายงานระดับน้ำ (ประชาชน)</span>
                 </div>
+                <div class="flex items-center gap-1.5">
+                    <span class="w-3 h-3 rounded-full bg-gradient-to-r from-sky-500 to-indigo-600"></span>
+                    <span>กล้อง CCTV ตรวจวัดระดับน้ำ</span>
+                </div>
             </div>
         </section>
 
@@ -1073,6 +1119,27 @@ window.renderPublicPortal = async function () {
                 หากท่านเป็นเจ้าหน้าที่ สามารถ <a href="index.html" class="underline hover:text-blue-500 font-bold">เข้าสู่ระบบสำหรับเจ้าหน้าที่</a>
             </p>
         </footer>
+
+        <!-- Modal: ขยายภาพกล้อง CCTV สำหรับประชาชน (Public CCTV Lightbox) -->
+        <div id="publicCctvLightbox" class="hidden fixed inset-0 z-[9999] bg-black/95 backdrop-blur-md flex items-center justify-center p-3 md:p-6" onclick="closePublicCctvLightbox()">
+            <div class="relative w-full max-w-4xl bg-slate-950 rounded-3xl overflow-hidden shadow-2xl border border-slate-800 flex flex-col" onclick="event.stopPropagation()">
+                <div class="p-4 bg-slate-900 border-b border-slate-800 flex items-center justify-between text-white">
+                    <div class="flex items-center gap-2.5">
+                        <span class="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <div>
+                            <h3 id="publicCctvModalTitle" class="font-bold text-sm md:text-base text-white">กล้อง CCTV ถ่ายทอดภาพสด</h3>
+                            <p id="publicCctvModalSub" class="text-[11px] text-slate-400">ภาพความละเอียดสูงจากจุดติดตั้ง</p>
+                        </div>
+                    </div>
+                    <button onclick="closePublicCctvLightbox()" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div id="publicCctvModalBody" class="w-full aspect-video bg-black flex items-center justify-center relative overflow-hidden">
+                    <!-- Dynamic Body with Staff Gauge & Water Level -->
+                </div>
+            </div>
+        </div>
     `;
 
     // 3. เริ่มต้นแผนที่ Mini Map หลังสร้าง DOM เสร็จ
@@ -1260,6 +1327,58 @@ function initPublicMiniMap(currentWaterLevel = 14.20) {
                             .addTo(publicMiniMapInstance);
                     }
                 }
+            });
+        }
+
+        
+        // 5. หมุดกล้อง CCTV สำหรับประชาชน
+        if (window.cctvCameras && Array.isArray(window.cctvCameras)) {
+            window.cctvCameras.forEach(cam => {
+                const lat = parseFloat(cam.lat);
+                const lng = parseFloat(cam.lng);
+                if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) return;
+
+                const isOnline = cam.status === 'online';
+                const cctvIcon = L.divIcon({
+                    className: 'public-cctv-pin',
+                    html: `<div class="w-9 h-9 rounded-2xl bg-gradient-to-br from-sky-500 to-indigo-600 text-white flex items-center justify-center shadow-lg border-2 border-white cursor-pointer hover:scale-110 transition-transform"><i class="fas fa-video text-xs"></i></div>`,
+                    iconSize: [36, 36],
+                    iconAnchor: [18, 18]
+                });
+
+                const displayImg = cam.snapshotUrl || cam.streamUrl || 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=400&q=80';
+                const popupHtml = `
+                    <div class="font-prompt p-2 text-slate-700 min-w-[230px]">
+                        <div class="flex items-center justify-between pb-1.5 mb-2 border-b border-slate-100">
+                            <h4 class="font-black text-slate-800 text-xs truncate max-w-[160px]">${cam.name}</h4>
+                            <span class="text-[9px] font-bold px-1.5 py-0.5 rounded ${isOnline ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}">
+                                ${isOnline ? 'LIVE' : 'OFFLINE'}
+                            </span>
+                        </div>
+                        ${isOnline ? `
+                            <div class="relative aspect-video rounded-xl overflow-hidden bg-black mb-2 cursor-pointer" onclick="openPublicCctvLightbox('${cam.id}')">
+                                <img src="${displayImg}" class="w-full h-full object-cover">
+                                <span class="absolute top-1 left-1 px-1.5 py-0.5 bg-black/70 text-white rounded text-[8px] font-mono">LIVE</span>
+                            </div>
+                        ` : ''}
+                        <div class="text-[11px] text-slate-600 mb-2 space-y-0.5">
+                            <div>จุดวัดน้ำ: <b>${cam.waterPoint || '-'}</b></div>
+                            <div>ระดับน้ำ: <b class="text-indigo-600">${cam.level !== null && cam.level !== undefined ? cam.level + ' ม.รทก.' : '-'}</b></div>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <button onclick="openPublicCctvLightbox('${cam.id}')" class="flex-1 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-[11px] font-bold transition flex items-center justify-center gap-1 shadow-sm">
+                                <i class="fas fa-expand text-[10px]"></i> ดูภาพใหญ่
+                            </button>
+                            <a href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}" target="_blank" class="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-[11px] font-bold transition flex items-center justify-center" title="นำทาง Google Maps">
+                                <i class="fas fa-location-arrow"></i>
+                            </a>
+                        </div>
+                    </div>
+                `;
+
+                L.marker([lat, lng], { icon: cctvIcon })
+                    .bindPopup(popupHtml, { maxWidth: 260, className: 'clean-popup' })
+                    .addTo(publicMiniMapInstance);
             });
         }
 
@@ -1952,3 +2071,222 @@ window.addCitizenWaterMarkerToPublicMap = function (report) {
 };
 
 
+
+// ==========================================
+// 📹 ฟังก์ชันจัดการกล้อง CCTV ในโหมดประชาชน
+// ==========================================
+function getPublicStaffGaugeHtml(cam) {
+    const level = cam.level !== null && cam.level !== undefined ? parseFloat(cam.level) : 0;
+    const warn = cam.warningThreshold || 1.5;
+    const crit = cam.criticalThreshold || 2.0;
+    const maxGauge = 3.0;
+    const waterPercent = Math.min(Math.max((level / maxGauge) * 100, 0), 100);
+    const warnPercent = Math.min((warn / maxGauge) * 100, 100);
+    const critPercent = Math.min((crit / maxGauge) * 100, 100);
+
+    return `
+        <div class="absolute right-2 top-2 bottom-8 w-10 bg-black/75 backdrop-blur-md rounded-xl border border-white/20 p-1 flex flex-col justify-between items-center text-white pointer-events-none z-10">
+            <div class="text-[7px] font-black font-mono text-sky-300 border-b border-white/20 pb-0.5 w-full text-center">เสาวัด</div>
+            <div class="relative flex-1 w-3.5 bg-slate-800 rounded my-1 border border-white/30 overflow-hidden flex flex-col-reverse">
+                <div class="w-full bg-gradient-to-t from-sky-500 to-cyan-300 transition-all duration-700" style="height: ${waterPercent}%;"></div>
+                <div class="absolute w-full border-t border-rose-500 z-10" style="bottom: ${critPercent}%;"></div>
+                <div class="absolute w-full border-t border-amber-400 z-10" style="bottom: ${warnPercent}%;"></div>
+            </div>
+            <div class="text-[8px] font-black font-mono text-amber-300 leading-tight text-center">
+                ${level > 0 ? level.toFixed(2) : '-'}m
+            </div>
+        </div>
+    `;
+}
+
+function renderPublicCctvCardsHtml() {
+    const cameras = window.cctvCameras || [];
+    if (cameras.length === 0) {
+        return `
+            <div class="p-8 text-center bg-gradient-to-b from-sky-50/60 to-slate-50/60 rounded-2xl border border-sky-100 flex flex-col items-center justify-center">
+                <div class="w-14 h-14 rounded-2xl bg-sky-100 text-sky-600 flex items-center justify-center text-2xl mb-3 shadow-inner">
+                    <i class="fas fa-video"></i>
+                </div>
+                <h4 class="text-sm font-black text-slate-800">ระบบกล้อง CCTV พร้อมถ่ายทอดสัญญาณภาพสด</h4>
+                <p class="text-xs text-slate-500 mt-1 max-w-md">เมื่อศูนย์ปฏิบัติการเชื่อมต่อสัญญาณกล้องจุดสำคัญในพื้นที่ ภาพสดและเสาวัดระดับน้ำเสมือนจริงจะปรากฏตรงนี้ทันที</p>
+                <div class="flex items-center gap-2 mt-4 text-[11px] text-slate-400 font-medium">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span>เชื่อมต่อระบบโทรมาตรและตรวจวัดระดับน้ำอัตโนมัติ 24 ชม.</span>
+                </div>
+            </div>
+        `;
+    }
+
+    return `
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            ${cameras.map(cam => {
+                const isOnline = cam.status === 'online';
+                let levelBadgeColor = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                let levelLabel = 'ปกติ';
+
+                if (!isOnline) {
+                    levelBadgeColor = 'bg-slate-100 text-slate-500 border-slate-200';
+                    levelLabel = 'ออฟไลน์';
+                } else if (cam.level !== null && cam.level !== undefined) {
+                    if (cam.criticalThreshold && cam.level >= cam.criticalThreshold) {
+                        levelBadgeColor = 'bg-rose-50 text-rose-700 border-rose-200 animate-pulse';
+                        levelLabel = 'วิกฤต';
+                    } else if (cam.warningThreshold && cam.level >= cam.warningThreshold) {
+                        levelBadgeColor = 'bg-amber-50 text-amber-700 border-amber-200';
+                        levelLabel = 'เฝ้าระวัง';
+                    }
+                }
+
+                const displayImg = cam.snapshotUrl || cam.streamUrl || 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=600&q=80';
+
+                return `
+                    <div class="bg-slate-50/80 border border-slate-100 rounded-2xl overflow-hidden flex flex-col justify-between hover:bg-slate-100/80 transition-all shadow-xs group">
+                        <div>
+                            <div class="p-3 bg-white border-b border-slate-100 flex items-center justify-between">
+                                <div class="flex items-center gap-2 min-w-0 pr-2">
+                                    <div class="w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'} shrink-0"></div>
+                                    <h4 class="font-bold text-slate-800 text-xs truncate" title="${cam.name}">${cam.name}</h4>
+                                </div>
+                                <span class="text-[9px] font-bold px-2 py-0.5 rounded-full border ${isOnline ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'} shrink-0">
+                                    ${isOnline ? 'LIVE' : 'OFFLINE'}
+                                </span>
+                            </div>
+
+                            <div class="relative w-full aspect-video bg-black overflow-hidden cursor-pointer group/feed" onclick="openPublicCctvLightbox('${cam.id}')">
+                                ${isOnline ? `
+                                    <img src="${displayImg}" class="w-full h-full object-cover group-hover/feed:scale-105 transition duration-500" alt="${cam.name}">
+                                    ${getPublicStaffGaugeHtml(cam)}
+                                    <div class="absolute top-2 left-2 px-1.5 py-0.5 bg-black/60 backdrop-blur-sm rounded text-white text-[8px] font-mono font-bold flex items-center gap-1">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span> LIVE
+                                    </div>
+                                    <div class="absolute bottom-2 left-2 right-12 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-1.5 rounded text-white text-[10px] font-mono flex items-center justify-between">
+                                        <span>ระดับน้ำ: <b class="text-amber-300">${cam.level !== null && cam.level !== undefined ? cam.level + ' ม.' : '-'}</b></span>
+                                        <span class="text-slate-300 text-[9px]">${cam.lastUpdate || 'ล่าสุด'}</span>
+                                    </div>
+                                    <div class="absolute inset-0 bg-black/20 opacity-0 group-hover/feed:opacity-100 transition flex items-center justify-center text-white text-xs font-bold gap-1 pointer-events-none">
+                                        <span class="px-2.5 py-1 bg-white/20 backdrop-blur-md rounded-lg border border-white/30"><i class="fas fa-expand"></i> แตะดูภาพใหญ่</span>
+                                    </div>
+                                ` : `
+                                    <div class="w-full h-full flex flex-col items-center justify-center text-slate-500 p-4">
+                                        <i class="fas fa-video-slash text-2xl mb-1 text-slate-600"></i>
+                                        <p class="text-[11px] font-bold text-slate-400">สัญญาณออฟไลน์ชั่วคราว</p>
+                                    </div>
+                                `}
+                            </div>
+
+                            <div class="p-3 text-xs space-y-1.5 bg-white">
+                                <div class="flex items-center justify-between text-[11px]">
+                                    <span class="text-slate-400">สถานะ:</span>
+                                    <span class="px-2 py-0.5 rounded-full font-bold text-[10px] border ${levelBadgeColor}">${levelLabel}</span>
+                                </div>
+                                <div class="flex items-center justify-between text-[11px]">
+                                    <span class="text-slate-400">จุดวัด:</span>
+                                    <span class="font-bold text-slate-700 truncate max-w-[150px]">${cam.waterPoint || '-'}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="p-3 pt-0 bg-white flex items-center gap-2">
+                            <button onclick="openPublicCctvLightbox('${cam.id}')"
+                                class="flex-1 py-2 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-100 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 active:scale-95 shadow-xs">
+                                <i class="fas fa-expand text-[10px]"></i> ดูภาพสดขยาย
+                            </button>
+                            ${(cam.lat && cam.lng) ? `
+                                <a href="https://www.google.com/maps/dir/?api=1&destination=${cam.lat},${cam.lng}" target="_blank"
+                                    class="py-2 px-3 bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 active:scale-95" title="นำทาง Google Maps">
+                                    <i class="fas fa-location-arrow text-[10px] text-blue-500"></i>
+                                </a>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('')}
+        </div>
+    `;
+}
+
+window.openPublicCctvLightbox = function(camId) {
+    const cam = (window.cctvCameras || []).find(c => c.id === camId);
+    if (!cam) return;
+
+    const modal = document.getElementById('publicCctvLightbox');
+    const title = document.getElementById('publicCctvModalTitle');
+    const sub = document.getElementById('publicCctvModalSub');
+    const body = document.getElementById('publicCctvModalBody');
+
+    if (title) title.innerText = cam.name;
+    if (sub) sub.innerText = `จุดวัด: ${cam.waterPoint || '-'} | ระดับน้ำ: ${cam.level !== null && cam.level !== undefined ? cam.level + ' ม.รทก.' : '-'} | สถานะ: ${cam.status.toUpperCase()}`;
+
+    const displayImg = cam.snapshotUrl || cam.streamUrl || 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=1200&q=80';
+
+    if (body) {
+        if (cam.status === 'online') {
+            body.innerHTML = `
+                <img src="${displayImg}" class="w-full h-full object-contain">
+                ${getPublicStaffGaugeHtml(cam)}
+                <div class="absolute top-4 left-4 flex items-center gap-2 bg-black/70 backdrop-blur-md px-3 py-1.5 rounded-xl text-white text-xs font-mono">
+                    <span class="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping"></span>
+                    <span>LIVE STREAM • ${cam.type}</span>
+                </div>
+                <div class="absolute bottom-4 left-4 right-14 bg-black/80 backdrop-blur-md p-3.5 rounded-2xl flex flex-wrap items-center justify-between text-white text-xs gap-2">
+                    <div>
+                        <span class="font-bold text-sky-400">จุดวัด: ${cam.waterPoint || '-'}</span>
+                        <span class="ml-3 text-slate-300 font-mono text-[11px]">พิกัด: ${cam.lat}, ${cam.lng}</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span>ระดับน้ำ: <b class="text-amber-300 text-sm font-black">${cam.level !== null && cam.level !== undefined ? cam.level + ' ม.รทก.' : '-'}</b></span>
+                        ${(cam.lat && cam.lng) ? `
+                            <a href="https://www.google.com/maps/dir/?api=1&destination=${cam.lat},${cam.lng}" target="_blank"
+                                class="px-3 py-1 bg-white/20 hover:bg-white/30 border border-white/30 text-white rounded-lg font-bold text-xs flex items-center gap-1 transition">
+                                <i class="fas fa-location-arrow text-[10px]"></i> นำทาง
+                            </a>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        } else {
+            body.innerHTML = `
+                <div class="text-center text-slate-500 p-8">
+                    <i class="fas fa-video-slash text-5xl mb-3 text-slate-600"></i>
+                    <h4 class="font-bold text-white text-base">กล้องไม่ได้เชื่อมต่อสัญญาณ (Offline)</h4>
+                    <p class="text-xs text-slate-400 mt-1">กรุณาตรวจสอบระบบสัญญาณหรือรอเจ้าหน้าที่ดำเนินการ</p>
+                </div>
+            `;
+        }
+    }
+
+    if (modal) modal.classList.remove('hidden');
+};
+
+window.closePublicCctvLightbox = function() {
+    const modal = document.getElementById('publicCctvLightbox');
+    if (modal) modal.classList.add('hidden');
+};
+
+window.refreshPublicCctvFeeds = async function() {
+    const btn = document.getElementById('publicCctvRefreshBtn');
+    if (btn) {
+        const orig = btn.innerHTML;
+        btn.innerHTML = `<i class="fas fa-rotate animate-spin text-xs"></i> <span>กำลังอัปเดต...</span>`;
+        btn.disabled = true;
+
+        if (typeof loadCctvCamerasData === 'function') {
+            await loadCctvCamerasData();
+        }
+
+        const container = document.getElementById('publicCctvContainer');
+        if (container) container.innerHTML = renderPublicCctvCardsHtml();
+
+        btn.innerHTML = orig;
+        btn.disabled = false;
+
+        Swal.fire({
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 1500,
+            icon: 'success',
+            title: 'รีเฟรชภาพกล้องเรียบร้อย'
+        });
+    }
+};

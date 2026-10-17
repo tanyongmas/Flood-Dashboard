@@ -1354,3 +1354,148 @@ window.sbDeleteFloodDataRecord = sbDeleteFloodDataRecord;
 
 // Initialize ทันที
 initSupabase();
+
+
+// ==========================================
+// 📹 ระบบกล้อง CCTV และ ภาพประวัติช่วงวิกฤต (Supabase Layer)
+// ==========================================
+async function sbFetchCctvCameras() {
+    if (!isSupabaseReady()) {
+        try {
+            const local = localStorage.getItem('cctv_cameras');
+            return local ? JSON.parse(local) : null;
+        } catch(e) { return null; }
+    }
+    try {
+        const { data, error } = await sbClient
+            .from('cctv_cameras')
+            .select('*')
+            .order('created_at', { ascending: true });
+
+        if (error) {
+            console.warn("⚠️ [Supabase] cctv_cameras table not yet created or inaccessible, fallback to local:", error.message);
+            const local = localStorage.getItem('cctv_cameras');
+            return local ? JSON.parse(local) : null;
+        }
+        return data;
+    } catch(err) {
+        console.warn("⚠️ [Supabase] Fetch CCTV failed:", err);
+        const local = localStorage.getItem('cctv_cameras');
+        return local ? JSON.parse(local) : null;
+    }
+}
+
+async function sbSaveCctvCamera(camera) {
+    // 1. บันทึกลง LocalStorage เสมอเพื่อความเสถียร 100%
+    try {
+        let cameras = [];
+        const local = localStorage.getItem('cctv_cameras');
+        if (local) cameras = JSON.parse(local);
+        const idx = cameras.findIndex(c => c.id === camera.id);
+        if (idx !== -1) {
+            cameras[idx] = { ...cameras[idx], ...camera, updated_at: new Date().toISOString() };
+        } else {
+            cameras.push({ ...camera, created_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+        }
+        localStorage.setItem('cctv_cameras', JSON.stringify(cameras));
+    } catch(e) {}
+
+    // 2. ซิงค์ขึ้น Supabase ถ้ามีตาราง
+    if (isSupabaseReady()) {
+        try {
+            const dbRecord = {
+                id: camera.id,
+                name: camera.name,
+                code: camera.code || camera.id,
+                type: camera.type || 'ESP32-CAM',
+                status: camera.status || 'online',
+                lat: camera.lat,
+                lng: camera.lng,
+                stream_url: camera.streamUrl || camera.stream_url || '',
+                snapshot_url: camera.snapshotUrl || camera.snapshot_url || '',
+                refresh_interval: camera.refreshInterval || 15,
+                water_point: camera.waterPoint || camera.water_point || '',
+                linked_station_id: camera.linkedStationId || '',
+                level: camera.level !== undefined ? camera.level : null,
+                warning_threshold: camera.warningThreshold || 1.50,
+                critical_threshold: camera.criticalThreshold || 2.00,
+                power: camera.power || 'Solar 100%',
+                updated_at: new Date().toISOString()
+            };
+            const { data, error } = await sbClient
+                .from('cctv_cameras')
+                .upsert([dbRecord], { onConflict: 'id' });
+            if (error) console.warn("Supabase cctv_cameras upsert note:", error.message);
+        } catch(sbErr) {
+            console.warn("Supabase cctv_cameras upsert error:", sbErr.message);
+        }
+    }
+    return { success: true };
+}
+
+async function sbDeleteCctvCamera(camId) {
+    try {
+        let cameras = [];
+        const local = localStorage.getItem('cctv_cameras');
+        if (local) {
+            cameras = JSON.parse(local).filter(c => c.id !== camId);
+            localStorage.setItem('cctv_cameras', JSON.stringify(cameras));
+        }
+    } catch(e) {}
+
+    if (isSupabaseReady()) {
+        try {
+            await sbClient.from('cctv_cameras').delete().eq('id', camId);
+        } catch(e) {}
+    }
+    return { success: true };
+}
+
+async function sbFetchCctvSnapshots(camId = null) {
+    if (!isSupabaseReady()) {
+        try {
+            const local = localStorage.getItem('cctv_snapshots');
+            let snaps = local ? JSON.parse(local) : [];
+            if (camId && camId !== 'all') snaps = snaps.filter(s => s.camera_id === camId);
+            return snaps;
+        } catch(e) { return []; }
+    }
+    try {
+        let query = sbClient.from('cctv_snapshots').select('*').order('snapshot_time', { ascending: false });
+        if (camId && camId !== 'all') query = query.eq('camera_id', camId);
+        const { data, error } = await query;
+        if (error) {
+            const local = localStorage.getItem('cctv_snapshots');
+            let snaps = local ? JSON.parse(local) : [];
+            if (camId && camId !== 'all') snaps = snaps.filter(s => s.camera_id === camId);
+            return snaps;
+        }
+        return data || [];
+    } catch(e) {
+        return [];
+    }
+}
+
+async function sbSaveCctvSnapshot(record) {
+    try {
+        let snaps = [];
+        const local = localStorage.getItem('cctv_snapshots');
+        if (local) snaps = JSON.parse(local);
+        snaps.unshift(record);
+        if (snaps.length > 50) snaps = snaps.slice(0, 50); // Keep latest 50
+        localStorage.setItem('cctv_snapshots', JSON.stringify(snaps));
+    } catch(e) {}
+
+    if (isSupabaseReady()) {
+        try {
+            await sbClient.from('cctv_snapshots').insert([record]);
+        } catch(e) {}
+    }
+    return { success: true };
+}
+
+window.sbFetchCctvCameras = sbFetchCctvCameras;
+window.sbSaveCctvCamera = sbSaveCctvCamera;
+window.sbDeleteCctvCamera = sbDeleteCctvCamera;
+window.sbFetchCctvSnapshots = sbFetchCctvSnapshots;
+window.sbSaveCctvSnapshot = sbSaveCctvSnapshot;

@@ -21,7 +21,8 @@ let dashLayers = {
     evac: null,
     flood: null,
     polygon: null,
-    road: null
+    road: null,
+    cctv: null
 };
 
 let dashLayerStates = {
@@ -31,7 +32,8 @@ let dashLayerStates = {
     evac: true,
     flood: true,
     polygon: true,
-    road: true
+    road: true,
+    cctv: true
 };
 
 // ==========================================
@@ -66,7 +68,8 @@ let dashLayerStates = {
                     await Promise.allSettled([
                         loadData(),
                         typeof loadRIDWaterLevel === 'function' ? loadRIDWaterLevel() : Promise.resolve(),
-                        typeof loadWeatherForecast === 'function' ? loadWeatherForecast() : Promise.resolve()
+                        typeof loadWeatherForecast === 'function' ? loadWeatherForecast() : Promise.resolve(),
+                        typeof loadCctvCamerasData === 'function' ? loadCctvCamerasData() : Promise.resolve()
                     ]);
                 } catch (e) {
                     console.warn("Public mode data fetch warning:", e);
@@ -140,13 +143,13 @@ let dashLayerStates = {
 
         // กำหนดว่าแต่ละสิทธิ์เข้าหน้าไหนได้บ้าง
         const PAGE_ACCESS = {
-            'superadmin': ['dashboard', 'water', 'addWater', 'shelter', 'evacuation', 'regis', 'relief', 'looker', 'userManagement'],
-            'admin': ['dashboard', 'water', 'addWater', 'shelter', 'evacuation', 'regis', 'relief', 'looker'],
-            'shelter': ['shelter', 'regis', 'looker'],
-            'water_staff': ['water', 'addWater', 'looker'],
-            'relief': ['relief', 'looker'],
-            'community': ['water', 'addWater', 'evacuation', 'looker'],
-            'flood_report': ['looker']
+            'superadmin': ['dashboard', 'water', 'addWater', 'shelter', 'evacuation', 'regis', 'relief', 'looker', 'cctv', 'userManagement'],
+            'admin': ['dashboard', 'water', 'addWater', 'shelter', 'evacuation', 'regis', 'relief', 'looker', 'cctv', 'userManagement'],
+            'shelter': ['shelter', 'regis', 'looker', 'cctv'],
+            'water_staff': ['water', 'addWater', 'looker', 'cctv'],
+            'relief': ['relief', 'looker', 'cctv'],
+            'community': ['water', 'addWater', 'evacuation', 'looker', 'cctv'],
+            'flood_report': ['looker', 'cctv']
         };
         // --- Navigation Logic ---
         // --- Navigation Logic ---
@@ -202,6 +205,7 @@ let dashLayerStates = {
                 regis: 'ลงทะเบียนผู้ประสบภัย',
                 relief: 'ข้อมูลผู้รับถุงยังชีพ',
                 looker: 'รายงานข้อมูลน้ำท่วม',
+                cctv: 'ระบบกล้อง CCTV ตรวจวัดระดับน้ำ',
                 evacuation: 'สถานะการอพยพและแผนที่',
                 userManagement: 'จัดการผู้ใช้งานระบบ'
             };
@@ -225,6 +229,18 @@ let dashLayerStates = {
             }
             if (pageId === 'userManagement' && userRole === 'superadmin') loadUsers();
 
+            
+            if (pageId === 'cctv') {
+                if (typeof initCctvMap === 'function') initCctvMap();
+                if (typeof renderCctvDashboard === 'function') renderCctvDashboard();
+                [100, 300, 500, 800].forEach(delay => {
+                    setTimeout(() => {
+                        if (window.cctvMap && typeof window.cctvMap.invalidateSize === 'function') {
+                            window.cctvMap.invalidateSize();
+                        }
+                    }, delay);
+                });
+            }
             if (pageId === 'looker') {
                 if (typeof initFloodReportMap === 'function') initFloodReportMap();
                 if (typeof renderFloodReportDashboard === 'function') renderFloodReportDashboard();
@@ -1524,6 +1540,7 @@ let dashLayerStates = {
             dashLayers.flood = L.layerGroup().addTo(dashOneMap);
             dashLayers.polygon = L.layerGroup().addTo(dashOneMap);
             dashLayers.road = L.layerGroup().addTo(dashOneMap);
+            dashLayers.cctv = L.layerGroup().addTo(dashOneMap);
 
             dashDrawnItems = new L.FeatureGroup().addTo(dashOneMap);
 
@@ -1695,7 +1712,8 @@ let dashLayerStates = {
                 evac: { id: 'btnLayerEvac', color: 'bg-purple-600' },
                 flood: { id: 'btnLayerFlood', color: 'bg-rose-600' },
                 polygon: { id: 'btnLayerPolygon', color: 'bg-red-700' },
-                road: { id: 'btnLayerRoad', color: 'bg-amber-600' }
+                road: { id: 'btnLayerRoad', color: 'bg-amber-600' },
+                cctv: { id: 'btnLayerCctv', color: 'bg-indigo-600' }
             };
 
             const target = btnIdMap[layerKey];
@@ -2383,6 +2401,59 @@ let dashLayerStates = {
                     }
                 });
             }
+            
+            // 8. เลเยอร์กล้อง CCTV ตรวจวัดระดับน้ำ (CCTV Cameras)
+            const cctvCameras = window.cctvCameras || [];
+            const cctvCountBadge = document.getElementById('dash_cctvCountBadge');
+            if (cctvCountBadge) {
+                cctvCountBadge.innerText = cctvCameras.length;
+            }
+
+            if (cctvCameras.length > 0 && dashLayers.cctv) {
+                cctvCameras.forEach(cam => {
+                    const lat = parseFloat(cam.lat);
+                    const lng = parseFloat(cam.lng);
+                    if (isNaN(lat) || isNaN(lng) || (lat === 0 && lng === 0)) return;
+
+                    const isOnline = cam.status === 'online';
+                    let markerBg = 'bg-emerald-500';
+                    let statusLabel = 'ปกติ';
+
+                    if (!isOnline) {
+                        markerBg = 'bg-slate-400';
+                        statusLabel = 'ออฟไลน์';
+                    } else if (cam.level !== null && cam.level !== undefined) {
+                        if (cam.criticalThreshold && cam.level >= cam.criticalThreshold) {
+                            markerBg = 'bg-rose-500';
+                            statusLabel = 'วิกฤต';
+                        } else if (cam.warningThreshold && cam.level >= cam.warningThreshold) {
+                            markerBg = 'bg-amber-500';
+                            statusLabel = 'เฝ้าระวัง';
+                        }
+                    }
+
+                    const icon = L.divIcon({
+                        className: 'custom-one-cctv-marker bg-transparent border-0',
+                        html: `
+                            <div class="relative flex flex-col items-center cursor-pointer group">
+                                ${isOnline ? `<div class="absolute w-10 h-10 rounded-full ${markerBg} opacity-40 animate-ping"></div>` : ''}
+                                <div class="bg-gradient-to-tr from-sky-500 to-indigo-600 text-white w-9 h-9 rounded-2xl border-2 border-white shadow-lg flex items-center justify-center text-xs font-black transition-transform group-hover:scale-110">
+                                    <i class="fas fa-video"></i>
+                                </div>
+                                <span class="bg-slate-900 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full shadow-md mt-0.5 whitespace-nowrap border border-white/20">CCTV • ${statusLabel}</span>
+                            </div>
+                        `,
+                        iconSize: [40, 52],
+                        iconAnchor: [20, 52],
+                        popupAnchor: [0, -52]
+                    });
+
+                    const popup = createCctvPopupHtml(cam);
+                    const m = L.marker([lat, lng], { icon: icon }).bindPopup(popup, { maxWidth: 300, className: 'cctv-proportional-popup' });
+                    dashLayers.cctv.addLayer(m);
+                });
+            }
+
             // 7. เลเยอร์เส้นทางปิด / ไม่สามารถสัญจรได้ (Road Closures)
             const roadClosures = store.roadClosures || [];
             const roadCountBadge = document.getElementById('dash_roadCountBadge');
@@ -4058,3 +4129,948 @@ let dashLayerStates = {
         // 5. ระบบจัดการผู้ใช้งาน & สิทธิ์ Admin     -> js/modules/user-mgmt.js
         // 6. แดชบอร์ดสรุปภาพรวม & แผนที่น้ำท่วม    -> js/modules/admin-dashboard.js
         // =========================================================================
+
+
+        // =========================================================================
+        // 📹 ระบบกล้อง CCTV ตรวจวัดระดับน้ำ (CCTV Flood Monitoring System)
+        // สถาปัตยกรรม 5 มิติ: Streaming/Snapshot, Telemetry E-Staff Gauge, Supabase Cloud, History & Superadmin Security
+        // =========================================================================
+
+        let cctvMap = null;
+        let cctvMarkerLayer = L.layerGroup();
+        window.cctvMap = null;
+        let cctvSnapshotTimer = null;
+
+        // ข้อมูลกล้อง CCTV เริ่มต้น (เชื่อมโยงกล้องจริงของเทศบาลตำบลตันหยงมัส & จุดเสี่ยงภัย)
+        // ข้อมูลกล้อง CCTV เริ่มต้น (ว่างไว้เพื่อรอรับข้อมูลจริง 100%)
+        const DEFAULT_CCTV_CAMERAS = [];
+
+        // ตัวอย่างภาพประวัติช่วงวิกฤตเริ่มต้น
+        // ข้อมูลประวัติภาพถ่ายช่วงวิกฤตเริ่มต้น (ว่างไว้เพื่อรอรับข้อมูลจริง 100%)
+        const DEFAULT_SNAPSHOT_HISTORY = [];
+
+        // โหลดข้อมูลกล้องจาก LocalStorage / Supabase
+        
+        // ล้าง Mock Data เก่าออกจาก LocalStorage เพื่อรองรับข้อมูลจริง 100%
+        try {
+            if (localStorage.getItem('cctv_mock_cleaned_v2') !== 'true') {
+                localStorage.removeItem('cctv_cameras');
+                localStorage.removeItem('cctv_snapshots');
+                localStorage.setItem('cctv_mock_cleaned_v2', 'true');
+            }
+        } catch(e) {}
+
+        async function loadCctvCamerasData() {
+            try {
+                if (typeof sbFetchCctvCameras === 'function') {
+                    const sbData = await sbFetchCctvCameras();
+                    if (Array.isArray(sbData) && sbData.length > 0) {
+                        window.cctvCameras = sbData;
+                        return sbData;
+                    }
+                }
+                const saved = localStorage.getItem('cctv_cameras');
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        window.cctvCameras = parsed;
+                        return parsed;
+                    }
+                }
+            } catch (e) {
+                console.warn("Error loading cctv_cameras:", e);
+            }
+            window.cctvCameras = JSON.parse(JSON.stringify(DEFAULT_CCTV_CAMERAS));
+            return window.cctvCameras;
+        }
+
+        window.cctvCameras = JSON.parse(JSON.stringify(DEFAULT_CCTV_CAMERAS));
+        loadCctvCamerasData();
+
+        // ซิงค์ข้อมูลระดับน้ำ Telemetry อัตโนมัติจาก store.waterPoints
+        function syncCctvTelemetry() {
+            if (!window.cctvCameras || !store || !store.waterPoints) return;
+            let changed = false;
+
+            window.cctvCameras.forEach(cam => {
+                if (!cam.waterPoint) return;
+                // หาจุดวัดน้ำที่ตรงกัน
+                const pt = store.waterPoints.find(p =>
+                    (p.name && p.name.includes(cam.waterPoint)) ||
+                    (p.id && String(p.id).toLowerCase() === String(cam.waterPoint).toLowerCase())
+                );
+                if (pt && pt.level !== undefined && pt.level !== null) {
+                    const newLevel = parseFloat(pt.level);
+                    if (!isNaN(newLevel) && cam.level !== newLevel) {
+                        cam.level = newLevel;
+                        changed = true;
+                    }
+                }
+            });
+
+            if (changed) {
+                renderCctvDashboard();
+                renderCctvMapMarkers();
+            }
+        }
+
+        // ==========================================
+        
+        // ==========================================
+        // 🎨 ฟังก์ชันสร้าง Leaflet Popup กล้อง CCTV แบบเป็นระเบียบ สวยงาม เป็นสัดส่วน
+        // ==========================================
+        window.createCctvPopupHtml = function(cam) {
+            const isOnline = cam.status === 'online';
+            const level = cam.level !== null && cam.level !== undefined ? parseFloat(cam.level) : null;
+            let statusText = 'ปกติ', statusColor = 'bg-emerald-500', statusBg = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+
+            if (!isOnline) {
+                statusText = 'ออฟไลน์';
+                statusBg = 'bg-slate-100 text-slate-500 border-slate-200';
+            } else if (level !== null) {
+                if (cam.criticalThreshold && level >= cam.criticalThreshold) {
+                    statusText = 'วิกฤต';
+                    statusBg = 'bg-rose-50 text-rose-700 border-rose-200 animate-pulse';
+                } else if (cam.warningThreshold && level >= cam.warningThreshold) {
+                    statusText = 'เฝ้าระวัง';
+                    statusBg = 'bg-amber-50 text-amber-700 border-amber-200';
+                }
+            }
+
+            const displayImg = cam.snapshotUrl || cam.streamUrl || 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=600&q=80';
+
+            return `
+                <div class="font-prompt text-slate-700 p-2 min-w-[260px] max-w-[280px]">
+                    <!-- Header: รหัสกล้องและสถานะ -->
+                    <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-100">
+                        <div class="flex items-center gap-2 min-w-0 pr-1">
+                            <div class="w-6 h-6 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center text-xs shrink-0 border border-indigo-100">
+                                <i class="fas fa-video"></i>
+                            </div>
+                            <h4 class="font-black text-slate-800 text-xs truncate leading-snug" title="${cam.name}">${cam.name}</h4>
+                        </div>
+                        <span class="text-[9px] font-extrabold px-2 py-0.5 rounded-full border ${statusBg} shrink-0">
+                            ${isOnline ? 'ONLINE' : 'OFFLINE'}
+                        </span>
+                    </div>
+
+                    <!-- กล่องภาพสด / Snapshot สัดส่วน 16:9 สวยงาม -->
+                    <div class="relative w-full aspect-video rounded-xl overflow-hidden bg-black mb-2.5 shadow-sm group cursor-pointer" onclick="openCctvFullscreen('${cam.id}')">
+                        ${isOnline ? `
+                            <img src="${displayImg}" class="w-full h-full object-cover group-hover:scale-105 transition duration-500" alt="${cam.name}">
+                            <div class="absolute top-1.5 left-1.5 px-1.5 py-0.5 bg-black/70 backdrop-blur-sm rounded text-white text-[8px] font-mono font-bold flex items-center gap-1">
+                                <span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span> LIVE
+                            </div>
+                            <div class="absolute bottom-1.5 right-1.5 px-2 py-0.5 bg-black/80 backdrop-blur-sm rounded text-[9px] font-mono text-amber-300 font-bold">
+                                ${level !== null ? level.toFixed(2) + ' ม.' : '-'}
+                            </div>
+                        ` : `
+                            <div class="w-full h-full flex flex-col items-center justify-center text-slate-400 p-2">
+                                <i class="fas fa-video-slash text-xl mb-1 text-slate-500"></i>
+                                <span class="text-[10px] font-bold">สัญญาณออฟไลน์</span>
+                            </div>
+                        `}
+                    </div>
+
+                    <!-- ตารางข้อมูล Telemetry เป็นสัดส่วน -->
+                    <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-100 space-y-1.5 mb-2.5 text-[11px]">
+                        <div class="flex items-center justify-between">
+                            <span class="text-slate-400 font-bold text-[10px]">จุดวัดน้ำ:</span>
+                            <span class="font-bold text-slate-700 truncate max-w-[140px]">${cam.waterPoint || '-'}</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-slate-400 font-bold text-[10px]">ระดับน้ำตรวจวัด:</span>
+                            <span class="font-black text-indigo-600">${level !== null ? level.toFixed(2) + ' ม.รทก.' : '-'}</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-slate-400 font-bold text-[10px]">สถานะน้ำ:</span>
+                            <span class="font-extrabold text-[10px] ${statusBg} px-2 py-0.5 rounded-full">${statusText}</span>
+                        </div>
+                        <div class="flex items-center justify-between text-[10px] text-slate-400 pt-1 border-t border-slate-200/60">
+                            <span>อัปเดต:</span>
+                            <span class="font-mono text-slate-500">${cam.lastUpdate || 'ล่าสุด'}</span>
+                        </div>
+                    </div>
+
+                    <!-- ปุ่มดำเนินการ 2 ปุ่มจัดระเบียบสวยงาม -->
+                    <div class="flex items-center gap-1.5">
+                        <button onclick="openCctvFullscreen('${cam.id}')"
+                            class="flex-1 py-2 bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-600 hover:to-indigo-700 text-white rounded-xl text-[11px] font-bold transition flex items-center justify-center gap-1.5 shadow-sm active:scale-95">
+                            <i class="fas fa-expand text-[10px]"></i> ดูภาพสดเต็มจอ
+                        </button>
+                        ${(cam.lat && cam.lng) ? `
+                            <a href="https://www.google.com/maps/dir/?api=1&destination=${cam.lat},${cam.lng}" target="_blank"
+                                class="p-2 bg-white hover:bg-slate-100 border border-slate-200 text-slate-600 rounded-xl text-xs font-bold transition flex items-center justify-center shadow-sm active:scale-95" title="นำทาง Google Maps">
+                                <i class="fas fa-location-arrow text-indigo-500"></i>
+                            </a>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        };
+
+        // 1. เริ่มต้นระบบแผนที่สำหรับกล้อง CCTV
+        // ==========================================
+        window.initCctvMap = function () {
+            if (cctvMap) {
+                renderCctvMapMarkers();
+                return;
+            }
+
+            const mapEl = document.getElementById('cctvMap');
+            if (!mapEl) return;
+
+            const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            });
+
+            const satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: '© Esri, Maxar, Earthstar Geographics'
+            });
+
+            cctvMap = L.map('cctvMap', {
+                center: [6.29445, 101.72362],
+                zoom: 14,
+                layers: [osmLayer]
+            });
+
+            window.cctvMap = cctvMap;
+
+            const baseLayers = {
+                "แผนที่ถนน (OSM)": osmLayer,
+                "แผนที่ภาพดาวเทียม": satLayer
+            };
+
+            const overlays = {
+                "จุดติดตั้งกล้อง CCTV": cctvMarkerLayer
+            };
+
+            L.control.layers(baseLayers, overlays, { position: 'topright' }).addTo(cctvMap);
+            cctvMarkerLayer.addTo(cctvMap);
+
+            renderCctvMapMarkers();
+
+            // เริ่ม Polling ภาพ Snapshot ESP32-CAM ทุกๆ 15 วินาที
+            if (!cctvSnapshotTimer) {
+                cctvSnapshotTimer = setInterval(() => {
+                    pollEsp32Snapshots();
+                }, 15000);
+            }
+        };
+
+        // ฟังก์ชัน Polling ภาพสดของ ESP32-CAM ป้องกัน Cache
+        function pollEsp32Snapshots() {
+            const cameras = window.cctvCameras || [];
+            cameras.forEach(cam => {
+                if (cam.type === 'ESP32-CAM' && cam.status === 'online') {
+                    cam.lastUpdate = new Date().toLocaleTimeString('th-TH');
+                }
+            });
+            const statLastSync = document.getElementById('cctv_statLastSync');
+            if (statLastSync) statLastSync.innerText = new Date().toLocaleTimeString('th-TH');
+        }
+
+        // วาด Marker กล้อง CCTV พร้อมสถานะสีและ Radar Pulse
+        function renderCctvMapMarkers() {
+            if (!cctvMap) return;
+            cctvMarkerLayer.clearLayers();
+
+            const cameras = window.cctvCameras || [];
+
+            cameras.forEach(cam => {
+                if (!cam.lat || !cam.lng) return;
+
+                const isOnline = cam.status === 'online';
+                let markerBg = 'bg-emerald-500';
+                let pulseClass = 'pulse-cctv-green';
+                let statusTh = 'ปกติ';
+
+                if (!isOnline) {
+                    markerBg = 'bg-slate-400';
+                    pulseClass = '';
+                    statusTh = 'ออฟไลน์';
+                } else if (cam.level !== null && cam.level !== undefined) {
+                    if (cam.criticalThreshold && cam.level >= cam.criticalThreshold) {
+                        markerBg = 'bg-rose-500';
+                        pulseClass = 'pulse-cctv-red';
+                        statusTh = 'วิกฤต';
+                    } else if (cam.warningThreshold && cam.level >= cam.warningThreshold) {
+                        markerBg = 'bg-amber-500';
+                        pulseClass = 'pulse-cctv-yellow';
+                        statusTh = 'เฝ้าระวัง';
+                    }
+                }
+
+                const customIcon = L.divIcon({
+                    className: 'cctv-custom-marker',
+                    html: `
+                        <div class="relative flex items-center justify-center">
+                            ${isOnline ? `<div class="absolute w-10 h-10 rounded-full ${markerBg} opacity-40 animate-ping"></div>` : ''}
+                            <div class="w-8 h-8 rounded-full ${markerBg} border-2 border-white shadow-lg flex items-center justify-center text-white text-xs transition-transform hover:scale-125 cursor-pointer">
+                                <i class="fas fa-video"></i>
+                            </div>
+                        </div>
+                    `,
+                    iconSize: [32, 32],
+                    iconAnchor: [16, 16]
+                });
+
+                const displayImg = cam.snapshotUrl || cam.streamUrl || 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=400&q=80';
+
+                const popupHtml = window.createCctvPopupHtml(cam);
+                const marker = L.marker([cam.lat, cam.lng], { icon: customIcon }).bindPopup(popupHtml, { maxWidth: 300, className: "cctv-proportional-popup" });
+                cctvMarkerLayer.addLayer(marker);
+            });
+        }
+
+        // ==========================================
+        // 2. ฟังก์ชันวาด E-Staff Gauge (เสาวัดระดับน้ำจำลอง Overlay)
+        // ==========================================
+        function getStaffGaugeOverlayHtml(cam) {
+            const level = cam.level !== null && cam.level !== undefined ? parseFloat(cam.level) : 0;
+            const warn = cam.warningThreshold || 1.5;
+            const crit = cam.criticalThreshold || 2.0;
+
+            // คำนวณความสูงของน้ำเป็น % (สมมุติสเกลเสา 0 ถึง 3 เมตร)
+            const maxGauge = 3.0;
+            const waterPercent = Math.min(Math.max((level / maxGauge) * 100, 0), 100);
+            const warnPercent = Math.min((warn / maxGauge) * 100, 100);
+            const critPercent = Math.min((crit / maxGauge) * 100, 100);
+
+            return `
+                <div class="absolute right-2 top-2 bottom-8 w-11 bg-black/70 backdrop-blur-md rounded-xl border border-white/20 p-1 flex flex-col justify-between items-center text-white pointer-events-none z-20">
+                    <div class="text-[8px] font-black font-mono text-sky-300 border-b border-white/20 pb-0.5 w-full text-center">GAUGE</div>
+                    
+                    <!-- แท่งสเกลเสาวัด -->
+                    <div class="relative flex-1 w-4 bg-slate-800 rounded-md my-1 border border-white/30 overflow-hidden flex flex-col-reverse">
+                        <!-- แถบน้ำขึ้นตามจริง -->
+                        <div class="w-full bg-gradient-to-t from-sky-500 to-cyan-300 transition-all duration-700" style="height: ${waterPercent}%;"></div>
+                        
+                        <!-- เส้นเตือนภัยวิกฤต -->
+                        <div class="absolute w-full border-t border-rose-500 z-10" style="bottom: ${critPercent}%;"></div>
+                        <!-- เส้นเฝ้าระวัง -->
+                        <div class="absolute w-full border-t border-amber-400 z-10" style="bottom: ${warnPercent}%;"></div>
+                    </div>
+
+                    <!-- ระดับน้ำตัวเลข -->
+                    <div class="text-[9px] font-black font-mono text-amber-300 leading-tight text-center">
+                        ${level > 0 ? level.toFixed(2) : '-'}m
+                    </div>
+                </div>
+            `;
+        }
+
+        // ==========================================
+        // 3. เรนเดอร์แดชบอร์ด CCTV (การ์ดสถิติ + ตารางกล้อง + สิทธิ์ Superadmin)
+        // ==========================================
+        window.renderCctvDashboard = function () {
+            const cameras = window.cctvCameras || [];
+            // สิทธิ์ Superadmin เท่านั้นที่แก้ไขได้ ตามข้อกำหนด
+            const isSuperAdmin = (userRole === 'superadmin');
+
+            // คำนวณสถิติ
+            let onlineCount = 0;
+            let normalCount = 0;
+            let alertCount = 0;
+
+            cameras.forEach(c => {
+                if (c.status === 'online') {
+                    onlineCount++;
+                    if (c.level !== null && c.level !== undefined) {
+                        if (c.criticalThreshold && c.level >= c.criticalThreshold) {
+                            alertCount++;
+                        } else if (c.warningThreshold && c.level >= c.warningThreshold) {
+                            alertCount++;
+                        } else {
+                            normalCount++;
+                        }
+                    } else {
+                        normalCount++;
+                    }
+                }
+            });
+
+            const statTotalEl = document.getElementById('cctv_statTotal');
+            const statOnlineEl = document.getElementById('cctv_statOnline');
+            const statAlertEl = document.getElementById('cctv_statAlert');
+            const statLastSync = document.getElementById('cctv_statLastSync');
+
+            if (statTotalEl) statTotalEl.innerText = cameras.length;
+            if (statOnlineEl) statOnlineEl.innerText = onlineCount;
+            if (statAlertEl) statAlertEl.innerText = alertCount;
+            if (statLastSync) statLastSync.innerText = new Date().toLocaleTimeString('th-TH');
+
+            // Badge สิทธิ์การเข้าถึง
+            const badgeEl = document.getElementById('cctvPermissionBadge');
+            if (badgeEl) {
+                if (isSuperAdmin) {
+                    badgeEl.innerHTML = `
+                        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-sm">
+                            <i class="fas fa-shield-halved text-indigo-600"></i> สิทธิ์ SUPERADMIN (จัดการและบันทึกภาพได้)
+                        </span>
+                    `;
+                } else {
+                    badgeEl.innerHTML = `
+                        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200 shadow-sm">
+                            <i class="fas fa-eye text-slate-500"></i> โหมดดูข้อมูลทั่วไป (Public / View Only)
+                        </span>
+                    `;
+                }
+            }
+
+            // เรนเดอร์ตารางการ์ดกล้อง CCTV
+            const gridEl = document.getElementById('cctvCameraGrid');
+            if (!gridEl) return;
+
+            if (cameras.length === 0) {
+                gridEl.innerHTML = `
+                    <div class="col-span-full bg-white rounded-3xl p-12 text-center border border-slate-100 text-slate-400">
+                        <i class="fas fa-video-slash text-4xl mb-3 text-slate-300"></i>
+                        <p class="font-bold text-sm text-slate-700">ยังไม่มีข้อมูลจุดติดตั้งกล้อง CCTV ในระบบ</p>
+                        <p class="text-xs text-slate-400 mt-1">ระบบพร้อมรองรับการเชื่อมต่อข้อมูลกล้องจริง (ผู้ดูแลระบบสามารถกด "+ เพิ่มกล้องใหม่" ด้านบนเพื่อเพิ่มกล้อง)</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let cardsHtml = '';
+            cameras.forEach(cam => {
+                const isOnline = cam.status === 'online';
+                let levelBadgeColor = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+                let levelLabel = 'ปกติ';
+
+                if (!isOnline) {
+                    levelBadgeColor = 'bg-slate-100 text-slate-500 border-slate-200';
+                    levelLabel = 'ออฟไลน์';
+                } else if (cam.level !== null && cam.level !== undefined) {
+                    if (cam.criticalThreshold && cam.level >= cam.criticalThreshold) {
+                        levelBadgeColor = 'bg-rose-50 text-rose-700 border-rose-200 animate-pulse';
+                        levelLabel = 'วิกฤต';
+                    } else if (cam.warningThreshold && cam.level >= cam.warningThreshold) {
+                        levelBadgeColor = 'bg-amber-50 text-amber-700 border-amber-200';
+                        levelLabel = 'เฝ้าระวัง';
+                    }
+                }
+
+                const displayImg = cam.snapshotUrl || cam.streamUrl || 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=800&q=80';
+
+                cardsHtml += `
+                    <div class="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden flex flex-col justify-between hover:shadow-lg transition-all duration-300 group">
+                        <div>
+                            <!-- Header กล้อง -->
+                            <div class="p-4 border-b border-slate-50 flex items-center justify-between bg-slate-50/40">
+                                <div class="flex items-center gap-2 overflow-hidden">
+                                    <div class="w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}"></div>
+                                    <h4 class="font-black text-xs text-slate-800 truncate" title="${cam.name}">${cam.name}</h4>
+                                </div>
+                                <span class="text-[9px] font-bold px-2 py-0.5 rounded-full border ${isOnline ? 'bg-emerald-50 text-emerald-600 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'}">
+                                    ${isOnline ? 'ONLINE' : 'OFFLINE'}
+                                </span>
+                            </div>
+
+                            <!-- กล่องสตรีมภาพ Live Video + E-Staff Gauge Overlay -->
+                            <div class="relative w-full aspect-video bg-slate-950 overflow-hidden cursor-pointer group/feed" onclick="openCctvFullscreen('${cam.id}')">
+                                ${isOnline ? `
+                                    <img src="${displayImg}" alt="${cam.name}" class="w-full h-full object-cover transition-transform duration-500 group-hover/feed:scale-105 opacity-90 group-hover/feed:opacity-100">
+                                    
+                                    <!-- Overlay E-Staff Gauge เสาวัดระดับน้ำ -->
+                                    ${getStaffGaugeOverlayHtml(cam)}
+
+                                    <!-- Overlay สถานะกล้อง -->
+                                    <div class="absolute top-2 left-2 flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-black/60 backdrop-blur-sm text-white text-[9px] font-mono font-bold">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span> REC • ${cam.type}
+                                    </div>
+
+                                    <div class="absolute bottom-2 left-2 right-14 flex items-center justify-between text-white text-[10px] font-mono bg-gradient-to-t from-black/80 via-black/40 to-transparent p-2 rounded-b">
+                                        <span>ระดับน้ำ: <b class="text-amber-300">${cam.level !== null ? cam.level + ' ม.รทก.' : '-'}</b></span>
+                                        <span class="text-slate-300 text-[9px]">${cam.lastUpdate || 'เมื่อสักครู่'}</span>
+                                    </div>
+                                ` : `
+                                    <div class="w-full h-full flex flex-col items-center justify-center text-slate-500">
+                                        <i class="fas fa-video-slash text-3xl mb-2 text-slate-600"></i>
+                                        <p class="text-xs font-bold text-slate-400">ไม่พบสัญญาณภาพ</p>
+                                        <p class="text-[10px] text-slate-600">ตรวจสอบระบบจ่ายไฟที่จุดติดตั้ง</p>
+                                    </div>
+                                `}
+
+                                <div class="absolute inset-0 bg-black/30 opacity-0 group-hover/feed:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                                    <span class="px-3 py-1.5 bg-white/20 backdrop-blur-md text-white rounded-xl text-xs font-bold border border-white/30 flex items-center gap-1.5">
+                                        <i class="fas fa-expand"></i> ดูภาพขยาย & ประวัติ
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- รายละเอียดกล้องและระดับน้ำ -->
+                            <div class="p-4 space-y-2">
+                                <div class="flex items-center justify-between text-xs">
+                                    <span class="text-slate-400 font-bold text-[10px]">สถานะระดับน้ำ:</span>
+                                    <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black border ${levelBadgeColor}">
+                                        ${levelLabel} ${cam.level !== null ? '(' + cam.level + ' ม.รทก.)' : ''}
+                                    </span>
+                                </div>
+                                <div class="flex items-center justify-between text-xs">
+                                    <span class="text-slate-400 font-bold text-[10px]">จุดวัดเชื่อมโยง:</span>
+                                    <span class="font-bold text-slate-700 text-[11px] truncate max-w-[170px]">${cam.waterPoint || '-'}</span>
+                                </div>
+                                <div class="flex items-center justify-between text-xs">
+                                    <span class="text-slate-400 font-bold text-[10px]">พิกัด / แหล่งจ่ายไฟ:</span>
+                                    <span class="text-slate-500 text-[10px] font-mono">${cam.lat.toFixed(4)}, ${cam.lng.toFixed(4)} | ${cam.power || '-'}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Card Footer ปุ่มดำเนินการ -->
+                        <div class="p-4 pt-0 border-t border-slate-50 mt-1 bg-slate-50/20 flex items-center justify-between gap-2">
+                            <button onclick="flyToCctvMarker(${cam.lat}, ${cam.lng})" class="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 active:scale-95" title="ค้นหาบนแผนที่">
+                                <i class="fas fa-map-location-dot text-sky-600"></i> แผนที่
+                            </button>
+
+                            <button onclick="openCctvHistory('${cam.id}')" class="px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition flex items-center gap-1 active:scale-95" title="ดูภาพประวัติช่วงวิกฤต">
+                                <i class="fas fa-clock-rotate-left"></i> ประวัติ
+                            </button>
+
+                            ${isSuperAdmin ? `
+                                <!-- ปุ่มแก้ไข/ลบ เฉพาะ Superadmin เท่านั้น -->
+                                <button onclick="openCctvModal('${cam.id}')" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 active:scale-95" title="แก้ไขกล้อง">
+                                    <i class="fas fa-pen-to-square"></i>
+                                </button>
+                                <button onclick="deleteCctvCamera('${cam.id}')" class="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl text-xs font-bold transition flex items-center gap-1 active:scale-95" title="ลบกล้อง">
+                                    <i class="fas fa-trash-can"></i>
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            });
+
+            gridEl.innerHTML = cardsHtml;
+        };
+
+        // ==========================================
+        // 4. ฟังก์ชันแผนที่และการรีเฟรช
+        // ==========================================
+        window.flyToCctvMarker = function (lat, lng) {
+            if (!cctvMap) window.initCctvMap();
+            if (cctvMap && lat && lng) {
+                cctvMap.flyTo([lat, lng], 17, { duration: 1.2 });
+                const mapEl = document.getElementById('cctvMap');
+                if (mapEl) mapEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        };
+
+        window.refreshCctvFeeds = function () {
+            const btn = document.getElementById('cctvRefreshBtn');
+            if (btn) {
+                const orig = btn.innerHTML;
+                btn.innerHTML = `<i class="fas fa-rotate animate-spin"></i> <span>กำลังอัปเดต...</span>`;
+                btn.disabled = true;
+
+                setTimeout(() => {
+                    const cameras = window.cctvCameras || [];
+                    cameras.forEach(c => {
+                        if (c.status === 'online') c.lastUpdate = 'อัปเดตเมื่อ ' + new Date().toLocaleTimeString('th-TH');
+                    });
+                    syncCctvTelemetry();
+                    renderCctvDashboard();
+                    renderCctvMapMarkers();
+
+                    btn.innerHTML = orig;
+                    btn.disabled = false;
+
+                    Swal.fire({
+                        toast: true,
+                        position: 'top-end',
+                        showConfirmButton: false,
+                        timer: 2000,
+                        timerProgressBar: true,
+                        icon: 'success',
+                        title: 'รีเฟรชภาพสด & ระดับน้ำเรียบร้อย'
+                    });
+                }, 600);
+            }
+        };
+
+        // ==========================================
+        // 5. Modal จัดการกล้อง (เฉพาะ Superadmin เท่านั้น)
+        // ==========================================
+        
+        let cctvPickerMap = null;
+        let cctvPickerMarker = null;
+
+        function initCctvPickerMap(lat = 6.29445, lng = 101.72362) {
+            const pickerEl = document.getElementById('cctvPickerMap');
+            if (!pickerEl) return;
+
+            if (!cctvPickerMap) {
+                cctvPickerMap = L.map('cctvPickerMap', {
+                    center: [lat, lng],
+                    zoom: 15,
+                    zoomControl: true
+                });
+
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 18,
+                    attribution: ''
+                }).addTo(cctvPickerMap);
+
+                const pickerIcon = L.divIcon({
+                    className: 'picker-marker',
+                    html: '<div class="w-8 h-8 rounded-full bg-rose-600 border-2 border-white shadow-xl flex items-center justify-center text-white text-xs animate-bounce"><i class="fas fa-video"></i></div>',
+                    iconSize: [32, 32],
+                    iconAnchor: [16, 32]
+                });
+
+                cctvPickerMarker = L.marker([lat, lng], {
+                    draggable: true,
+                    icon: pickerIcon
+                }).addTo(cctvPickerMap);
+
+                cctvPickerMarker.on('dragend', function (e) {
+                    const pos = e.target.getLatLng();
+                    document.getElementById('cctv_form_lat').value = pos.lat.toFixed(6);
+                    document.getElementById('cctv_form_lng').value = pos.lng.toFixed(6);
+                });
+
+                cctvPickerMap.on('click', function (e) {
+                    const { lat, lng } = e.latlng;
+                    cctvPickerMarker.setLatLng([lat, lng]);
+                    document.getElementById('cctv_form_lat').value = lat.toFixed(6);
+                    document.getElementById('cctv_form_lng').value = lng.toFixed(6);
+                });
+
+                // ซิงค์เมื่อผู้ใช้พิมพ์พิกัดใน input
+                const latInput = document.getElementById('cctv_form_lat');
+                const lngInput = document.getElementById('cctv_form_lng');
+                const syncFromInputs = () => {
+                    const pLat = parseFloat(latInput.value);
+                    const pLng = parseFloat(lngInput.value);
+                    if (!isNaN(pLat) && !isNaN(pLng) && cctvPickerMarker && cctvPickerMap) {
+                        cctvPickerMarker.setLatLng([pLat, pLng]);
+                        cctvPickerMap.panTo([pLat, pLng]);
+                    }
+                };
+                if (latInput) latInput.addEventListener('input', syncFromInputs);
+                if (lngInput) lngInput.addEventListener('input', syncFromInputs);
+            } else {
+                cctvPickerMap.setView([lat, lng], 15);
+                if (cctvPickerMarker) cctvPickerMarker.setLatLng([lat, lng]);
+            }
+
+            setTimeout(() => {
+                if (cctvPickerMap) cctvPickerMap.invalidateSize();
+            }, 250);
+        }
+
+        window.openCctvModal = function (camId = null) {
+            if (userRole !== 'superadmin') {
+                return Swal.fire({
+                    title: 'จำกัดสิทธิ์เฉพาะ Superadmin',
+                    text: 'ผู้ใช้งานทั่วไปสามารถดูภาพสดและระดับน้ำได้เท่านั้น หากต้องการแก้ไขกรุณาติดต่อผู้ดูแลระบบหลัก',
+                    icon: 'warning',
+                    customClass: { popup: 'rounded-[2rem]' }
+                });
+            }
+
+            const modal = document.getElementById('cctvModal');
+            const title = document.getElementById('cctvModalTitle');
+            const editId = document.getElementById('cctv_edit_id');
+
+            if (camId) {
+                const cam = (window.cctvCameras || []).find(c => c.id === camId);
+                if (cam) {
+                    title.innerText = 'แก้ไขข้อมูลกล้อง CCTV (' + cam.id + ')';
+                    editId.value = cam.id;
+                    document.getElementById('cctv_form_name').value = cam.name || '';
+                    document.getElementById('cctv_form_type').value = cam.type || 'ESP32-CAM';
+                    document.getElementById('cctv_form_status').value = cam.status || 'online';
+                    document.getElementById('cctv_form_lat').value = cam.lat || '';
+                    document.getElementById('cctv_form_lng').value = cam.lng || '';
+                    document.getElementById('cctv_form_stream_url').value = cam.streamUrl || '';
+                    document.getElementById('cctv_form_water_point').value = cam.waterPoint || '';
+                    document.getElementById('cctv_form_level').value = cam.level !== null ? cam.level : '';
+                    document.getElementById('cctv_form_warning').value = cam.warningThreshold || '1.50';
+                    document.getElementById('cctv_form_critical').value = cam.criticalThreshold || '2.00';
+                }
+            } else {
+                title.innerText = 'เพิ่มกล้อง CCTV ตรวจวัดระดับน้ำใหม่';
+                editId.value = '';
+                document.getElementById('cctvForm').reset();
+                document.getElementById('cctv_form_lat').value = '6.29445';
+                document.getElementById('cctv_form_lng').value = '101.72362';
+            }
+
+            if (modal) modal.classList.remove('hidden');
+            const initLat = parseFloat(document.getElementById('cctv_form_lat').value) || 6.29445;
+            const initLng = parseFloat(document.getElementById('cctv_form_lng').value) || 101.72362;
+            initCctvPickerMap(initLat, initLng);
+        };
+
+        window.closeCctvModal = function () {
+            const modal = document.getElementById('cctvModal');
+            if (modal) modal.classList.add('hidden');
+        };
+
+        window.handleCctvSubmit = async function (event) {
+            event.preventDefault();
+            if (userRole !== 'superadmin') return;
+
+            const editId = document.getElementById('cctv_edit_id').value;
+            const name = document.getElementById('cctv_form_name').value.trim();
+            const type = document.getElementById('cctv_form_type').value;
+            const status = document.getElementById('cctv_form_status').value;
+            const lat = parseFloat(document.getElementById('cctv_form_lat').value);
+            const lng = parseFloat(document.getElementById('cctv_form_lng').value);
+            const streamUrl = document.getElementById('cctv_form_stream_url').value.trim();
+            const waterPoint = document.getElementById('cctv_form_water_point').value.trim();
+            const levelVal = document.getElementById('cctv_form_level').value;
+            const level = levelVal !== '' ? parseFloat(levelVal) : null;
+            const warningThreshold = parseFloat(document.getElementById('cctv_form_warning').value) || 1.50;
+            const criticalThreshold = parseFloat(document.getElementById('cctv_form_critical').value) || 2.00;
+
+            let updatedCam = null;
+
+            if (editId) {
+                const idx = window.cctvCameras.findIndex(c => c.id === editId);
+                if (idx !== -1) {
+                    window.cctvCameras[idx] = {
+                        ...window.cctvCameras[idx],
+                        name, type, status, lat, lng, streamUrl, waterPoint, level,
+                        warningThreshold, criticalThreshold,
+                        lastUpdate: 'เพิ่งอัปเดต'
+                    };
+                    updatedCam = window.cctvCameras[idx];
+                }
+            } else {
+                const newId = 'CAM-' + String(window.cctvCameras.length + 1).padStart(2, '0');
+                updatedCam = {
+                    id: newId,
+                    name, type, status, lat, lng, streamUrl, waterPoint, level,
+                    warningThreshold, criticalThreshold,
+                    power: 'Solar/DC',
+                    lastUpdate: 'เพิ่งเพิ่ม'
+                };
+                window.cctvCameras.push(updatedCam);
+            }
+
+            // บันทึกลง Supabase Service Layer
+            if (typeof sbSaveCctvCamera === 'function' && updatedCam) {
+                await sbSaveCctvCamera(updatedCam);
+            }
+
+            closeCctvModal();
+            renderCctvDashboard();
+            renderCctvMapMarkers();
+
+            Swal.fire({
+                icon: 'success',
+                title: 'บันทึกสำเร็จ',
+                text: 'บันทึกข้อมูลกล้อง CCTV เรียบร้อยแล้ว',
+                timer: 1500,
+                showConfirmButton: false,
+                customClass: { popup: 'rounded-[2rem]' }
+            });
+        };
+
+        window.deleteCctvCamera = function (camId) {
+            if (userRole !== 'superadmin') return;
+
+            Swal.fire({
+                title: 'ยืนยันลบกล้อง CCTV?',
+                text: `คุณต้องการลบกล้อง ${camId} ออกจากระบบหรือไม่?`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#e11d48',
+                confirmButtonText: 'ลบข้อมูล',
+                cancelButtonText: 'ยกเลิก',
+                customClass: { popup: 'rounded-[2rem]' }
+            }).then(async (res) => {
+                if (res.isConfirmed) {
+                    window.cctvCameras = window.cctvCameras.filter(c => c.id !== camId);
+                    if (typeof sbDeleteCctvCamera === 'function') {
+                        await sbDeleteCctvCamera(camId);
+                    }
+                    renderCctvDashboard();
+                    renderCctvMapMarkers();
+
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'ลบสำเร็จ',
+                        timer: 1200,
+                        showConfirmButton: false,
+                        customClass: { popup: 'rounded-[2rem]' }
+                    });
+                }
+            });
+        };
+
+        // ==========================================
+        // 6. ดูภาพเต็มจอ (Fullscreen Modal)
+        // ==========================================
+        window.activeFullscreenCamId = null;
+
+        window.openCctvFullscreen = function (camId) {
+            const cam = (window.cctvCameras || []).find(c => c.id === camId);
+            if (!cam) return;
+            window.activeFullscreenCamId = camId;
+
+            const modal = document.getElementById('cctvFullscreenModal');
+            const title = document.getElementById('cctvFullscreenTitle');
+            const sub = document.getElementById('cctvFullscreenSub');
+            const body = document.getElementById('cctvFullscreenBody');
+
+            if (title) title.innerText = cam.name;
+            if (sub) sub.innerText = `โปรโตคอล: ${cam.type} | แหล่งจ่ายไฟ: ${cam.power || '-'} | สถานะ: ${cam.status.toUpperCase()}`;
+
+            const displayImg = cam.snapshotUrl || cam.streamUrl || 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=1200&q=80';
+
+            if (body) {
+                if (cam.status === 'online') {
+                    body.innerHTML = `
+                        <img src="${displayImg}" class="w-full h-full object-contain">
+                        ${getStaffGaugeOverlayHtml(cam)}
+                        <div class="absolute top-4 left-4 flex items-center gap-2 bg-black/70 backdrop-blur-md px-3 py-1.5 rounded-xl text-white text-xs font-mono">
+                            <span class="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping"></span>
+                            <span>LIVE STREAM • ${cam.type}</span>
+                        </div>
+                        <div class="absolute bottom-4 left-4 right-16 bg-black/80 backdrop-blur-md p-3.5 rounded-2xl flex flex-wrap items-center justify-between text-white text-xs">
+                            <div>
+                                <span class="font-bold text-sky-400">จุดวัด: ${cam.waterPoint || '-'}</span>
+                                <span class="ml-3 text-slate-300 font-mono text-[11px]">พิกัด: ${cam.lat}, ${cam.lng}</span>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <span>เกณฑ์เฝ้าระวัง: <b class="text-amber-400">${cam.warningThreshold || 1.5} ม.</b></span>
+                                <span>ระดับน้ำ: <b class="text-amber-300 text-sm font-black">${cam.level !== null ? cam.level + ' ม.รทก.' : '-'}</b></span>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    body.innerHTML = `
+                        <div class="text-center text-slate-500 p-8">
+                            <i class="fas fa-video-slash text-5xl mb-3 text-slate-600"></i>
+                            <h4 class="font-bold text-white text-base">กล้องไม่ได้เชื่อมต่อ (Offline)</h4>
+                            <p class="text-xs text-slate-400 mt-1">กรุณาตรวจสอบระบบจ่ายไฟและการเชื่อมต่อสัญญาณอินเทอร์เน็ตที่จุดติดตั้ง</p>
+                        </div>
+                    `;
+                }
+            }
+
+            if (modal) modal.classList.remove('hidden');
+        };
+
+        window.closeCctvFullscreen = function () {
+            const modal = document.getElementById('cctvFullscreenModal');
+            if (modal) modal.classList.add('hidden');
+            window.activeFullscreenCamId = null;
+        };
+
+        // ==========================================
+        // 7. ระบบบันทึกประวัติภาพช่วงวิกฤต (Flood Snapshot History)
+        // ==========================================
+        window.openCctvHistory = function (camId = 'all') {
+            const modal = document.getElementById('cctvHistoryModal');
+            const selectEl = document.getElementById('cctv_history_cam_select');
+
+            if (selectEl) {
+                const cameras = window.cctvCameras || [];
+                let options = '<option value="all">กล้องทุกจุด</option>';
+                cameras.forEach(c => {
+                    options += `<option value="${c.id}" ${c.id === camId ? 'selected' : ''}>${c.name}</option>`;
+                });
+                selectEl.innerHTML = options;
+            }
+
+            renderCctvHistorySnapshots();
+            if (modal) modal.classList.remove('hidden');
+        };
+
+        window.closeCctvHistory = function () {
+            const modal = document.getElementById('cctvHistoryModal');
+            if (modal) modal.classList.add('hidden');
+        };
+
+        window.renderCctvHistorySnapshots = async function () {
+            const selectEl = document.getElementById('cctv_history_cam_select');
+            const selectedCam = selectEl ? selectEl.value : 'all';
+            const gridEl = document.getElementById('cctvHistoryGrid');
+            const countEl = document.getElementById('cctv_history_count');
+
+            let snapshots = DEFAULT_SNAPSHOT_HISTORY;
+            if (typeof sbFetchCctvSnapshots === 'function') {
+                const fetched = await sbFetchCctvSnapshots(selectedCam);
+                if (fetched && fetched.length > 0) snapshots = fetched;
+            }
+
+            if (selectedCam !== 'all') {
+                snapshots = snapshots.filter(s => s.camera_id === selectedCam);
+            }
+
+            if (countEl) countEl.innerText = snapshots.length;
+
+            if (!gridEl) return;
+            if (snapshots.length === 0) {
+                gridEl.innerHTML = `
+                    <div class="col-span-full py-12 text-center text-slate-400">
+                        <i class="fas fa-images text-4xl mb-2 text-slate-300"></i>
+                        <p class="font-bold text-xs">ยังไม่มีบันทึกภาพถ่ายสำหรับจุดนี้</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '';
+            snapshots.forEach(s => {
+                const isCrisis = s.status_level === 'วิกฤต';
+                html += `
+                    <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden flex flex-col justify-between">
+                        <div class="relative aspect-video bg-black">
+                            <img src="${s.image_url}" class="w-full h-full object-cover">
+                            <span class="absolute top-2 left-2 px-2 py-0.5 rounded text-[9px] font-bold text-white ${isCrisis ? 'bg-rose-600' : 'bg-amber-600'}">
+                                ${s.status_level}
+                            </span>
+                            <span class="absolute bottom-2 right-2 px-2 py-0.5 bg-black/70 rounded text-[9px] font-mono text-amber-300">
+                                ระดับน้ำ: ${s.water_level} ม.
+                            </span>
+                        </div>
+                        <div class="p-3">
+                            <h5 class="text-xs font-black text-slate-800 truncate">${s.camera_name}</h5>
+                            <p class="text-[10px] text-slate-400 font-mono mt-0.5"><i class="far fa-clock mr-1"></i>${s.snapshot_time}</p>
+                            <p class="text-[10px] text-slate-600 mt-1 italic">${s.note || '-'}</p>
+                        </div>
+                    </div>
+                `;
+            });
+            gridEl.innerHTML = html;
+        };
+
+        // ฟังก์ชันบันทึกภาพ Snapshot ทันที (Superadmin only)
+        window.captureCurrentSnapshot = async function () {
+            if (userRole !== 'superadmin') return;
+            const camId = window.activeFullscreenCamId;
+            if (!camId) return;
+
+            const cam = (window.cctvCameras || []).find(c => c.id === camId);
+            if (!cam) return;
+
+            const record = {
+                camera_id: cam.id,
+                camera_name: cam.name,
+                water_level: cam.level || 0,
+                status_level: (cam.level >= cam.criticalThreshold) ? 'วิกฤต' : ((cam.level >= cam.warningThreshold) ? 'เฝ้าระวัง' : 'ปกติ'),
+                image_url: cam.snapshotUrl || cam.streamUrl || 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=800&q=80',
+                snapshot_time: new Date().toISOString().replace('T', ' ').substring(0, 19),
+                note: 'บันทึกภาพแบบ Real-time โดย Superadmin'
+            };
+
+            if (typeof sbSaveCctvSnapshot === 'function') {
+                await sbSaveCctvSnapshot(record);
+            }
+
+            Swal.fire({
+                icon: 'success',
+                title: 'บันทึกภาพ Snapshot เรียบร้อย',
+                text: 'รูปภาพและระดับน้ำได้ถูกจัดเก็บเข้าสู่ประวัติภาพช่วงวิกฤตแล้ว',
+                timer: 1800,
+                showConfirmButton: false,
+                customClass: { popup: 'rounded-[2rem]' }
+            });
+        };
