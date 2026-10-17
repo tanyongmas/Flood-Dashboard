@@ -4438,7 +4438,7 @@ let dashLayerStates = {
             const critPercent = Math.min((crit / maxGauge) * 100, 100);
 
             return `
-                <div class="absolute right-2 top-2 bottom-8 w-11 bg-black/70 backdrop-blur-md rounded-xl border border-white/20 p-1 flex flex-col justify-between items-center text-white pointer-events-none z-20">
+                <div class="absolute right-2 top-2 bottom-8 w-9 sm:w-11 bg-black/70 backdrop-blur-md rounded-xl border border-white/20 p-0.5 sm:p-1 flex flex-col justify-between items-center text-white pointer-events-none z-20">
                     <div class="text-[8px] font-black font-mono text-sky-300 border-b border-white/20 pb-0.5 w-full text-center">GAUGE</div>
                     
                     <!-- แท่งสเกลเสาวัด -->
@@ -4555,10 +4555,10 @@ let dashLayerStates = {
                 const displayImg = cam.snapshotUrl || cam.streamUrl || 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=800&q=80';
 
                 cardsHtml += `
-                    <div class="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden flex flex-col justify-between hover:shadow-lg transition-all duration-300 group">
+                    <div class="bg-white rounded-2xl sm:rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden flex flex-col justify-between hover:shadow-lg transition-all duration-300 group">
                         <div>
                             <!-- Header กล้อง -->
-                            <div class="p-4 border-b border-slate-50 flex items-center justify-between bg-slate-50/40">
+                            <div class="p-3 sm:p-4 border-b border-slate-50 flex items-center justify-between bg-slate-50/40">
                                 <div class="flex items-center gap-2 overflow-hidden">
                                     <div class="w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}"></div>
                                     <h4 class="font-black text-xs text-slate-800 truncate" title="${cam.name}">${cam.name}</h4>
@@ -4601,7 +4601,7 @@ let dashLayerStates = {
                             </div>
 
                             <!-- รายละเอียดกล้องและระดับน้ำ -->
-                            <div class="p-4 space-y-2">
+                            <div class="p-3 sm:p-4 space-y-1.5 sm:space-y-2">
                                 <div class="flex items-center justify-between text-xs">
                                     <span class="text-slate-400 font-bold text-[10px]">สถานะระดับน้ำ:</span>
                                     <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black border ${levelBadgeColor}">
@@ -4620,21 +4620,21 @@ let dashLayerStates = {
                         </div>
 
                         <!-- Card Footer ปุ่มดำเนินการ -->
-                        <div class="p-4 pt-0 border-t border-slate-50 mt-1 bg-slate-50/20 flex items-center justify-between gap-2">
-                            <button onclick="flyToCctvMarker(${cam.lat}, ${cam.lng})" class="flex-1 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 active:scale-95" title="ค้นหาบนแผนที่">
+                        <div class="p-3 sm:p-4 pt-0 border-t border-slate-50 mt-1 bg-slate-50/20 flex items-center justify-between gap-1.5 sm:gap-2">
+                            <button onclick="flyToCctvMarker(${cam.lat}, ${cam.lng})" class="flex-1 py-1.5 sm:py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[11px] sm:text-xs font-bold transition flex items-center justify-center gap-1 active:scale-95" title="ค้นหาบนแผนที่">
                                 <i class="fas fa-map-location-dot text-sky-600"></i> แผนที่
                             </button>
 
-                            <button onclick="openCctvHistory('${cam.id}')" class="px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition flex items-center gap-1 active:scale-95" title="ดูภาพประวัติช่วงวิกฤต">
+                            <button onclick="openCctvHistory('${cam.id}')" class="px-2.5 sm:px-3 py-1.5 sm:py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-[11px] sm:text-xs font-bold transition flex items-center justify-center gap-1 active:scale-95" title="ดูภาพประวัติช่วงวิกฤต">
                                 <i class="fas fa-clock-rotate-left"></i> ประวัติ
                             </button>
 
                             ${isSuperAdmin ? `
                                 <!-- ปุ่มแก้ไข/ลบ เฉพาะ Superadmin เท่านั้น -->
-                                <button onclick="openCctvModal('${cam.id}')" class="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition flex items-center gap-1 active:scale-95" title="แก้ไขกล้อง">
+                                <button onclick="openCctvModal('${cam.id}')" class="px-2.5 sm:px-3 py-1.5 sm:py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-[11px] sm:text-xs font-bold transition flex items-center justify-center active:scale-95" title="แก้ไขกล้อง">
                                     <i class="fas fa-pen-to-square"></i>
                                 </button>
-                                <button onclick="deleteCctvCamera('${cam.id}')" class="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl text-xs font-bold transition flex items-center gap-1 active:scale-95" title="ลบกล้อง">
+                                <button onclick="deleteCctvCamera('${cam.id}')" class="px-2.5 sm:px-3 py-1.5 sm:py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl text-[11px] sm:text-xs font-bold transition flex items-center justify-center active:scale-95" title="ลบกล้อง">
                                     <i class="fas fa-trash-can"></i>
                                 </button>
                             ` : ''}

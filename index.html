@@ -203,11 +203,6 @@
                     data-page="looker" title="รายงานสรุปข้อมูลน้ำท่วม">
                     <i class="fas fa-chart-pie text-[22px]"></i>
                 </button>
-                <button onclick="showPage('cctv')"
-                    class="mobile-nav-btn flex items-center justify-center text-slate-400 hover:text-blue-600 transition-colors w-full h-full"
-                    data-page="cctv" title="กล้อง CCTV">
-                    <i class="fas fa-video text-[22px]"></i>
-                </button>
             </div>
         </div>
 
@@ -228,13 +223,13 @@
                 </button>
 
                 <!-- ⚙️ จัดการผู้ใช้งานระบบ (Admin Only) -->
-                                <!-- 📹 กล้อง CCTV ตรวจวัดระดับน้ำ -->
+                                <!-- 📹 กล้อง CCTV -->
                 <button onclick="showPage('cctv'); toggleMoreMenu();"
                     class="w-full flex items-center space-x-4 p-3 hover:bg-sky-50 rounded-2xl text-slate-700 transition-colors"
                     data-page="cctv">
                     <div class="w-8 h-8 rounded-full bg-sky-100 text-sky-600 flex items-center justify-center"><i
                             class="fas fa-video"></i></div>
-                    <span class="font-bold text-sm">กล้อง CCTV ตรวจวัดระดับน้ำ</span>
+                    <span class="font-bold text-sm">กล้อง CCTV</span>
                 </button>
 
 <button onclick="showPage('userManagement'); toggleMoreMenu();"
@@ -3041,160 +3036,162 @@
                     </div>
                 </section>
 
-            </div>
-        
                 <!-- ========================================================================= -->
                 <!-- 📹 หน้าที่ 9: ระบบกล้อง CCTV ตรวจวัดระดับน้ำ (CCTV Flood Monitoring) -->
                 <!-- ========================================================================= -->
-                <section id="cctvPage" class="page-section hidden max-w-7xl mx-auto space-y-6 fade-in pb-12">
-                    <!-- ส่วนหัวข้อและแบนเนอร์ระบบ -->
-                    <div class="relative bg-gradient-to-r from-slate-900 via-sky-950 to-indigo-950 p-6 md:p-8 rounded-[2.5rem] shadow-xl border border-sky-500/20 overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div class="absolute -top-24 -left-24 w-72 h-72 bg-sky-500/10 rounded-full blur-3xl pointer-events-none"></div>
-                        <div class="absolute -bottom-24 -right-24 w-72 h-72 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
+                <section id="cctvPage" class="content-page hidden animate-fade-in">
+                    <!-- 🌟 กล่องพื้นหลังสีขาวใหญ่แบบเดียวกับหน้ารายงานสถานะ (Evacuation Page Pattern) -->
+                    <div class="bg-white p-4 md:p-6 rounded-[2rem] shadow-sm border border-blue-50 mb-8 max-w-7xl mx-auto flex flex-col space-y-6">
 
-                        <div class="relative z-10 flex items-center gap-4">
-                            <div class="w-14 h-14 bg-sky-500/20 backdrop-blur-md rounded-2xl flex items-center justify-center text-sky-400 border border-sky-400/30 shadow-inner shrink-0">
-                                <i class="fas fa-video text-2xl drop-shadow-sm"></i>
+                        <!-- ส่วนหัวและแบนเนอร์ระบบ -->
+                        <div class="flex flex-col md:flex-row justify-between md:items-center gap-4 border-b border-slate-100 pb-4">
+                            <div class="flex items-center gap-3.5">
+                                <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-sky-600 text-white flex items-center justify-center text-xl shadow-md shadow-indigo-100 shrink-0">
+                                    <i class="fas fa-video"></i>
+                                </div>
+                                <div>
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <h3 class="text-lg md:text-xl font-black text-slate-800 tracking-tight">
+                                            ระบบกล้อง CCTV ตรวจวัดระดับน้ำ
+                                        </h3>
+                                        <span class="px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-mono font-bold flex items-center gap-1">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> LIVE
+                                        </span>
+                                    </div>
+                                    <p class="text-[11px] md:text-xs text-slate-400 font-bold uppercase mt-0.5">
+                                        CCTV Flood Monitoring & Real-time Telemetry
+                                    </p>
+                                </div>
                             </div>
-                            <div>
+
+                            <!-- ปุ่มดำเนินการด่วน -->
+                            <div class="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 w-full md:w-auto">
+                                <button onclick="refreshCctvFeeds()" id="cctvRefreshBtn"
+                                    class="w-full sm:w-auto px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-2 active:scale-95">
+                                    <i class="fas fa-rotate text-sky-600"></i>
+                                    <span>รีเฟรชภาพสด</span>
+                                </button>
+
+                                <button onclick="openCctvHistory()"
+                                    class="w-full sm:w-auto px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl font-bold text-xs border border-indigo-100 transition-all flex items-center justify-center gap-2 active:scale-95">
+                                    <i class="fas fa-clock-rotate-left text-indigo-600"></i>
+                                    <span>ประวัติภาพวิกฤต</span>
+                                </button>
+
+                                <!-- ปุ่มเพิ่มกล้อง (เฉพาะ Superadmin) -->
+                                <button onclick="openCctvModal()"
+                                    class="superadmin-only hidden col-span-2 sm:col-span-1 w-full sm:w-auto px-4 py-2.5 bg-sky-500 hover:bg-sky-600 text-white rounded-xl font-bold text-xs shadow-md shadow-sky-200 transition-all flex items-center justify-center gap-2 active:scale-95">
+                                    <i class="fas fa-plus-circle"></i>
+                                    <span>เพิ่มกล้องใหม่</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- การ์ดสรุปสถานะกล้องวงจรปิด (4 KPI Cards) -->
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+                            <div class="bg-slate-50/80 rounded-2xl p-4 border border-slate-100 flex items-center gap-3">
+                                <div class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-sky-100 text-sky-600 flex items-center justify-center text-lg shrink-0">
+                                    <i class="fas fa-video"></i>
+                                </div>
+                                <div class="min-w-0">
+                                    <p class="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase truncate">กล้องทั้งหมด</p>
+                                    <h3 id="cctv_statTotal" class="text-xl sm:text-2xl font-black text-slate-800 leading-tight">0</h3>
+                                    <p class="text-[9px] text-slate-400 truncate">จุดติดตั้งในพื้นที่</p>
+                                </div>
+                            </div>
+
+                            <div class="bg-slate-50/80 rounded-2xl p-4 border border-slate-100 flex items-center gap-3">
+                                <div class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center text-lg shrink-0">
+                                    <i class="fas fa-signal"></i>
+                                </div>
+                                <div class="min-w-0">
+                                    <p class="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase truncate">ออนไลน์ปกติ</p>
+                                    <h3 id="cctv_statOnline" class="text-xl sm:text-2xl font-black text-emerald-600 leading-tight">0</h3>
+                                    <p class="text-[9px] text-emerald-600 font-bold truncate">ส่งสัญญาณภาพสด</p>
+                                </div>
+                            </div>
+
+                            <div class="bg-slate-50/80 rounded-2xl p-4 border border-slate-100 flex items-center gap-3">
+                                <div class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center text-lg shrink-0">
+                                    <i class="fas fa-triangle-exclamation"></i>
+                                </div>
+                                <div class="min-w-0">
+                                    <p class="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase truncate">เฝ้าระวัง/วิกฤต</p>
+                                    <h3 id="cctv_statAlert" class="text-xl sm:text-2xl font-black text-rose-600 leading-tight">0</h3>
+                                    <p class="text-[9px] text-rose-600 font-bold truncate">ระดับน้ำเกินเกณฑ์</p>
+                                </div>
+                            </div>
+
+                            <div class="bg-slate-50/80 rounded-2xl p-4 border border-slate-100 flex items-center gap-3">
+                                <div class="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center text-lg shrink-0">
+                                    <i class="fas fa-camera"></i>
+                                </div>
+                                <div class="min-w-0">
+                                    <p class="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase truncate">ภาพบันทึกล่าสุด</p>
+                                    <h3 id="cctv_statLastSync" class="text-xs sm:text-sm font-black text-slate-800 leading-tight truncate">เมื่อสักครู่</h3>
+                                    <p class="text-[9px] text-indigo-600 font-bold truncate">Telemetry Sync</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- ส่วนแสดงแผนที่พิกัดกล้อง CCTV -->
+                        <div class="rounded-2xl border border-slate-100 overflow-hidden shadow-xs">
+                            <div class="p-3.5 sm:p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-slate-50/50">
                                 <div class="flex items-center gap-2">
-                                    <h1 class="text-2xl md:text-3xl font-black text-white tracking-tight drop-shadow-md">
-                                        ระบบกล้อง CCTV ตรวจวัดระดับน้ำ
-                                    </h1>
-                                    <span class="px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-[10px] font-mono font-bold flex items-center gap-1">
-                                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> LIVE
+                                    <div class="w-1.5 h-5 bg-sky-500 rounded-full"></div>
+                                    <h4 class="text-xs sm:text-sm font-black text-slate-700 uppercase tracking-wider">
+                                        แผนที่พิกัดจุดติดตั้งกล้อง CCTV และสถานะระดับน้ำ
+                                    </h4>
+                                </div>
+                                <div>
+                                    <span class="text-[9px] sm:text-[10px] text-slate-500 font-bold bg-white px-2.5 py-1 rounded-xl border border-slate-100 shadow-xs inline-flex items-center gap-1.5">
+                                        <i class="fas fa-location-crosshairs text-sky-500"></i> คลิกหมุดเพื่อดูภาพสดและระดับน้ำ
                                     </span>
                                 </div>
-                                <p class="text-sky-200/80 text-xs md:text-sm font-medium mt-1">
-                                    ศูนย์เฝ้าระวังอุทกภัย เทศบาลตำบลตันหยงมัส ถ่ายทอดสดภาพกล้อง & เชื่อมโยงระดับน้ำ Telemetry Real-time
-                                </p>
+                            </div>
+                            <div id="cctvMap" class="w-full h-[280px] sm:h-[380px] md:h-[460px] bg-slate-100 relative z-10"></div>
+                            <div class="p-3 sm:p-3.5 bg-slate-50/70 border-t border-slate-100 grid grid-cols-2 sm:flex sm:flex-wrap gap-2 sm:gap-4 sm:justify-center text-[10px] sm:text-xs font-bold text-slate-600">
+                                <div class="flex items-center space-x-1.5">
+                                    <div class="w-3 h-3 rounded-full bg-emerald-500 border border-white shadow-xs shrink-0"></div>
+                                    <span class="truncate">ระดับน้ำปกติ (เขียว)</span>
+                                </div>
+                                <div class="flex items-center space-x-1.5">
+                                    <div class="w-3 h-3 rounded-full bg-amber-500 border border-white shadow-xs shrink-0"></div>
+                                    <span class="truncate">เฝ้าระวัง (เหลือง)</span>
+                                </div>
+                                <div class="flex items-center space-x-1.5">
+                                    <div class="w-3 h-3 rounded-full bg-rose-500 border border-white shadow-xs animate-pulse shrink-0"></div>
+                                    <span class="truncate">วิกฤต (แดง)</span>
+                                </div>
+                                <div class="flex items-center space-x-1.5">
+                                    <div class="w-3 h-3 rounded-full bg-slate-400 border border-white shadow-xs shrink-0"></div>
+                                    <span class="truncate">ออฟไลน์ (เทา)</span>
+                                </div>
                             </div>
                         </div>
 
-                        <!-- ปุ่มดำเนินการด่วน -->
-                        <div class="relative z-10 flex flex-wrap items-center gap-2.5">
-                            <button onclick="refreshCctvFeeds()" id="cctvRefreshBtn"
-                                class="px-4 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl font-bold text-xs backdrop-blur-md border border-white/20 transition-all flex items-center gap-2 shadow-sm active:scale-95">
-                                <i class="fas fa-rotate"></i>
-                                <span>รีเฟรชภาพสด</span>
-                            </button>
+                        <!-- ตารางการ์ดแสดงผลภาพสด Live Feed & Staff Gauge -->
+                        <div class="space-y-3 sm:space-y-4 pt-2">
+                            <div class="flex items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-1.5 h-5 bg-indigo-500 rounded-full"></div>
+                                    <h4 class="text-xs sm:text-sm font-black text-slate-700 uppercase tracking-wider">
+                                        สตรีมภาพสด & เสาวัดระดับน้ำ (Live Feeds & E-Staff Gauge)
+                                    </h4>
+                                </div>
+                                <div id="cctvPermissionBadge">
+                                    <!-- Badge แสดงสถานะสิทธิ์ -->
+                                </div>
+                            </div>
 
-                            <button onclick="openCctvHistory()"
-                                class="px-4 py-2.5 bg-indigo-600/80 hover:bg-indigo-600 text-white rounded-xl font-bold text-xs backdrop-blur-md border border-indigo-400/30 transition-all flex items-center gap-2 shadow-sm active:scale-95">
-                                <i class="fas fa-clock-rotate-left"></i>
-                                <span>ประวัติภาพวิกฤต</span>
-                            </button>
-
-                            <!-- ปุ่มเพิ่มกล้อง (เฉพาะ Superadmin) -->
-                            <button onclick="openCctvModal()"
-                                class="superadmin-only hidden px-4 py-2.5 bg-sky-500 hover:bg-sky-400 text-slate-950 rounded-xl font-bold text-xs transition-all flex items-center gap-2 shadow-md active:scale-95">
-                                <i class="fas fa-plus-circle"></i>
-                                <span>เพิ่มกล้องใหม่</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- การ์ดสรุปสถานะกล้องวงจรปิด (4 KPI Cards) -->
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div class="bg-white rounded-[2rem] p-5 border border-slate-100 shadow-sm flex items-center gap-4 hover:shadow-md transition">
-                            <div class="w-12 h-12 rounded-2xl bg-sky-50 text-sky-600 flex items-center justify-center text-xl shrink-0">
-                                <i class="fas fa-video"></i>
+                            <!-- ตารางการ์ดกล้อง CCTV (เรนเดอร์ผ่าน JavaScript) -->
+                            <div id="cctvCameraGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                                <!-- เรนเดอร์การ์ดกล้องผ่าน JavaScript -->
                             </div>
-                            <div>
-                                <p class="text-[11px] font-bold text-slate-400 uppercase">กล้องทั้งหมด</p>
-                                <h3 id="cctv_statTotal" class="text-2xl font-black text-slate-800 mt-0.5">0</h3>
-                                <p class="text-[10px] text-slate-400">จุดติดตั้งในพื้นที่</p>
-                            </div>
-                        </div>
-
-                        <div class="bg-white rounded-[2rem] p-5 border border-slate-100 shadow-sm flex items-center gap-4 hover:shadow-md transition">
-                            <div class="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl shrink-0">
-                                <i class="fas fa-signal"></i>
-                            </div>
-                            <div>
-                                <p class="text-[11px] font-bold text-slate-400 uppercase">ออนไลน์ปกติ</p>
-                                <h3 id="cctv_statOnline" class="text-2xl font-black text-emerald-600 mt-0.5">0</h3>
-                                <p class="text-[10px] text-emerald-600 font-bold">ส่งสัญญาณภาพสด</p>
-                            </div>
-                        </div>
-
-                        <div class="bg-white rounded-[2rem] p-5 border border-slate-100 shadow-sm flex items-center gap-4 hover:shadow-md transition">
-                            <div class="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center text-xl shrink-0">
-                                <i class="fas fa-triangle-exclamation"></i>
-                            </div>
-                            <div>
-                                <p class="text-[11px] font-bold text-slate-400 uppercase">เฝ้าระวัง / วิกฤต</p>
-                                <h3 id="cctv_statAlert" class="text-2xl font-black text-rose-600 mt-0.5">0</h3>
-                                <p class="text-[10px] text-rose-600 font-bold">ระดับน้ำเกินเกณฑ์</p>
-                            </div>
-                        </div>
-
-                        <div class="bg-white rounded-[2rem] p-5 border border-slate-100 shadow-sm flex items-center gap-4 hover:shadow-md transition">
-                            <div class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl shrink-0">
-                                <i class="fas fa-camera"></i>
-                            </div>
-                            <div>
-                                <p class="text-[11px] font-bold text-slate-400 uppercase">ภาพบันทึกภาพล่าสุด</p>
-                                <h3 id="cctv_statLastSync" class="text-sm font-black text-slate-800 mt-1 truncate">เมื่อสักครู่</h3>
-                                <p class="text-[10px] text-indigo-600 font-bold">เชื่อมต่อ Telemetry</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- ส่วนแสดงแผนที่พิกัดกล้อง CCTV -->
-                    <div class="bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden">
-                        <div class="p-5 border-b border-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/20">
-                            <div class="flex items-center gap-2">
-                                <div class="w-1.5 h-6 bg-sky-500 rounded-full"></div>
-                                <h3 class="text-sm font-black text-slate-700 uppercase tracking-wider">แผนที่พิกัดจุดติดตั้งกล้อง CCTV และสถานะระดับน้ำ</h3>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <span class="text-[10px] text-slate-500 font-bold bg-white px-3 py-1.5 rounded-xl border border-slate-100 shadow-sm flex items-center gap-1.5">
-                                    <i class="fas fa-location-crosshairs text-sky-500"></i> คลิกจุดบนแผนที่เพื่อดูภาพสดและระดับน้ำ
-                                </span>
-                            </div>
-                        </div>
-                        <div id="cctvMap" class="w-full h-[400px] md:h-[460px] bg-slate-100 relative z-10"></div>
-                        <div class="p-4 bg-slate-50/50 flex flex-wrap gap-4 justify-center border-t border-slate-100 text-xs font-bold text-slate-500">
-                            <div class="flex items-center space-x-2">
-                                <div class="w-3.5 h-3.5 rounded-full bg-emerald-500 border border-white shadow-sm"></div>
-                                <span>ออนไลน์ - ระดับน้ำปกติ (เขียว)</span>
-                            </div>
-                            <div class="flex items-center space-x-2">
-                                <div class="w-3.5 h-3.5 rounded-full bg-amber-500 border border-white shadow-sm"></div>
-                                <span>ออนไลน์ - ระดับน้ำเฝ้าระวัง (เหลือง)</span>
-                            </div>
-                            <div class="flex items-center space-x-2">
-                                <div class="w-3.5 h-3.5 rounded-full bg-rose-500 border border-white shadow-sm animate-pulse"></div>
-                                <span>ออนไลน์ - ระดับน้ำวิกฤต (แดง)</span>
-                            </div>
-                            <div class="flex items-center space-x-2">
-                                <div class="w-3.5 h-3.5 rounded-full bg-slate-400 border border-white shadow-sm"></div>
-                                <span>ออฟไลน์ / ปิดปรับปรุง (เทา)</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- ตารางการ์ดแสดงผลภาพสด Live Feed & Staff Gauge -->
-                    <div class="space-y-4">
-                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                            <div class="flex items-center gap-2">
-                                <div class="w-1.5 h-6 bg-indigo-500 rounded-full"></div>
-                                <h3 class="text-sm font-black text-slate-700 uppercase tracking-wider">
-                                    รายการสตรีมภาพสด & เสาวัดระดับน้ำเสมือนจริง (Live Feeds & E-Staff Gauge)
-                                </h3>
-                            </div>
-                            <div id="cctvPermissionBadge">
-                                <!-- Badge แสดงสถานะสิทธิ์ -->
-                            </div>
-                        </div>
-
-                        <!-- ตารางการ์ดกล้อง CCTV (เรนเดอร์ผ่าน JavaScript) -->
-                        <div id="cctvCameraGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            <!-- เรนเดอร์การ์ดกล้องผ่าน JavaScript -->
                         </div>
                     </div>
                 </section>
+            </div>
 
                 <!-- ========================================================================= -->
                 <!-- 📸 Modal 1: เพิ่ม/แก้ไขกล้อง CCTV (เฉพาะ Superadmin) -->
