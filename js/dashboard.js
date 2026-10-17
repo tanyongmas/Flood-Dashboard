@@ -4160,31 +4160,56 @@ let dashLayerStates = {
             }
         } catch(e) {}
 
+        
+        function normalizeCctvCamera(c) {
+            if (!c) return c;
+            const stream = (c.streamUrl || c.stream_url || c.snapshotUrl || c.snapshot_url || '').trim();
+            const snapshot = (c.snapshotUrl || c.snapshot_url || stream).trim();
+            return {
+                ...c,
+                streamUrl: stream,
+                stream_url: stream,
+                snapshotUrl: snapshot,
+                snapshot_url: snapshot,
+                waterPoint: c.waterPoint || c.water_point || '',
+                water_point: c.waterPoint || c.water_point || '',
+                warningThreshold: c.warningThreshold !== undefined ? Number(c.warningThreshold) : (c.warning_threshold !== undefined ? Number(c.warning_threshold) : 1.50),
+                warning_threshold: c.warningThreshold !== undefined ? Number(c.warningThreshold) : (c.warning_threshold !== undefined ? Number(c.warning_threshold) : 1.50),
+                criticalThreshold: c.criticalThreshold !== undefined ? Number(c.criticalThreshold) : (c.critical_threshold !== undefined ? Number(c.critical_threshold) : 2.00),
+                critical_threshold: c.criticalThreshold !== undefined ? Number(c.criticalThreshold) : (c.critical_threshold !== undefined ? Number(c.critical_threshold) : 2.00),
+                type: c.type || 'IP Camera',
+                status: c.status || 'online',
+                level: (c.level !== undefined && c.level !== null && c.level !== '') ? parseFloat(c.level) : null
+            };
+        }
+        window.normalizeCctvCamera = normalizeCctvCamera;
+
         async function loadCctvCamerasData() {
             try {
                 if (typeof sbFetchCctvCameras === 'function') {
                     const sbData = await sbFetchCctvCameras();
                     if (Array.isArray(sbData) && sbData.length > 0) {
-                        window.cctvCameras = sbData;
-                        return sbData;
+                        window.cctvCameras = sbData.map(normalizeCctvCamera);
+                        return window.cctvCameras;
                     }
                 }
                 const saved = localStorage.getItem('cctv_cameras');
                 if (saved) {
                     const parsed = JSON.parse(saved);
                     if (Array.isArray(parsed) && parsed.length > 0) {
-                        window.cctvCameras = parsed;
-                        return parsed;
+                        window.cctvCameras = parsed.map(normalizeCctvCamera);
+                        return window.cctvCameras;
                     }
                 }
             } catch (e) {
                 console.warn("Error loading cctv_cameras:", e);
             }
-            window.cctvCameras = JSON.parse(JSON.stringify(DEFAULT_CCTV_CAMERAS));
+            window.cctvCameras = JSON.parse(JSON.stringify(DEFAULT_CCTV_CAMERAS)).map(normalizeCctvCamera);
             return window.cctvCameras;
         }
 
         window.cctvCameras = JSON.parse(JSON.stringify(DEFAULT_CCTV_CAMERAS));
+        window.loadCctvCamerasData = loadCctvCamerasData;
         loadCctvCamerasData();
 
         // ซิงค์ข้อมูลระดับน้ำ Telemetry อัตโนมัติจาก store.waterPoints
@@ -4237,7 +4262,8 @@ let dashLayerStates = {
                 }
             }
 
-            const displayImg = cam.snapshotUrl || cam.streamUrl || 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=600&q=80';
+            const streamRaw = (cam.streamUrl || cam.stream_url || cam.snapshotUrl || cam.snapshot_url || '').trim();
+            const displayImg = streamRaw || 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=600&q=80';
 
             return `
                 <div class="font-prompt text-slate-700 p-2 min-w-[260px] max-w-[280px]">
@@ -4552,7 +4578,8 @@ let dashLayerStates = {
                     }
                 }
 
-                const displayImg = cam.snapshotUrl || cam.streamUrl || 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=800&q=80';
+                const streamRaw = (cam.streamUrl || cam.stream_url || cam.snapshotUrl || cam.snapshot_url || '').trim();
+                const displayImg = streamRaw || 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=800&q=80';
 
                 cardsHtml += `
                     <div class="bg-white rounded-2xl sm:rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden flex flex-col justify-between hover:shadow-lg transition-all duration-300 group">
@@ -4571,7 +4598,7 @@ let dashLayerStates = {
                             <!-- กล่องสตรีมภาพ Live Video + E-Staff Gauge Overlay -->
                             <div class="relative w-full aspect-video bg-slate-950 overflow-hidden cursor-pointer group/feed" onclick="openCctvFullscreen('${cam.id}')">
                                 ${isOnline ? `
-                                    <img src="${displayImg}" alt="${cam.name}" class="w-full h-full object-cover transition-transform duration-500 group-hover/feed:scale-105 opacity-90 group-hover/feed:opacity-100">
+                                    <img src="${displayImg}" data-raw-src="${streamRaw}" alt="${cam.name}" class="cctv-live-feed-img w-full h-full object-cover transition-transform duration-500 group-hover/feed:scale-105 opacity-90 group-hover/feed:opacity-100" onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=800&q=80';">
                                     
                                     <!-- Overlay E-Staff Gauge เสาวัดระดับน้ำ -->
                                     ${getStaffGaugeOverlayHtml(cam)}
@@ -4785,8 +4812,8 @@ let dashLayerStates = {
                     document.getElementById('cctv_form_status').value = cam.status || 'online';
                     document.getElementById('cctv_form_lat').value = cam.lat || '';
                     document.getElementById('cctv_form_lng').value = cam.lng || '';
-                    document.getElementById('cctv_form_stream_url').value = cam.streamUrl || '';
-                    document.getElementById('cctv_form_water_point').value = cam.waterPoint || '';
+                    document.getElementById('cctv_form_stream_url').value = cam.streamUrl || cam.stream_url || '';
+                    document.getElementById('cctv_form_water_point').value = cam.waterPoint || cam.water_point || '';
                     document.getElementById('cctv_form_level').value = cam.level !== null ? cam.level : '';
                     document.getElementById('cctv_form_warning').value = cam.warningThreshold || '1.50';
                     document.getElementById('cctv_form_critical').value = cam.criticalThreshold || '2.00';
@@ -4800,6 +4827,19 @@ let dashLayerStates = {
             }
 
             if (modal) modal.classList.remove('hidden');
+            if (window.cctvFullscreenTimer) clearInterval(window.cctvFullscreenTimer);
+            if (streamRaw && (streamRaw.includes('.jpeg') || streamRaw.includes('.jpg') || streamRaw.includes('/public-frame') || streamRaw.includes('api/webrtc'))) {
+                window.cctvFullscreenTimer = setInterval(() => {
+                    const fImg = document.getElementById('cctvFullscreenImg');
+                    if (fImg && window.activeFullscreenCamId) {
+                        const sep = streamRaw.includes('?') ? '&' : '?';
+                        const nSrc = `${streamRaw}${sep}_t=${Date.now()}`;
+                        const p = new Image();
+                        p.onload = () => { if (fImg) fImg.src = nSrc; };
+                        p.src = nSrc;
+                    }
+                }, 5000);
+            }
             const initLat = parseFloat(document.getElementById('cctv_form_lat').value) || 6.29445;
             const initLng = parseFloat(document.getElementById('cctv_form_lng').value) || 101.72362;
             initCctvPickerMap(initLat, initLng);
@@ -4834,7 +4874,7 @@ let dashLayerStates = {
                 if (idx !== -1) {
                     window.cctvCameras[idx] = {
                         ...window.cctvCameras[idx],
-                        name, type, status, lat, lng, streamUrl, waterPoint, level,
+                        name, type, status, lat, lng, streamUrl, stream_url: streamUrl, snapshotUrl: streamUrl, snapshot_url: streamUrl, waterPoint, water_point: waterPoint, level,
                         warningThreshold, criticalThreshold,
                         lastUpdate: 'เพิ่งอัปเดต'
                     };
@@ -4907,6 +4947,10 @@ let dashLayerStates = {
         // 6. ดูภาพเต็มจอ (Fullscreen Modal)
         // ==========================================
         window.activeFullscreenCamId = null;
+            if (window.cctvFullscreenTimer) {
+                clearInterval(window.cctvFullscreenTimer);
+                window.cctvFullscreenTimer = null;
+            }
 
         window.openCctvFullscreen = function (camId) {
             const cam = (window.cctvCameras || []).find(c => c.id === camId);
@@ -4921,12 +4965,13 @@ let dashLayerStates = {
             if (title) title.innerText = cam.name;
             if (sub) sub.innerText = `โปรโตคอล: ${cam.type} | แหล่งจ่ายไฟ: ${cam.power || '-'} | สถานะ: ${cam.status.toUpperCase()}`;
 
-            const displayImg = cam.snapshotUrl || cam.streamUrl || 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=1200&q=80';
+            const streamRaw = (cam.streamUrl || cam.stream_url || cam.snapshotUrl || cam.snapshot_url || '').trim();
+            const displayImg = streamRaw || 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=1200&q=80';
 
             if (body) {
                 if (cam.status === 'online') {
                     body.innerHTML = `
-                        <img src="${displayImg}" class="w-full h-full object-contain">
+                        <img id="cctvFullscreenImg" data-raw-src="${streamRaw}" src="${displayImg}" class="w-full h-full object-contain" onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=1200&q=80';">
                         ${getStaffGaugeOverlayHtml(cam)}
                         <div class="absolute top-4 left-4 flex items-center gap-2 bg-black/70 backdrop-blur-md px-3 py-1.5 rounded-xl text-white text-xs font-mono">
                             <span class="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping"></span>
@@ -5074,3 +5119,21 @@ let dashLayerStates = {
                 customClass: { popup: 'rounded-[2rem]' }
             });
         };
+
+        // 🔄 ระบบ Auto-refresh สตรีมภาพ CCTV ทุก 10 วินาที สำหรับกล้อง Snapshot/JPEG WebRTC
+        if (window.cctvFeedAutoRefreshInterval) clearInterval(window.cctvFeedAutoRefreshInterval);
+        window.cctvFeedAutoRefreshInterval = setInterval(() => {
+            const feedImgs = document.querySelectorAll('img.cctv-live-feed-img');
+            if (feedImgs.length === 0) return;
+            const now = Date.now();
+            feedImgs.forEach(img => {
+                const raw = img.getAttribute('data-raw-src');
+                if (raw && (raw.includes('.jpeg') || raw.includes('.jpg') || raw.includes('/public-frame') || raw.includes('api/webrtc'))) {
+                    const sep = raw.includes('?') ? '&' : '?';
+                    const nSrc = `${raw}${sep}_t=${now}`;
+                    const pre = new Image();
+                    pre.onload = () => { img.src = nSrc; };
+                    pre.src = nSrc;
+                }
+            });
+        }, 10000);

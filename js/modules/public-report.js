@@ -368,6 +368,19 @@ function openEvacuationForm(status) {
 
     const modal = document.getElementById('evacuationModal');
     if (modal) modal.classList.remove('hidden');
+    if (window.publicCctvLightboxTimer) clearInterval(window.publicCctvLightboxTimer);
+    if (streamRaw && (streamRaw.includes('.jpeg') || streamRaw.includes('.jpg') || streamRaw.includes('/public-frame') || streamRaw.includes('api/webrtc'))) {
+        window.publicCctvLightboxTimer = setInterval(() => {
+            const lImg = document.getElementById('publicCctvLightboxImg');
+            if (lImg) {
+                const sep = streamRaw.includes('?') ? '&' : '?';
+                const nSrc = `${streamRaw}${sep}_t=${Date.now()}`;
+                const p = new Image();
+                p.onload = () => { if (lImg) lImg.src = nSrc; };
+                p.src = nSrc;
+            }
+        }, 5000);
+    }
 }
 
 window.showQRCode = function () {
@@ -518,6 +531,21 @@ async function getPublicRealtimeWaterData() {
  * ฟังก์ชันหลักในการสร้างหน้าจอโหมดประชาชน (Clean Minimal Dashboard)
  */
 window.renderPublicPortal = async function () {
+    // 🌟 โหลดข้อมูลกล้อง CCTV ให้พร้อมสำหรับโหมดประชาชน
+    try {
+        if (!window.cctvCameras || window.cctvCameras.length === 0) {
+            if (typeof window.loadCctvCamerasData === 'function') {
+                await window.loadCctvCamerasData();
+            } else if (typeof sbFetchCctvCameras === 'function') {
+                const sbData = await sbFetchCctvCameras();
+                if (Array.isArray(sbData)) {
+                    window.cctvCameras = sbData.map(c => typeof window.normalizeCctvCamera === 'function' ? window.normalizeCctvCamera(c) : c);
+                }
+            }
+        }
+    } catch(err) {
+        console.warn('Citizen mode CCTV load note:', err);
+    }
     // 1. ดึงข้อมูลระดับน้ำสดเรียลไทม์
     const ridResult = await getPublicRealtimeWaterData();
 
@@ -1346,7 +1374,8 @@ function initPublicMiniMap(currentWaterLevel = 14.20) {
                     iconAnchor: [18, 18]
                 });
 
-                const displayImg = cam.snapshotUrl || cam.streamUrl || 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=400&q=80';
+                const streamRaw = (cam.streamUrl || cam.stream_url || cam.snapshotUrl || cam.snapshot_url || '').trim();
+                const displayImg = streamRaw || 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=400&q=80';
                 const popupHtml = `
                     <div class="font-prompt p-2 text-slate-700 min-w-[230px]">
                         <div class="flex items-center justify-between pb-1.5 mb-2 border-b border-slate-100">
@@ -2137,7 +2166,8 @@ function renderPublicCctvCardsHtml() {
                     }
                 }
 
-                const displayImg = cam.snapshotUrl || cam.streamUrl || 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=600&q=80';
+                const streamRaw = (cam.streamUrl || cam.stream_url || cam.snapshotUrl || cam.snapshot_url || '').trim();
+                const displayImg = streamRaw || 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=600&q=80';
 
                 return `
                     <div class="bg-slate-50/80 border border-slate-100 rounded-2xl overflow-hidden flex flex-col justify-between hover:bg-slate-100/80 transition-all shadow-xs group">
@@ -2154,10 +2184,10 @@ function renderPublicCctvCardsHtml() {
 
                             <div class="relative w-full aspect-video bg-black overflow-hidden cursor-pointer group/feed" onclick="openPublicCctvLightbox('${cam.id}')">
                                 ${isOnline ? `
-                                    <img src="${displayImg}" class="w-full h-full object-cover group-hover/feed:scale-105 transition duration-500" alt="${cam.name}">
+                                    <img src="${displayImg}" data-raw-src="${streamRaw}" class="public-cctv-img w-full h-full object-cover group-hover/feed:scale-105 transition duration-500" alt="${cam.name}" onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=600&q=80';">
                                     ${getPublicStaffGaugeHtml(cam)}
                                     <div class="absolute top-2 left-2 px-1.5 py-0.5 bg-black/60 backdrop-blur-sm rounded text-white text-[8px] font-mono font-bold flex items-center gap-1">
-                                        <span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span> LIVE
+                                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> ภาพสด • อัปเดตทุก 10 วิ
                                     </div>
                                     <div class="absolute bottom-2 left-2 right-12 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-1.5 rounded text-white text-[10px] font-mono flex items-center justify-between">
                                         <span>ระดับน้ำ: <b class="text-amber-300">${cam.level !== null && cam.level !== undefined ? cam.level + ' ม.' : '-'}</b></span>
@@ -2217,12 +2247,13 @@ window.openPublicCctvLightbox = function(camId) {
     if (title) title.innerText = cam.name;
     if (sub) sub.innerText = `จุดวัด: ${cam.waterPoint || '-'} | ระดับน้ำ: ${cam.level !== null && cam.level !== undefined ? cam.level + ' ม.รทก.' : '-'} | สถานะ: ${cam.status.toUpperCase()}`;
 
-    const displayImg = cam.snapshotUrl || cam.streamUrl || 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=1200&q=80';
+    const streamRaw = (cam.streamUrl || cam.stream_url || cam.snapshotUrl || cam.snapshot_url || '').trim();
+    const displayImg = streamRaw || 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=1200&q=80';
 
     if (body) {
         if (cam.status === 'online') {
             body.innerHTML = `
-                <img src="${displayImg}" class="w-full h-full object-contain">
+                <img id="publicCctvLightboxImg" data-raw-src="${streamRaw}" src="${displayImg}" class="w-full h-full object-contain" onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=1200&q=80';">
                 ${getPublicStaffGaugeHtml(cam)}
                 <div class="absolute top-4 left-4 flex items-center gap-2 bg-black/70 backdrop-blur-md px-3 py-1.5 rounded-xl text-white text-xs font-mono">
                     <span class="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping"></span>
@@ -2261,6 +2292,10 @@ window.openPublicCctvLightbox = function(camId) {
 window.closePublicCctvLightbox = function() {
     const modal = document.getElementById('publicCctvLightbox');
     if (modal) modal.classList.add('hidden');
+    if (window.publicCctvLightboxTimer) {
+        clearInterval(window.publicCctvLightboxTimer);
+        window.publicCctvLightboxTimer = null;
+    }
 };
 
 window.refreshPublicCctvFeeds = async function() {
@@ -2270,8 +2305,13 @@ window.refreshPublicCctvFeeds = async function() {
         btn.innerHTML = `<i class="fas fa-rotate animate-spin text-xs"></i> <span>กำลังอัปเดต...</span>`;
         btn.disabled = true;
 
-        if (typeof loadCctvCamerasData === 'function') {
-            await loadCctvCamerasData();
+        if (typeof window.loadCctvCamerasData === 'function') {
+            await window.loadCctvCamerasData();
+        } else if (typeof sbFetchCctvCameras === 'function') {
+            const sbData = await sbFetchCctvCameras();
+            if (Array.isArray(sbData)) {
+                window.cctvCameras = sbData.map(c => typeof window.normalizeCctvCamera === 'function' ? window.normalizeCctvCamera(c) : c);
+            }
         }
 
         const container = document.getElementById('publicCctvContainer');
@@ -2290,3 +2330,21 @@ window.refreshPublicCctvFeeds = async function() {
         });
     }
 };
+
+// 🔄 ระบบ Auto-refresh สตรีมภาพ CCTV โหมดประชาชน ทุก 10 วินาที
+if (window.publicCctvAutoRefreshInterval) clearInterval(window.publicCctvAutoRefreshInterval);
+window.publicCctvAutoRefreshInterval = setInterval(() => {
+    const pImgs = document.querySelectorAll('img.public-cctv-img');
+    if (pImgs.length === 0) return;
+    const now = Date.now();
+    pImgs.forEach(img => {
+        const raw = img.getAttribute('data-raw-src');
+        if (raw && (raw.includes('.jpeg') || raw.includes('.jpg') || raw.includes('/public-frame') || raw.includes('api/webrtc'))) {
+            const sep = raw.includes('?') ? '&' : '?';
+            const nSrc = `${raw}${sep}_t=${now}`;
+            const pre = new Image();
+            pre.onload = () => { img.src = nSrc; };
+            pre.src = nSrc;
+        }
+    });
+}, 10000);
