@@ -69,6 +69,8 @@ async function loadRIDWaterLevel(forceRefresh = false) {
             window.setAppCache('rid_data', result, 5); // Cache 5 นาที
             window.setAppCache('rid_data_backup', result, 1440); // Backup cache 24 ชม.
         }
+        window.latestRIDData = result;
+        if (typeof syncCctvTelemetry === 'function') syncCctvTelemetry();
 
         // 🚀 3. Stale Cache Fallback: หากดึงสดล้มเหลว นำแคชสำรองเดิมมาแสดงแทนตัวอักษร Error
         if (!result && typeof window.getAppCache === 'function') {

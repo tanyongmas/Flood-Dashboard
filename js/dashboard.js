@@ -4190,7 +4190,8 @@ let dashLayerStates = {
                     const sbData = await sbFetchCctvCameras();
                     if (Array.isArray(sbData) && sbData.length > 0) {
                         window.cctvCameras = sbData.map(normalizeCctvCamera);
-                        return window.cctvCameras;
+                        syncCctvTelemetry();
+            return window.cctvCameras;
                     }
                 }
                 const saved = localStorage.getItem('cctv_cameras');
@@ -4212,32 +4213,76 @@ let dashLayerStates = {
         window.loadCctvCamerasData = loadCctvCamerasData;
         loadCctvCamerasData();
 
-        // ซิงค์ข้อมูลระดับน้ำ Telemetry อัตโนมัติจาก store.waterPoints
+        // ซิงค์ข้อมูลระดับน้ำ Telemetry อัตโนมัติ (สถานี X.73 และ X.73A)
         function syncCctvTelemetry() {
-            if (!window.cctvCameras || !store || !store.waterPoints) return;
+            if (!window.cctvCameras || !Array.isArray(window.cctvCameras)) return;
             let changed = false;
 
+            // ดึงระดับน้ำล่าสุดของ X.73 และ X.73A
+            let levelX73 = null;
+            let levelX73A = null;
+
+            const ridCache = (typeof window.getAppCache === 'function' ? window.getAppCache('rid_data') : null) || window.latestRIDData;
+            if (ridCache && ridCache.data) {
+                if (ridCache.data.level) levelX73 = parseFloat(ridCache.data.level);
+                if (ridCache.data.dataX73A && ridCache.data.dataX73A.level) {
+                    levelX73A = parseFloat(ridCache.data.dataX73A.level);
+                } else if (ridCache.data.levelX73A) {
+                    levelX73A = parseFloat(ridCache.data.levelX73A);
+                } else if (levelX73 !== null) {
+                    levelX73A = parseFloat((levelX73 + 11.20).toFixed(2));
+                }
+            }
+
             window.cctvCameras.forEach(cam => {
-                if (!cam.waterPoint) return;
-                // หาจุดวัดน้ำที่ตรงกัน
-                const pt = store.waterPoints.find(p =>
-                    (p.name && p.name.includes(cam.waterPoint)) ||
-                    (p.id && String(p.id).toLowerCase() === String(cam.waterPoint).toLowerCase())
-                );
-                if (pt && pt.level !== undefined && pt.level !== null) {
-                    const newLevel = parseFloat(pt.level);
-                    if (!isNaN(newLevel) && cam.level !== newLevel) {
-                        cam.level = newLevel;
-                        changed = true;
+                const name = (cam.name || '').toLowerCase();
+                const wp = (cam.waterPoint || cam.water_point || '').toLowerCase();
+                let targetLevel = null;
+                let targetWp = cam.waterPoint;
+                let targetWarn = cam.warningThreshold;
+                let targetCrit = cam.criticalThreshold;
+
+                // 1. กล้อง CAM-00_คลองบองอ -> สถานี X.73A บ้านบองอ (ระดับเตือนภัย 25.80, วิกฤต 26.80)
+                if (cam.id === 'CAM-01' || name.includes('บองอ') || wp.includes('บองอ') || wp.includes('x.73a') || wp.includes('x73a')) {
+                    targetLevel = levelX73A;
+                    targetWp = 'สถานี X.73A (บ้านบองอ)';
+                    targetWarn = 25.80;
+                    targetCrit = 26.80;
+                }
+                // 2. กล้อง CAM-01_ถนนประชาสามัคคี -> สถานี X.73 สะพานตันหยงมัส (ระดับเตือนภัย 13.50, วิกฤต 14.90)
+                else if (cam.id === 'CAM-02' || name.includes('ประชาสามัคคี') || name.includes('ตันหยงมัส') || wp.includes('ประชาสามัคคี') || wp.includes('x.73') || wp.includes('x73')) {
+                    targetLevel = levelX73;
+                    targetWp = 'สถานี X.73 (คลองตันหยงมัส)';
+                    targetWarn = 13.50;
+                    targetCrit = 14.90;
+                }
+                // 3. จุดวัดน้ำทั่วไปจาก store.waterPoints
+                else if (cam.waterPoint && store && store.waterPoints) {
+                    const pt = store.waterPoints.find(p =>
+                        (p.name && p.name.includes(cam.waterPoint)) ||
+                        (p.id && String(p.id).toLowerCase() === String(cam.waterPoint).toLowerCase())
+                    );
+                    if (pt && pt.level !== undefined && pt.level !== null) {
+                        targetLevel = parseFloat(pt.level);
                     }
+                }
+
+                if (targetLevel !== null && !isNaN(targetLevel) && cam.level !== targetLevel) {
+                    cam.level = targetLevel;
+                    cam.waterPoint = targetWp;
+                    cam.water_point = targetWp;
+                    cam.warningThreshold = targetWarn;
+                    cam.criticalThreshold = targetCrit;
+                    changed = true;
                 }
             });
 
             if (changed) {
-                renderCctvDashboard();
-                renderCctvMapMarkers();
+                if (typeof renderCctvDashboard === 'function') renderCctvDashboard();
+                if (typeof renderCctvMapMarkers === 'function') renderCctvMapMarkers();
             }
         }
+        window.syncCctvTelemetry = syncCctvTelemetry;
 
         // ==========================================
         
@@ -4453,33 +4498,36 @@ let dashLayerStates = {
         // 2. ฟังก์ชันวาด E-Staff Gauge (เสาวัดระดับน้ำจำลอง Overlay)
         // ==========================================
         function getStaffGaugeOverlayHtml(cam) {
-            const level = cam.level !== null && cam.level !== undefined ? parseFloat(cam.level) : 0;
-            const warn = cam.warningThreshold || 1.5;
-            const crit = cam.criticalThreshold || 2.0;
+            const level = (cam.level !== null && cam.level !== undefined) ? parseFloat(cam.level) : 0;
+            const name = (cam.name || '').toLowerCase();
+            const wp = (cam.waterPoint || cam.water_point || '').toLowerCase();
 
-            // คำนวณความสูงของน้ำเป็น % (สมมุติสเกลเสา 0 ถึง 3 เมตร)
-            const maxGauge = 3.0;
-            const waterPercent = Math.min(Math.max((level / maxGauge) * 100, 0), 100);
-            const warnPercent = Math.min((warn / maxGauge) * 100, 100);
-            const critPercent = Math.min((crit / maxGauge) * 100, 100);
+            let minGauge = 0, maxGauge = 3.0;
+            let warn = cam.warningThreshold || 1.5;
+            let crit = cam.criticalThreshold || 2.0;
+
+            if (cam.id === 'CAM-01' || name.includes('บองอ') || wp.includes('บองอ') || wp.includes('x.73a') || wp.includes('x73a')) {
+                minGauge = 20.0; maxGauge = 28.0; warn = 25.80; crit = 26.80;
+            } else if (cam.id === 'CAM-02' || name.includes('ประชาสามัคคี') || name.includes('ตันหยงมัส') || wp.includes('ประชาสามัคคี') || wp.includes('x.73') || wp.includes('x73') || level > 5.0) {
+                minGauge = 8.0; maxGauge = 16.0; warn = 13.50; crit = 14.90;
+            }
+
+            const range = Math.max(maxGauge - minGauge, 1);
+            const waterPercent = Math.min(Math.max(((level - minGauge) / range) * 100, 4), 100);
+            const warnPercent = Math.min(Math.max(((warn - minGauge) / range) * 100, 0), 100);
+            const critPercent = Math.min(Math.max(((crit - minGauge) / range) * 100, 0), 100);
 
             return `
-                <div class="absolute right-2 top-2 bottom-8 w-9 sm:w-11 bg-black/70 backdrop-blur-md rounded-xl border border-white/20 p-0.5 sm:p-1 flex flex-col justify-between items-center text-white pointer-events-none z-20">
-                    <div class="text-[8px] font-black font-mono text-sky-300 border-b border-white/20 pb-0.5 w-full text-center">GAUGE</div>
+                <div class="cctv-fs-overlay absolute right-1.5 sm:right-3 top-2 sm:top-3 bottom-12 sm:bottom-16 w-8 sm:w-11 bg-black/75 backdrop-blur-md rounded-lg sm:rounded-xl border border-white/20 p-0.5 sm:p-1 flex flex-col justify-between items-center text-white pointer-events-none z-20 transition-opacity duration-300">
+                    <div class="text-[7px] sm:text-[8px] font-black font-mono text-sky-300 border-b border-white/20 pb-0.5 w-full text-center">GAUGE</div>
                     
-                    <!-- แท่งสเกลเสาวัด -->
-                    <div class="relative flex-1 w-4 bg-slate-800 rounded-md my-1 border border-white/30 overflow-hidden flex flex-col-reverse">
-                        <!-- แถบน้ำขึ้นตามจริง -->
+                    <div class="relative flex-1 w-3 sm:w-4 bg-slate-800 rounded my-1 border border-white/30 overflow-hidden flex flex-col-reverse">
                         <div class="w-full bg-gradient-to-t from-sky-500 to-cyan-300 transition-all duration-700" style="height: ${waterPercent}%;"></div>
-                        
-                        <!-- เส้นเตือนภัยวิกฤต -->
-                        <div class="absolute w-full border-t border-rose-500 z-10" style="bottom: ${critPercent}%;"></div>
-                        <!-- เส้นเฝ้าระวัง -->
-                        <div class="absolute w-full border-t border-amber-400 z-10" style="bottom: ${warnPercent}%;"></div>
+                        <div class="absolute w-full border-t-2 border-rose-500 z-10" style="bottom: ${critPercent}%;"></div>
+                        <div class="absolute w-full border-t-2 border-amber-400 z-10" style="bottom: ${warnPercent}%;"></div>
                     </div>
 
-                    <!-- ระดับน้ำตัวเลข -->
-                    <div class="text-[9px] font-black font-mono text-amber-300 leading-tight text-center">
+                    <div class="text-[8px] sm:text-[9px] font-black font-mono text-amber-300 leading-tight text-center">
                         ${level > 0 ? level.toFixed(2) : '-'}m
                     </div>
                 </div>
@@ -4963,36 +5011,55 @@ let dashLayerStates = {
             const body = document.getElementById('cctvFullscreenBody');
 
             if (title) title.innerText = cam.name;
-            if (sub) sub.innerText = `โปรโตคอล: ${cam.type} | แหล่งจ่ายไฟ: ${cam.power || '-'} | สถานะ: ${cam.status.toUpperCase()}`;
+            if (sub) sub.innerText = `จุดวัด: ${cam.waterPoint || '-'} | โปรโตคอล: ${cam.type} | สถานะ: ${cam.status.toUpperCase()}`;
 
             const streamRaw = (cam.streamUrl || cam.stream_url || cam.snapshotUrl || cam.snapshot_url || '').trim();
             const displayImg = streamRaw || 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=1200&q=80';
+            const levelVal = (cam.level !== null && cam.level !== undefined) ? parseFloat(cam.level) : null;
+            const levelStr = levelVal !== null ? `${levelVal.toFixed(2)} ม.รทก.` : '-';
+
+            let statusBadge = 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30';
+            let statusLabel = 'ระดับปกติ';
+            if (levelVal !== null) {
+                if (cam.criticalThreshold && levelVal >= cam.criticalThreshold) {
+                    statusBadge = 'bg-rose-500/30 text-rose-300 border-rose-500/40 animate-pulse';
+                    statusLabel = 'วิกฤต (ล้นตลิ่ง)';
+                } else if (cam.warningThreshold && levelVal >= cam.warningThreshold) {
+                    statusBadge = 'bg-amber-500/30 text-amber-300 border-amber-500/40';
+                    statusLabel = 'เฝ้าระวังเตือนภัย';
+                }
+            }
 
             if (body) {
                 if (cam.status === 'online') {
                     body.innerHTML = `
-                        <img id="cctvFullscreenImg" data-raw-src="${streamRaw}" src="${displayImg}" class="w-full h-full object-contain" onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=1200&q=80';">
+                        <img id="cctvFullscreenImg" data-raw-src="${streamRaw}" src="${displayImg}" class="w-full h-full object-contain pointer-events-none" onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=1200&q=80';">
                         ${getStaffGaugeOverlayHtml(cam)}
-                        <div class="absolute top-4 left-4 flex items-center gap-2 bg-black/70 backdrop-blur-md px-3 py-1.5 rounded-xl text-white text-xs font-mono">
-                            <span class="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping"></span>
-                            <span>LIVE STREAM • ${cam.type}</span>
+                        
+                        <!-- Top Badge -->
+                        <div class="cctv-fs-overlay absolute top-2 sm:top-3 left-2 sm:left-3 flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg text-white text-[9px] sm:text-xs font-mono transition-opacity duration-300">
+                            <span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span>
+                            <span>LIVE • ${cam.type}</span>
                         </div>
-                        <div class="absolute bottom-4 left-4 right-16 bg-black/80 backdrop-blur-md p-3.5 rounded-2xl flex flex-wrap items-center justify-between text-white text-xs">
-                            <div>
-                                <span class="font-bold text-sky-400">จุดวัด: ${cam.waterPoint || '-'}</span>
-                                <span class="ml-3 text-slate-300 font-mono text-[11px]">พิกัด: ${cam.lat}, ${cam.lng}</span>
+
+                        <!-- Bottom Info Bar (Ultra-compact for mobile) -->
+                        <div class="cctv-fs-overlay absolute bottom-0 left-0 right-0 sm:bottom-3 sm:left-3 sm:right-3 bg-gradient-to-t from-black/95 via-black/80 to-transparent sm:bg-black/80 sm:backdrop-blur-md p-2 sm:p-3 sm:rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between text-white text-[10px] sm:text-xs gap-1 sm:gap-2 transition-opacity duration-300">
+                            <div class="flex items-center gap-2 truncate max-w-full">
+                                <span class="font-bold text-sky-400 truncate"><i class="fas fa-location-dot mr-1"></i>${cam.waterPoint || 'จุดวัดน้ำ'}</span>
+                                <span class="hidden md:inline text-slate-400 font-mono text-[10px]">(${cam.lat}, ${cam.lng})</span>
                             </div>
-                            <div class="flex items-center gap-3">
-                                <span>เกณฑ์เฝ้าระวัง: <b class="text-amber-400">${cam.warningThreshold || 1.5} ม.</b></span>
-                                <span>ระดับน้ำ: <b class="text-amber-300 text-sm font-black">${cam.level !== null ? cam.level + ' ม.รทก.' : '-'}</b></span>
+                            <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
+                                <span>ระดับน้ำ: <b class="text-amber-300 text-xs sm:text-sm font-black">${levelStr}</b></span>
+                                <span class="text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded border ${statusBadge} font-bold">${statusLabel}</span>
+                                <span class="text-slate-400 text-[9px] hidden sm:inline">(แตะจอเพื่อซ่อนแถบ)</span>
                             </div>
                         </div>
                     `;
                 } else {
                     body.innerHTML = `
                         <div class="text-center text-slate-500 p-8">
-                            <i class="fas fa-video-slash text-5xl mb-3 text-slate-600"></i>
-                            <h4 class="font-bold text-white text-base">กล้องไม่ได้เชื่อมต่อ (Offline)</h4>
+                            <i class="fas fa-video-slash text-4xl sm:text-5xl mb-2 sm:mb-3 text-slate-600"></i>
+                            <h4 class="font-bold text-white text-sm sm:text-base">กล้องไม่ได้เชื่อมต่อ (Offline)</h4>
                             <p class="text-xs text-slate-400 mt-1">กรุณาตรวจสอบระบบจ่ายไฟและการเชื่อมต่อสัญญาณอินเทอร์เน็ตที่จุดติดตั้ง</p>
                         </div>
                     `;
@@ -5000,6 +5067,40 @@ let dashLayerStates = {
             }
 
             if (modal) modal.classList.remove('hidden');
+            if (window.cctvFullscreenTimer) clearInterval(window.cctvFullscreenTimer);
+            if (streamRaw && (streamRaw.includes('.jpeg') || streamRaw.includes('.jpg') || streamRaw.includes('/public-frame') || streamRaw.includes('api/webrtc'))) {
+                window.cctvFullscreenTimer = setInterval(() => {
+                    const fImg = document.getElementById('cctvFullscreenImg');
+                    if (fImg && window.activeFullscreenCamId) {
+                        const sep = streamRaw.includes('?') ? '&' : '?';
+                        const nSrc = `${streamRaw}${sep}_t=${Date.now()}`;
+                        const p = new Image();
+                        p.onload = () => { if (fImg) fImg.src = nSrc; };
+                        p.src = nSrc;
+                    }
+                }, 5000);
+            }
+        };
+
+        // ฟังก์ชันแตะจอเพื่อสลับซ่อน/แสดงแถบข้อมูล
+        window.toggleCctvFullscreenOverlay = function (e) {
+            if (e) e.stopPropagation();
+            const overlays = document.querySelectorAll('.cctv-fs-overlay');
+            const header = document.getElementById('cctvFsHeader');
+            const icon = document.getElementById('cctvFsToggleIcon');
+            let isHidden = false;
+            overlays.forEach(el => {
+                el.classList.toggle('opacity-0');
+                el.classList.toggle('pointer-events-none');
+                if (el.classList.contains('opacity-0')) isHidden = true;
+            });
+            if (header) {
+                header.classList.toggle('opacity-0');
+                header.classList.toggle('pointer-events-none');
+            }
+            if (icon) {
+                icon.className = isHidden ? 'fas fa-eye text-[9px]' : 'fas fa-eye-slash text-[9px]';
+            }
         };
 
         window.closeCctvFullscreen = function () {

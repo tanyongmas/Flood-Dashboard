@@ -3312,27 +3312,30 @@
                 <!-- ========================================================================= -->
                 <!-- 🔍 Modal 2: ขยายภาพกล้องเต็มจอ (Fullscreen Live View + Telemetry) -->
                 <!-- ========================================================================= -->
-                <div id="cctvFullscreenModal" class="hidden fixed inset-0 z-[9995] bg-black/95 backdrop-blur-md flex items-center justify-center p-3 md:p-6" onclick="closeCctvFullscreen()">
-                    <div class="relative w-full max-w-6xl bg-slate-950 rounded-3xl overflow-hidden shadow-2xl border border-slate-800 flex flex-col" onclick="event.stopPropagation()">
-                        <div class="p-4 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between text-white shrink-0">
-                            <div class="flex items-center gap-3">
-                                <span class="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></span>
-                                <div>
-                                    <h3 id="cctvFullscreenTitle" class="font-bold text-sm md:text-base text-white">กำลังโหลดภาพสด...</h3>
-                                    <p id="cctvFullscreenSub" class="text-[11px] text-slate-400">เชื่อมต่อสัญญาณภาพความละเอียดสูง</p>
+                <div id="cctvFullscreenModal" class="hidden fixed inset-0 z-[9995] bg-black/95 backdrop-blur-md flex items-center justify-center p-0 sm:p-3 md:p-6" onclick="closeCctvFullscreen()">
+                    <div class="relative w-full h-full sm:h-auto max-w-6xl bg-slate-950 sm:rounded-3xl overflow-hidden shadow-2xl border-0 sm:border border-slate-800 flex flex-col justify-between sm:justify-start" onclick="event.stopPropagation()">
+                        <div id="cctvFsHeader" class="p-2.5 sm:p-4 bg-slate-900/95 border-b border-slate-800 flex items-center justify-between text-white shrink-0 transition-all duration-300 z-30">
+                            <div class="flex items-center gap-2 sm:gap-3 min-w-0 pr-2">
+                                <span class="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+                                <div class="min-w-0">
+                                    <h3 id="cctvFullscreenTitle" class="font-bold text-xs sm:text-base text-white truncate max-w-[170px] sm:max-w-none">กำลังโหลดภาพสด...</h3>
+                                    <p id="cctvFullscreenSub" class="text-[9px] sm:text-[11px] text-slate-400 truncate max-w-[170px] sm:max-w-none">เชื่อมต่อสัญญาณภาพความละเอียดสูง</p>
                                 </div>
                             </div>
-                            <div class="flex items-center gap-2">
-                                <button onclick="captureCurrentSnapshot()" class="superadmin-only hidden px-3 py-1.5 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 rounded-xl text-xs font-bold border border-sky-400/30 flex items-center gap-1.5 transition">
-                                    <i class="fas fa-camera"></i> <span>บันทึกภาพ</span>
+                            <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                                <button onclick="toggleCctvFullscreenOverlay(event)" class="px-2 py-1 bg-white/10 hover:bg-white/20 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 transition" title="ซ่อน/แสดงแถบข้อมูล">
+                                    <i id="cctvFsToggleIcon" class="fas fa-eye-slash text-[9px]"></i> <span class="hidden sm:inline">ซ่อนแถบ</span>
                                 </button>
-                                <button onclick="closeCctvFullscreen()" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition">
-                                    <i class="fas fa-times"></i>
+                                <button onclick="captureCurrentSnapshot()" class="superadmin-only hidden px-2 sm:px-3 py-1 sm:py-1.5 bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 rounded-lg sm:rounded-xl text-[10px] sm:text-xs font-bold border border-sky-400/30 flex items-center gap-1 transition">
+                                    <i class="fas fa-camera text-[10px]"></i> <span class="hidden sm:inline">บันทึกภาพ</span>
+                                </button>
+                                <button onclick="closeCctvFullscreen()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition">
+                                    <i class="fas fa-times text-xs sm:text-sm"></i>
                                 </button>
                             </div>
                         </div>
 
-                        <div id="cctvFullscreenBody" class="w-full aspect-video bg-black flex items-center justify-center relative overflow-hidden">
+                        <div id="cctvFullscreenBody" class="w-full flex-1 sm:flex-initial sm:aspect-video bg-black flex items-center justify-center relative overflow-hidden select-none cursor-pointer" onclick="toggleCctvFullscreenOverlay(event)">
                             <!-- เรนเดอร์ผ่าน JavaScript -->
                         </div>
                     </div>

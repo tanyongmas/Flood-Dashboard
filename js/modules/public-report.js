@@ -1149,21 +1149,26 @@ window.renderPublicPortal = async function () {
         </footer>
 
         <!-- Modal: ขยายภาพกล้อง CCTV สำหรับประชาชน (Public CCTV Lightbox) -->
-        <div id="publicCctvLightbox" class="hidden fixed inset-0 z-[9999] bg-black/95 backdrop-blur-md flex items-center justify-center p-3 md:p-6" onclick="closePublicCctvLightbox()">
-            <div class="relative w-full max-w-4xl bg-slate-950 rounded-3xl overflow-hidden shadow-2xl border border-slate-800 flex flex-col" onclick="event.stopPropagation()">
-                <div class="p-4 bg-slate-900 border-b border-slate-800 flex items-center justify-between text-white">
-                    <div class="flex items-center gap-2.5">
-                        <span class="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></span>
-                        <div>
-                            <h3 id="publicCctvModalTitle" class="font-bold text-sm md:text-base text-white">กล้อง CCTV ถ่ายทอดภาพสด</h3>
-                            <p id="publicCctvModalSub" class="text-[11px] text-slate-400">ภาพความละเอียดสูงจากจุดติดตั้ง</p>
+        <div id="publicCctvLightbox" class="hidden fixed inset-0 z-[9999] bg-black/95 backdrop-blur-md flex items-center justify-center p-0 sm:p-3 md:p-6" onclick="closePublicCctvLightbox()">
+            <div class="relative w-full h-full sm:h-auto max-w-4xl bg-slate-950 sm:rounded-3xl overflow-hidden shadow-2xl border-0 sm:border border-slate-800 flex flex-col justify-between sm:justify-start" onclick="event.stopPropagation()">
+                <div id="publicCctvFsHeader" class="p-2.5 sm:p-4 bg-slate-900/95 border-b border-slate-800 flex items-center justify-between text-white shrink-0 transition-all duration-300 z-30">
+                    <div class="flex items-center gap-2 min-w-0 pr-2">
+                        <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+                        <div class="min-w-0">
+                            <h3 id="publicCctvModalTitle" class="font-bold text-xs sm:text-base text-white truncate max-w-[180px] sm:max-w-none">กล้อง CCTV ถ่ายทอดภาพสด</h3>
+                            <p id="publicCctvModalSub" class="text-[9px] sm:text-[11px] text-slate-400 truncate max-w-[180px] sm:max-w-none">ภาพความละเอียดสูงจากจุดติดตั้ง</p>
                         </div>
                     </div>
-                    <button onclick="closePublicCctvLightbox()" class="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition">
-                        <i class="fas fa-times"></i>
-                    </button>
+                    <div class="flex items-center gap-1.5 shrink-0">
+                        <button onclick="togglePublicCctvOverlay(event)" class="px-2 py-1 bg-white/10 hover:bg-white/20 text-white rounded-lg text-[10px] font-bold flex items-center gap-1 transition" title="ซ่อน/แสดงแถบข้อมูล">
+                            <i id="publicCctvFsToggleIcon" class="fas fa-eye-slash text-[9px]"></i> <span class="hidden sm:inline">ซ่อนแถบ</span>
+                        </button>
+                        <button onclick="closePublicCctvLightbox()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition">
+                            <i class="fas fa-times text-xs sm:text-sm"></i>
+                        </button>
+                    </div>
                 </div>
-                <div id="publicCctvModalBody" class="w-full aspect-video bg-black flex items-center justify-center relative overflow-hidden">
+                <div id="publicCctvModalBody" class="w-full flex-1 sm:flex-initial sm:aspect-video bg-black flex items-center justify-center relative overflow-hidden select-none cursor-pointer" onclick="togglePublicCctvOverlay(event)">
                     <!-- Dynamic Body with Staff Gauge & Water Level -->
                 </div>
             </div>
@@ -2105,23 +2110,34 @@ window.addCitizenWaterMarkerToPublicMap = function (report) {
 // 📹 ฟังก์ชันจัดการกล้อง CCTV ในโหมดประชาชน
 // ==========================================
 function getPublicStaffGaugeHtml(cam) {
-    const level = cam.level !== null && cam.level !== undefined ? parseFloat(cam.level) : 0;
-    const warn = cam.warningThreshold || 1.5;
-    const crit = cam.criticalThreshold || 2.0;
-    const maxGauge = 3.0;
-    const waterPercent = Math.min(Math.max((level / maxGauge) * 100, 0), 100);
-    const warnPercent = Math.min((warn / maxGauge) * 100, 100);
-    const critPercent = Math.min((crit / maxGauge) * 100, 100);
+    const level = (cam.level !== null && cam.level !== undefined) ? parseFloat(cam.level) : 0;
+    const name = (cam.name || '').toLowerCase();
+    const wp = (cam.waterPoint || cam.water_point || '').toLowerCase();
+
+    let minGauge = 0, maxGauge = 3.0;
+    let warn = cam.warningThreshold || 1.5;
+    let crit = cam.criticalThreshold || 2.0;
+
+    if (cam.id === 'CAM-01' || name.includes('บองอ') || wp.includes('บองอ') || wp.includes('x.73a') || wp.includes('x73a')) {
+        minGauge = 20.0; maxGauge = 28.0; warn = 25.80; crit = 26.80;
+    } else if (cam.id === 'CAM-02' || name.includes('ประชาสามัคคี') || name.includes('ตันหยงมัส') || wp.includes('ประชาสามัคคี') || wp.includes('x.73') || wp.includes('x73') || level > 5.0) {
+        minGauge = 8.0; maxGauge = 16.0; warn = 13.50; crit = 14.90;
+    }
+
+    const range = Math.max(maxGauge - minGauge, 1);
+    const waterPercent = Math.min(Math.max(((level - minGauge) / range) * 100, 4), 100);
+    const warnPercent = Math.min(Math.max(((warn - minGauge) / range) * 100, 0), 100);
+    const critPercent = Math.min(Math.max(((crit - minGauge) / range) * 100, 0), 100);
 
     return `
-        <div class="absolute right-2 top-2 bottom-8 w-10 bg-black/75 backdrop-blur-md rounded-xl border border-white/20 p-1 flex flex-col justify-between items-center text-white pointer-events-none z-10">
-            <div class="text-[7px] font-black font-mono text-sky-300 border-b border-white/20 pb-0.5 w-full text-center">เสาวัด</div>
-            <div class="relative flex-1 w-3.5 bg-slate-800 rounded my-1 border border-white/30 overflow-hidden flex flex-col-reverse">
+        <div class="public-cctv-fs-overlay absolute right-1.5 sm:right-3 top-2 sm:top-3 bottom-12 sm:bottom-16 w-8 sm:w-10 bg-black/75 backdrop-blur-md rounded-lg sm:rounded-xl border border-white/20 p-0.5 sm:p-1 flex flex-col justify-between items-center text-white pointer-events-none z-20 transition-opacity duration-300">
+            <div class="text-[7px] sm:text-[7px] font-black font-mono text-sky-300 border-b border-white/20 pb-0.5 w-full text-center">เสาวัด</div>
+            <div class="relative flex-1 w-3 sm:w-3.5 bg-slate-800 rounded my-1 border border-white/30 overflow-hidden flex flex-col-reverse">
                 <div class="w-full bg-gradient-to-t from-sky-500 to-cyan-300 transition-all duration-700" style="height: ${waterPercent}%;"></div>
-                <div class="absolute w-full border-t border-rose-500 z-10" style="bottom: ${critPercent}%;"></div>
-                <div class="absolute w-full border-t border-amber-400 z-10" style="bottom: ${warnPercent}%;"></div>
+                <div class="absolute w-full border-t-2 border-rose-500 z-10" style="bottom: ${critPercent}%;"></div>
+                <div class="absolute w-full border-t-2 border-amber-400 z-10" style="bottom: ${warnPercent}%;"></div>
             </div>
-            <div class="text-[8px] font-black font-mono text-amber-300 leading-tight text-center">
+            <div class="text-[8px] sm:text-[8px] font-black font-mono text-amber-300 leading-tight text-center">
                 ${level > 0 ? level.toFixed(2) : '-'}m
             </div>
         </div>
@@ -2245,41 +2261,60 @@ window.openPublicCctvLightbox = function(camId) {
     const body = document.getElementById('publicCctvModalBody');
 
     if (title) title.innerText = cam.name;
-    if (sub) sub.innerText = `จุดวัด: ${cam.waterPoint || '-'} | ระดับน้ำ: ${cam.level !== null && cam.level !== undefined ? cam.level + ' ม.รทก.' : '-'} | สถานะ: ${cam.status.toUpperCase()}`;
+    if (sub) sub.innerText = `จุดวัด: ${cam.waterPoint || '-'} | ระดับน้ำ: ${cam.level !== null && cam.level !== undefined ? parseFloat(cam.level).toFixed(2) + ' ม.รทก.' : '-'} | ${cam.status.toUpperCase()}`;
 
     const streamRaw = (cam.streamUrl || cam.stream_url || cam.snapshotUrl || cam.snapshot_url || '').trim();
     const displayImg = streamRaw || 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=1200&q=80';
+    const levelVal = (cam.level !== null && cam.level !== undefined) ? parseFloat(cam.level) : null;
+    const levelStr = levelVal !== null ? `${levelVal.toFixed(2)} ม.รทก.` : '-';
+
+    let statusBadge = 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30';
+    let statusLabel = 'ปกติ';
+    if (levelVal !== null) {
+        if (cam.criticalThreshold && levelVal >= cam.criticalThreshold) {
+            statusBadge = 'bg-rose-500/30 text-rose-300 border-rose-500/40 animate-pulse';
+            statusLabel = 'วิกฤต (ล้นตลิ่ง)';
+        } else if (cam.warningThreshold && levelVal >= cam.warningThreshold) {
+            statusBadge = 'bg-amber-500/30 text-amber-300 border-amber-500/40';
+            statusLabel = 'เฝ้าระวัง';
+        }
+    }
 
     if (body) {
         if (cam.status === 'online') {
             body.innerHTML = `
-                <img id="publicCctvLightboxImg" data-raw-src="${streamRaw}" src="${displayImg}" class="w-full h-full object-contain" onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=1200&q=80';">
+                <img id="publicCctvLightboxImg" data-raw-src="${streamRaw}" src="${displayImg}" class="w-full h-full object-contain pointer-events-none" onerror="this.onerror=null; this.src='https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=1200&q=80';">
                 ${getPublicStaffGaugeHtml(cam)}
-                <div class="absolute top-4 left-4 flex items-center gap-2 bg-black/70 backdrop-blur-md px-3 py-1.5 rounded-xl text-white text-xs font-mono">
-                    <span class="w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping"></span>
+                
+                <!-- Top Badge -->
+                <div class="public-cctv-fs-overlay absolute top-2 sm:top-3 left-2 sm:left-3 flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg text-white text-[9px] sm:text-xs font-mono transition-opacity duration-300">
+                    <span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span>
                     <span>LIVE STREAM • ${cam.type}</span>
                 </div>
-                <div class="absolute bottom-4 left-4 right-14 bg-black/80 backdrop-blur-md p-3.5 rounded-2xl flex flex-wrap items-center justify-between text-white text-xs gap-2">
-                    <div>
-                        <span class="font-bold text-sky-400">จุดวัด: ${cam.waterPoint || '-'}</span>
-                        <span class="ml-3 text-slate-300 font-mono text-[11px]">พิกัด: ${cam.lat}, ${cam.lng}</span>
+
+                <!-- Bottom Bar (Compact on mobile) -->
+                <div class="public-cctv-fs-overlay absolute bottom-0 left-0 right-0 sm:bottom-3 sm:left-3 sm:right-3 bg-gradient-to-t from-black/95 via-black/80 to-transparent sm:bg-black/80 sm:backdrop-blur-md p-2 sm:p-3 sm:rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between text-white text-[10px] sm:text-xs gap-1 sm:gap-2 transition-opacity duration-300">
+                    <div class="flex items-center gap-2 truncate max-w-full">
+                        <span class="font-bold text-sky-400 truncate"><i class="fas fa-location-dot mr-1"></i>${cam.waterPoint || '-'}</span>
                     </div>
-                    <div class="flex items-center gap-3">
-                        <span>ระดับน้ำ: <b class="text-amber-300 text-sm font-black">${cam.level !== null && cam.level !== undefined ? cam.level + ' ม.รทก.' : '-'}</b></span>
+                    <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
+                        <span>ระดับน้ำ: <b class="text-amber-300 text-xs sm:text-sm font-black">${levelStr}</b></span>
+                        <span class="text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded border ${statusBadge} font-bold">${statusLabel}</span>
                         ${(cam.lat && cam.lng) ? `
-                            <a href="https://www.google.com/maps/dir/?api=1&destination=${cam.lat},${cam.lng}" target="_blank"
-                                class="px-3 py-1 bg-white/20 hover:bg-white/30 border border-white/30 text-white rounded-lg font-bold text-xs flex items-center gap-1 transition">
-                                <i class="fas fa-location-arrow text-[10px]"></i> นำทาง
+                            <a href="https://www.google.com/maps/dir/?api=1&destination=${cam.lat},${cam.lng}" target="_blank" onclick="event.stopPropagation()"
+                                class="px-2 py-0.5 bg-white/20 hover:bg-white/30 border border-white/30 text-white rounded font-bold text-[10px] flex items-center gap-1 transition">
+                                <i class="fas fa-location-arrow text-[9px]"></i> นำทาง
                             </a>
                         ` : ''}
+                        <span class="text-slate-400 text-[9px] hidden sm:inline">(แตะจอเพื่อซ่อนแถบ)</span>
                     </div>
                 </div>
             `;
         } else {
             body.innerHTML = `
                 <div class="text-center text-slate-500 p-8">
-                    <i class="fas fa-video-slash text-5xl mb-3 text-slate-600"></i>
-                    <h4 class="font-bold text-white text-base">กล้องไม่ได้เชื่อมต่อสัญญาณ (Offline)</h4>
+                    <i class="fas fa-video-slash text-4xl sm:text-5xl mb-2 sm:mb-3 text-slate-600"></i>
+                    <h4 class="font-bold text-white text-sm sm:text-base">กล้องไม่ได้เชื่อมต่อสัญญาณ (Offline)</h4>
                     <p class="text-xs text-slate-400 mt-1">กรุณาตรวจสอบระบบสัญญาณหรือรอเจ้าหน้าที่ดำเนินการ</p>
                 </div>
             `;
@@ -2287,6 +2322,39 @@ window.openPublicCctvLightbox = function(camId) {
     }
 
     if (modal) modal.classList.remove('hidden');
+    if (window.publicCctvLightboxTimer) clearInterval(window.publicCctvLightboxTimer);
+    if (streamRaw && (streamRaw.includes('.jpeg') || streamRaw.includes('.jpg') || streamRaw.includes('/public-frame') || streamRaw.includes('api/webrtc'))) {
+        window.publicCctvLightboxTimer = setInterval(() => {
+            const lImg = document.getElementById('publicCctvLightboxImg');
+            if (lImg) {
+                const sep = streamRaw.includes('?') ? '&' : '?';
+                const nSrc = `${streamRaw}${sep}_t=${Date.now()}`;
+                const p = new Image();
+                p.onload = () => { if (lImg) lImg.src = nSrc; };
+                p.src = nSrc;
+            }
+        }, 5000);
+    }
+};
+
+window.togglePublicCctvOverlay = function(e) {
+    if (e) e.stopPropagation();
+    const overlays = document.querySelectorAll('.public-cctv-fs-overlay');
+    const header = document.getElementById('publicCctvFsHeader');
+    const icon = document.getElementById('publicCctvFsToggleIcon');
+    let isHidden = false;
+    overlays.forEach(el => {
+        el.classList.toggle('opacity-0');
+        el.classList.toggle('pointer-events-none');
+        if (el.classList.contains('opacity-0')) isHidden = true;
+    });
+    if (header) {
+        header.classList.toggle('opacity-0');
+        header.classList.toggle('pointer-events-none');
+    }
+    if (icon) {
+        icon.className = isHidden ? 'fas fa-eye text-[9px]' : 'fas fa-eye-slash text-[9px]';
+    }
 };
 
 window.closePublicCctvLightbox = function() {
