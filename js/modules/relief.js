@@ -76,6 +76,330 @@ window.selectReliefAddress = function (addr) {
     }
 };
 
+// ========================================================
+// 🌟 ระบบสลับโหมดและบันทึกการแจกตามโซน (Quick Zone Distribution)
+// ========================================================
+window.currentReliefModalMode = 'zone';
+window.currentModalZone = 'zone1';
+window.modalZoneSearchQuery = '';
+
+const MODAL_ZONE_INFO = {
+    zone1: { name: 'โซน 1: ชุมชนตลาดกลางผลไม้', short: 'ตลาดกลาง' },
+    zone2: { name: 'โซน 2: หลังสระรพช-ตรอ', short: 'รพช-ตรอ' },
+    zone3: { name: 'โซน 3: เขาพระ-โรงฆ่าสัตว์', short: 'เขาพระ' },
+    zone4: { name: 'โซน 4: ดารุสสลาม-สุขาภิบาล', short: 'ดารุสสลาม' },
+    zone5: { name: 'โซน 5: บาลูกา', short: 'บาลูกา' }
+};
+
+window.switchReliefModalMode = function (mode) {
+    window.currentReliefModalMode = mode;
+    const tabZone = document.getElementById('tab-relief-zone');
+    const tabManual = document.getElementById('tab-relief-manual');
+    const modeZone = document.getElementById('reliefModeZone');
+    const modeManual = document.getElementById('reliefModeManual');
+
+    if (mode === 'zone') {
+        if (tabZone) {
+            tabZone.className = 'flex-1 py-2.5 px-3 rounded-xl font-black text-xs md:text-sm flex items-center justify-center transition-all bg-white text-amber-600 shadow-sm';
+        }
+        if (tabManual) {
+            tabManual.className = 'flex-1 py-2.5 px-3 rounded-xl font-bold text-xs md:text-sm flex items-center justify-center transition-all text-slate-500 hover:text-slate-700';
+        }
+        if (modeZone) modeZone.classList.remove('hidden');
+        if (modeManual) modeManual.classList.add('hidden');
+
+        window.renderModalZoneAddresses();
+    } else {
+        if (tabZone) {
+            tabZone.className = 'flex-1 py-2.5 px-3 rounded-xl font-bold text-xs md:text-sm flex items-center justify-center transition-all text-slate-500 hover:text-slate-700';
+        }
+        if (tabManual) {
+            tabManual.className = 'flex-1 py-2.5 px-3 rounded-xl font-black text-xs md:text-sm flex items-center justify-center transition-all bg-white text-amber-600 shadow-sm';
+        }
+        if (modeZone) modeZone.classList.add('hidden');
+        if (modeManual) modeManual.classList.remove('hidden');
+    }
+};
+
+window.selectModalZone = function (zoneKey) {
+    window.currentModalZone = zoneKey;
+
+    const zones = ['zone1', 'zone2', 'zone3', 'zone4', 'zone5'];
+    zones.forEach(z => {
+        const btn = document.getElementById(`mzone-btn-${z}`);
+        if (!btn) return;
+        const isSpan2 = (z === 'zone5') ? ' col-span-2 sm:col-span-1' : '';
+        if (z === zoneKey) {
+            btn.className = 'modal-zone-btn p-2.5 rounded-2xl border-2 border-amber-400 bg-amber-50 text-amber-900 text-xs font-black shadow-sm transition-all text-center flex flex-col items-center justify-center ring-2 ring-amber-200' + isSpan2;
+        } else {
+            btn.className = 'modal-zone-btn p-2.5 rounded-2xl border border-slate-200 bg-white text-slate-600 text-xs font-bold hover:bg-slate-50 transition-all text-center flex flex-col items-center justify-center' + isSpan2;
+        }
+    });
+
+    const badge = document.getElementById('modalZoneSummaryBadge');
+    if (badge && MODAL_ZONE_INFO[zoneKey]) {
+        badge.innerText = MODAL_ZONE_INFO[zoneKey].name;
+    }
+
+    window.renderModalZoneAddresses();
+};
+
+window.handleModalZoneSearch = function (val) {
+    window.modalZoneSearchQuery = (val || '').trim();
+    window.renderModalZoneAddresses();
+};
+
+window.renderModalZoneAddresses = function () {
+    const listContainer = document.getElementById('reliefZoneList');
+    if (!listContainer) return;
+
+    if (!window.reliefAddressList || window.reliefAddressList.length === 0) {
+        window.reliefAddressList = getReliefAddressList();
+    }
+    const allAddresses = window.reliefAddressList || [];
+
+    // แผนที่ตรวจสอบบ้านที่เคยรับไปแล้วในรอบปัจจุบัน
+    const receivedMap = new Map();
+    if (store && store.reliefData && Array.isArray(store.reliefData)) {
+        store.reliefData.forEach(r => {
+            const addr = r[4] ? r[4].toString().trim() : '';
+            if (addr && !receivedMap.has(addr)) {
+                receivedMap.set(addr, {
+                    distributedAt: r[0] || '',
+                    name: r[1] || '',
+                    status: r[2] || '',
+                    members: r[3] || 1
+                });
+            }
+        });
+    }
+
+    // คำนวณจำนวนบ้านทั้งหมดในแต่ละโซนเพื่ออัปเดต Badge บนปุ่มทั้ง 5 โซน
+    const zoneCounts = { zone1: 0, zone2: 0, zone3: 0, zone4: 0, zone5: 0 };
+    allAddresses.forEach(addr => {
+        const exact = window.getExactZoneForAddress ? window.getExactZoneForAddress(addr) : 'zone 5';
+        const key = exact.replace(/\s+/g, '').toLowerCase();
+        if (zoneCounts[key] !== undefined) {
+            zoneCounts[key]++;
+        }
+    });
+
+    ['zone1', 'zone2', 'zone3', 'zone4', 'zone5'].forEach(zKey => {
+        const badge = document.getElementById(`mzone-count-${zKey}`);
+        if (badge) badge.innerText = zoneCounts[zKey] || 0;
+    });
+
+    // กรองที่อยู่เฉพาะโซนปัจจุบัน
+    const currentZone = window.currentModalZone || 'zone1';
+    const zoneAddresses = allAddresses.filter(addr => {
+        const exact = window.getExactZoneForAddress ? window.getExactZoneForAddress(addr) : 'zone 5';
+        const key = exact.replace(/\s+/g, '').toLowerCase();
+        return key === currentZone;
+    });
+
+    // กรองตามคำค้นหา (บ้านเลขที่ / ชื่อถนน / ข้อความ)
+    let filtered = zoneAddresses;
+    const q = (window.modalZoneSearchQuery || '').toLowerCase();
+    if (q) {
+        filtered = zoneAddresses.filter(addr => {
+            const lowerAddr = addr.toLowerCase();
+            if (lowerAddr.includes(q)) return true;
+            if (typeof window.extractAddressComponents === 'function') {
+                const comps = window.extractAddressComponents(addr);
+                if (comps.houseNo && comps.houseNo.toLowerCase().includes(q)) return true;
+                if (comps.streetName && comps.streetName.toLowerCase().includes(q)) return true;
+            }
+            return false;
+        });
+    }
+
+    // จัดเรียง: หลังที่ยังไม่ได้รับขึ้นก่อน -> เรียงตามลำดับบ้านเลขที่/ชื่อ
+    filtered.sort((a, b) => {
+        const aRec = receivedMap.has(a);
+        const bRec = receivedMap.has(b);
+        if (aRec !== bRec) {
+            return aRec ? 1 : -1;
+        }
+        return a.localeCompare(b, 'th', { numeric: true });
+    });
+
+    // คำนวณสถิติในโซนนี้
+    const totalInZone = zoneAddresses.length;
+    const receivedInZone = zoneAddresses.filter(a => receivedMap.has(a)).length;
+    const pendingInZone = totalInZone - receivedInZone;
+
+    const statSummaryEl = document.getElementById('modalZoneStatSummary');
+    if (statSummaryEl) {
+        if (q) {
+            statSummaryEl.innerHTML = `ค้นพบ <span class="text-amber-600 font-black">${filtered.length}</span> จากทั้งหมด ${totalInZone} หลังคาเรือน`;
+        } else {
+            statSummaryEl.innerHTML = `ทั้งหมด <span class="text-slate-800 font-black">${totalInZone}</span> หลังคาเรือน`;
+        }
+    }
+    const statRecEl = document.getElementById('mzone-stat-received');
+    if (statRecEl) statRecEl.innerText = receivedInZone;
+    const statPenEl = document.getElementById('mzone-stat-pending');
+    if (statPenEl) statPenEl.innerText = pendingInZone;
+
+    if (filtered.length === 0) {
+        listContainer.innerHTML = `
+            <div class="py-12 text-center text-slate-400 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+                <i class="fas fa-search-minus text-3xl mb-2 block opacity-30"></i>
+                <p class="font-bold text-sm text-slate-600">ไม่พบที่อยู่ที่ตรงกับเงื่อนไขในโซนนี้</p>
+                <p class="text-xs text-slate-400 mt-1">สามารถสลับไปที่แท็บ "บันทึกแบบเดิม" เพื่อระบุที่อยู่ใหม่ได้</p>
+            </div>
+        `;
+        return;
+    }
+
+    let html = '';
+    filtered.forEach(addr => {
+        const isReceived = receivedMap.has(addr);
+        if (isReceived) {
+            const item = receivedMap.get(addr);
+            let dateStr = '';
+            if (item.distributedAt) {
+                try {
+                    const d = new Date(item.distributedAt);
+                    dateStr = d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) + ' น.';
+                } catch (e) {
+                    dateStr = item.distributedAt;
+                }
+            }
+            html += `
+                <div class="p-3 md:p-3.5 bg-emerald-50/70 border border-emerald-200/80 rounded-2xl flex items-center justify-between gap-3 transition-all">
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2">
+                            <span class="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center text-xs flex-shrink-0">
+                                <i class="fas fa-home"></i>
+                            </span>
+                            <span class="font-black text-slate-800 text-sm truncate">${addr}</span>
+                        </div>
+                        <div class="text-[11px] text-emerald-700 font-bold mt-1 flex items-center gap-1.5 ml-8 flex-wrap">
+                            <span class="inline-flex items-center text-emerald-600">
+                                <i class="fas fa-check-circle mr-1"></i>รับแล้ว ${dateStr ? `(${dateStr})` : ''}
+                            </span>
+                            ${item.name ? `<span class="text-slate-500 font-normal">| ผู้รับ: ${item.name}</span>` : ''}
+                        </div>
+                    </div>
+                    <button type="button" disabled
+                        class="px-3.5 py-2 bg-emerald-100 text-emerald-700 font-bold text-xs rounded-xl cursor-not-allowed opacity-80 flex items-center whitespace-nowrap flex-shrink-0">
+                        <i class="fas fa-check mr-1.5"></i>รับแล้ว
+                    </button>
+                </div>
+            `;
+        } else {
+            html += `
+                <div class="p-3 md:p-3.5 bg-white hover:bg-amber-50/40 border border-slate-200 hover:border-amber-300 rounded-2xl flex items-center justify-between gap-3 shadow-sm hover:shadow transition-all group">
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2">
+                            <span class="w-6 h-6 rounded-lg bg-slate-100 group-hover:bg-amber-100 text-slate-400 group-hover:text-amber-600 flex items-center justify-center text-xs flex-shrink-0 transition-colors">
+                                <i class="fas fa-home"></i>
+                            </span>
+                            <span class="font-bold text-slate-800 text-sm truncate">${addr}</span>
+                        </div>
+                        <div class="text-[11px] text-slate-400 font-medium mt-1 flex items-center gap-1 ml-8">
+                            <i class="far fa-circle text-[9px] text-slate-300"></i>
+                            <span>ยังไม่ได้รับถุงยังชีพ</span>
+                        </div>
+                    </div>
+                    <button type="button" onclick='quickSaveReliefByAddress(${JSON.stringify(addr)}, this)'
+                        class="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-black text-xs rounded-xl shadow-md shadow-amber-200 transition-all flex items-center whitespace-nowrap flex-shrink-0 cursor-pointer">
+                        <i class="fas fa-bolt mr-1.5"></i>บันทึกแจก
+                    </button>
+                </div>
+            `;
+        }
+    });
+
+    listContainer.innerHTML = html;
+};
+
+window.quickSaveReliefByAddress = async function (addr, btnEl) {
+    if (typeof checkAdminReadOnlyAction === 'function' && checkAdminReadOnlyAction()) return;
+
+    if (!addr || !addr.trim()) {
+        Swal.fire('แจ้งเตือน', 'ไม่พบข้อมูลที่อยู่', 'warning');
+        return;
+    }
+
+    const cleanAddr = addr.trim();
+
+    // ตรวจสอบการแจกซ้ำ
+    if (store && store.reliefData && store.reliefData.length > 0) {
+        const isDuplicate = store.reliefData.some(r => {
+            const existingAddress = r[4] ? r[4].toString().trim() : '';
+            return existingAddress === cleanAddr;
+        });
+
+        if (isDuplicate) {
+            Swal.fire({
+                title: 'ไม่สามารถบันทึกได้!',
+                html: `ที่อยู่ <b>"${cleanAddr}"</b> <br><span class="text-rose-500">มีการรับถุงยังชีพไปแล้ว</span>`,
+                icon: 'error',
+                confirmButtonColor: '#ef4444'
+            });
+            window.renderModalZoneAddresses();
+            return;
+        }
+    }
+
+    const originalBtnHTML = btnEl ? btnEl.innerHTML : '';
+    if (btnEl) {
+        btnEl.disabled = true;
+        btnEl.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>บันทึก...';
+    }
+
+    const payload = {
+        action: 'saveRelief',
+        name: '', // เว้นว่างตามความต้องการเพื่อความรวดเร็ว
+        status: 'เจ้าบ้าน',
+        members: 1,
+        address: cleanAddr,
+        regisAddress: cleanAddr,
+        period: typeof currentPeriod !== 'undefined' ? currentPeriod : ''
+    };
+
+    try {
+        if (typeof sbSaveRelief === 'function') {
+            await sbSaveRelief(payload);
+        } else {
+            throw new Error('Supabase Service ไม่พร้อมทำงาน');
+        }
+
+        // เพิ่มข้อมูลลงใน local store ทันที (Optimistic UI)
+        if (!store.reliefData) store.reliefData = [];
+        const nowIso = new Date().toISOString();
+        store.reliefData.unshift([nowIso, '', 'เจ้าบ้าน', 1, cleanAddr, cleanAddr]);
+
+        // อัปเดตตารางหลักและ Dashboard ด้านหลัง
+        if (typeof renderReliefTable === 'function') renderReliefTable();
+        if (typeof renderStockDashboard === 'function') renderStockDashboard();
+
+        // รีเฟรชรายการใน Modal ทันที ให้เปลี่ยนเป็นสถานะ "รับแล้ว"
+        window.renderModalZoneAddresses();
+
+        // แสดงแจ้งเตือนแบบ Toast สั้นๆ ไม่รบกวนหน้าจอ
+        const Toast = Swal.mixin({
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 2000,
+            timerProgressBar: true
+        });
+        Toast.fire({
+            icon: 'success',
+            title: `บันทึกแจกถุงยังชีพสำเร็จ:<br><span class="text-xs text-slate-600 font-bold">${cleanAddr}</span>`
+        });
+    } catch (err) {
+        if (btnEl) {
+            btnEl.disabled = false;
+            btnEl.innerHTML = originalBtnHTML;
+        }
+        Swal.fire('ผิดพลาด', err.message, 'error');
+    }
+};
+
 window.openReliefModal = function () {
     const form = document.getElementById('reliefForm');
     if (form) form.reset();
@@ -93,9 +417,16 @@ window.openReliefModal = function () {
     const resultBox = document.getElementById('rel_address_results');
     if (resultBox) resultBox.classList.add('hidden');
 
+    const searchInput = document.getElementById('reliefZoneSearchInput');
+    if (searchInput) searchInput.value = '';
+    window.modalZoneSearchQuery = '';
+
     window.reliefAddressList = getReliefAddressList();
     const modal = document.getElementById('reliefModal');
     if (modal) modal.classList.remove('hidden');
+
+    // เริ่มต้นแสดงผลโหมดที่เลือกไว้ (ค่าเริ่มต้นคือแบบเลือกตามโซน)
+    window.switchReliefModalMode(window.currentReliefModalMode || 'zone');
 };
 
 window.closeReliefModal = function () {
@@ -545,3 +876,8 @@ window.renderReliefTable = renderReliefTable;
 window.filterByZone = filterByZone;
 window.clearZoneFilter = clearZoneFilter;
 window.filterReliefTable = filterReliefTable;
+window.switchReliefModalMode = switchReliefModalMode;
+window.selectModalZone = selectModalZone;
+window.handleModalZoneSearch = handleModalZoneSearch;
+window.renderModalZoneAddresses = renderModalZoneAddresses;
+window.quickSaveReliefByAddress = quickSaveReliefByAddress;

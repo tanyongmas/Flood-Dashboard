@@ -2188,108 +2188,208 @@
                     </div>
                 </section>
                 <div id="reliefModal"
-                    class="hidden fixed inset-0 bg-slate-900/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
+                    class="hidden fixed inset-0 bg-slate-900/60 z-[100] flex items-center justify-center p-3 md:p-4 backdrop-blur-sm">
                     <div
-                        class="bg-white w-full max-w-lg rounded-[2.5rem] p-6 shadow-2xl overflow-y-auto max-h-[90vh] scale-in-center">
-                        <div class="flex justify-between items-center mb-4">
-                            <h3 class="text-lg font-black text-slate-800">บันทึกการแจกถุงยังชีพ</h3>
-                            <button type="button" onclick="closeReliefModal()"
-                                class="text-slate-400 hover:text-red-500 transition-colors"><i
-                                    class="fas fa-times-circle text-xl"></i></button>
-                        </div>
-
-                        <!-- 🌟 ส่วนที่เพิ่มใหม่: ปุ่มสแกนบัตรประชาชนด้วย AI OCR พร้อมตัวเลือก Engine -->
-                        <div
-                            class="mb-5 bg-indigo-50 border border-indigo-100 rounded-2xl p-4 flex flex-col items-center justify-center transition-all">
-
-                            <!-- 🌟 เพิ่ม Dropdown เลือก AI ตรงนี้ -->
-                            <div
-                                class="w-full flex items-center justify-between bg-white p-2.5 rounded-xl border border-indigo-100 mb-3 shadow-sm">
-                                <label class="text-[11px] font-bold text-indigo-800"><i class="fas fa-robot mr-1"></i>
-                                    เลือกระบบ AI อ่านบัตร:</label>
-                                <select id="swal_ocr_engine"
-                                    class="p-1.5 border border-indigo-200 bg-indigo-50 rounded-lg text-xs font-bold text-indigo-600 outline-none focus:ring-2 focus:ring-indigo-300 transition-all cursor-pointer">
-                                    <option value="typhoon" selected>Typhoon OCR (ระบบหลัก)</option>
-                                    <option value="akson">Akson OCR (ระบบสำรอง)</option>
-                                </select>
-                            </div>
-
-                            <!-- input file ซ่อนไว้ ใช้สำหรับเปิดกล้องถ่ายรูป หรือเลือกไฟล์รูป -->
-                            <input type="file" id="ocr_id_card" accept="image/*" capture="environment" class="hidden"
-                                onchange="processIdCardOCR(event)">
-
-                            <button type="button" onclick="document.getElementById('ocr_id_card').click()"
-                                class="w-full py-3.5 bg-white text-indigo-600 font-black rounded-[1.2rem] shadow-sm border border-indigo-200 hover:bg-indigo-600 hover:text-white transition-all active:scale-95 flex items-center justify-center group">
-                                <i class="fas fa-id-card text-xl mr-2 group-hover:scale-110 transition-transform"></i>
-                                สแกนบัตรประชาชน (AI OCR)
-                            </button>
-                            <p class="text-[10px] text-indigo-400 mt-2 font-bold"><i
-                                    class="fas fa-magic mr-1"></i>ดึงชื่อและที่อยู่ตามทะเบียนบ้านอัตโนมัติ</p>
-                        </div>
-
-                        <form id="reliefForm" onsubmit="saveReliefData(event)" class="space-y-4">
-
-                            <div>
-                                <label
-                                    class="text-[10px] font-bold text-slate-400 uppercase ml-1">ชื่อ-นามสกุลผู้รับ</label>
-                                <input type="text" id="rel_name"
-                                    class="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-50 transition-all"
-                                    required>
-                            </div>
-
-                            <div class="grid grid-cols-2 gap-4">
+                        class="bg-white w-full max-w-2xl rounded-[2.5rem] p-5 md:p-7 shadow-2xl overflow-y-auto max-h-[92vh] scale-in-center transition-all">
+                        
+                        <!-- Header -->
+                        <div class="flex justify-between items-center mb-3">
+                            <div class="flex items-center gap-2.5">
+                                <div class="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-md shadow-amber-200">
+                                    <i class="fas fa-box-open text-lg"></i>
+                                </div>
                                 <div>
-                                    <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">สถานะ</label>
-                                    <select id="rel_status"
-                                        class="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-amber-400">
-                                        <option value="เจ้าบ้าน">เจ้าบ้าน</option>
-                                        <option value="ผู้อาศัย">ผู้อาศัย</option>
+                                    <h3 class="text-lg font-black text-slate-800 leading-tight">บันทึกการแจกถุงยังชีพ</h3>
+                                    <p class="text-[11px] text-slate-400 font-bold">บันทึกข้อมูลครัวเรือนที่รับถุงยังชีพ</p>
+                                </div>
+                            </div>
+                            <button type="button" onclick="closeReliefModal()"
+                                class="w-8 h-8 rounded-full bg-slate-100 hover:bg-rose-50 text-slate-400 hover:text-rose-500 flex items-center justify-center transition-colors">
+                                <i class="fas fa-times text-sm"></i>
+                            </button>
+                        </div>
+
+                        <!-- แถบสลับโหมด (Mode Switcher Tabs) -->
+                        <div class="flex p-1 bg-slate-100 rounded-2xl mb-4 border border-slate-200/60">
+                            <button type="button" id="tab-relief-zone" onclick="switchReliefModalMode('zone')"
+                                class="flex-1 py-2.5 px-3 rounded-xl font-black text-xs md:text-sm flex items-center justify-center transition-all bg-white text-amber-600 shadow-sm">
+                                <i class="fas fa-map-marked-alt mr-2 text-amber-500"></i>เลือกตามโซน (บันทึกด่วน)
+                            </button>
+                            <button type="button" id="tab-relief-manual" onclick="switchReliefModalMode('manual')"
+                                class="flex-1 py-2.5 px-3 rounded-xl font-bold text-xs md:text-sm flex items-center justify-center transition-all text-slate-500 hover:text-slate-700">
+                                <i class="fas fa-edit mr-2 text-slate-400"></i>บันทึกแบบเดิม (กรอกละเอียด / AI)
+                            </button>
+                        </div>
+
+                        <!-- 🌟 โหมดที่ 1: บันทึกแบบเลือกตามโซน (ด่วน) -->
+                        <div id="reliefModeZone" class="space-y-3.5">
+                            <!-- ปุ่มเลือกโซน (Zone 1 - 5) -->
+                            <div>
+                                <div class="flex items-center justify-between mb-2">
+                                    <label class="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center">
+                                        <i class="fas fa-map-pin text-amber-500 mr-1.5"></i>เลือกโซนที่ต้องการแจก:
+                                    </label>
+                                    <span id="modalZoneSummaryBadge" class="text-[11px] font-black text-amber-700 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
+                                        โซน 1: ชุมชนตลาดกลางผลไม้
+                                    </span>
+                                </div>
+                                <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                                    <button type="button" onclick="selectModalZone('zone1')" id="mzone-btn-zone1"
+                                        class="modal-zone-btn p-2.5 rounded-2xl border-2 border-amber-400 bg-amber-50 text-amber-900 text-xs font-black shadow-sm transition-all text-center flex flex-col items-center justify-center ring-2 ring-amber-200">
+                                        <span>โซน 1</span>
+                                        <span class="text-[10px] text-amber-700 truncate w-full">ตลาดกลาง</span>
+                                        <span id="mzone-count-zone1" class="mt-1 px-2 py-0.5 text-[9px] rounded-full bg-amber-200 text-amber-900 font-black">0</span>
+                                    </button>
+                                    <button type="button" onclick="selectModalZone('zone2')" id="mzone-btn-zone2"
+                                        class="modal-zone-btn p-2.5 rounded-2xl border border-slate-200 bg-white text-slate-600 text-xs font-bold hover:bg-slate-50 transition-all text-center flex flex-col items-center justify-center">
+                                        <span>โซน 2</span>
+                                        <span class="text-[10px] text-slate-400 truncate w-full">รพช-ตรอ</span>
+                                        <span id="mzone-count-zone2" class="mt-1 px-2 py-0.5 text-[9px] rounded-full bg-slate-100 text-slate-600 font-bold">0</span>
+                                    </button>
+                                    <button type="button" onclick="selectModalZone('zone3')" id="mzone-btn-zone3"
+                                        class="modal-zone-btn p-2.5 rounded-2xl border border-slate-200 bg-white text-slate-600 text-xs font-bold hover:bg-slate-50 transition-all text-center flex flex-col items-center justify-center">
+                                        <span>โซน 3</span>
+                                        <span class="text-[10px] text-slate-400 truncate w-full">เขาพระ</span>
+                                        <span id="mzone-count-zone3" class="mt-1 px-2 py-0.5 text-[9px] rounded-full bg-slate-100 text-slate-600 font-bold">0</span>
+                                    </button>
+                                    <button type="button" onclick="selectModalZone('zone4')" id="mzone-btn-zone4"
+                                        class="modal-zone-btn p-2.5 rounded-2xl border border-slate-200 bg-white text-slate-600 text-xs font-bold hover:bg-slate-50 transition-all text-center flex flex-col items-center justify-center">
+                                        <span>โซน 4</span>
+                                        <span class="text-[10px] text-slate-400 truncate w-full">ดารุสสลาม</span>
+                                        <span id="mzone-count-zone4" class="mt-1 px-2 py-0.5 text-[9px] rounded-full bg-slate-100 text-slate-600 font-bold">0</span>
+                                    </button>
+                                    <button type="button" onclick="selectModalZone('zone5')" id="mzone-btn-zone5"
+                                        class="modal-zone-btn p-2.5 rounded-2xl border border-slate-200 bg-white text-slate-600 text-xs font-bold hover:bg-slate-50 transition-all text-center flex flex-col items-center justify-center col-span-2 sm:col-span-1">
+                                        <span>โซน 5</span>
+                                        <span class="text-[10px] text-slate-400 truncate w-full">บาลูกา</span>
+                                        <span id="mzone-count-zone5" class="mt-1 px-2 py-0.5 text-[9px] rounded-full bg-slate-100 text-slate-600 font-bold">0</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- ช่องค้นหาบ้านเลขที่ / ถนน ในโซนนี้ -->
+                            <div class="relative">
+                                <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                                <input type="text" id="reliefZoneSearchInput" onkeyup="handleModalZoneSearch(this.value)"
+                                    class="w-full pl-11 pr-10 py-3 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100 text-sm font-medium transition-all"
+                                    placeholder="ค้นหาบ้านเลขที่ หรือ ชื่อถนน/ซอย ในโซนนี้...">
+                                <button type="button" onclick="document.getElementById('reliefZoneSearchInput').value=''; handleModalZoneSearch('');"
+                                    class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500 text-xs p-1">
+                                    <i class="fas fa-times-circle"></i>
+                                </button>
+                            </div>
+
+                            <!-- แถบสรุปสถิติในโซน -->
+                            <div class="flex items-center justify-between text-xs px-1 text-slate-500">
+                                <span id="modalZoneStatSummary" class="font-bold text-slate-700">กำลังโหลด...</span>
+                                <div class="flex items-center gap-3">
+                                    <span class="flex items-center gap-1.5 text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-100">
+                                        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>รับแล้ว <b id="mzone-stat-received">0</b>
+                                    </span>
+                                    <span class="flex items-center gap-1.5 text-slate-600 font-bold bg-slate-100 px-2 py-0.5 rounded-lg border border-slate-200">
+                                        <span class="w-2 h-2 rounded-full bg-slate-300"></span>ยังไม่ได้รับ <b id="mzone-stat-pending">0</b>
+                                    </span>
+                                </div>
+                            </div>
+
+                            <!-- รายการที่อยู่แบบการ์ด (เลื่อนดูได้) -->
+                            <div id="reliefZoneList" class="space-y-2 max-h-[380px] overflow-y-auto pr-1 custom-scrollbar">
+                                <!-- เรนเดอร์ไดนามิกโดย renderModalZoneAddresses() -->
+                            </div>
+                        </div>
+
+                        <!-- 🌟 โหมดที่ 2: บันทึกแบบเดิม (กรอกละเอียด / AI OCR) -->
+                        <div id="reliefModeManual" class="hidden space-y-4">
+                            <!-- ปุ่มสแกนบัตรประชาชนด้วย AI OCR พร้อมตัวเลือก Engine -->
+                            <div
+                                class="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 flex flex-col items-center justify-center transition-all">
+
+                                <div
+                                    class="w-full flex items-center justify-between bg-white p-2.5 rounded-xl border border-indigo-100 mb-3 shadow-sm">
+                                    <label class="text-[11px] font-bold text-indigo-800"><i class="fas fa-robot mr-1"></i>
+                                        เลือกระบบ AI อ่านบัตร:</label>
+                                    <select id="swal_ocr_engine"
+                                        class="p-1.5 border border-indigo-200 bg-indigo-50 rounded-lg text-xs font-bold text-indigo-600 outline-none focus:ring-2 focus:ring-indigo-300 transition-all cursor-pointer">
+                                        <option value="typhoon" selected>Typhoon OCR (ระบบหลัก)</option>
+                                        <option value="akson">Akson OCR (ระบบสำรอง)</option>
                                     </select>
                                 </div>
+
+                                <input type="file" id="ocr_id_card" accept="image/*" capture="environment" class="hidden"
+                                    onchange="processIdCardOCR(event)">
+
+                                <button type="button" onclick="document.getElementById('ocr_id_card').click()"
+                                    class="w-full py-3.5 bg-white text-indigo-600 font-black rounded-[1.2rem] shadow-sm border border-indigo-200 hover:bg-indigo-600 hover:text-white transition-all active:scale-95 flex items-center justify-center group">
+                                    <i class="fas fa-id-card text-xl mr-2 group-hover:scale-110 transition-transform"></i>
+                                    สแกนบัตรประชาชน (AI OCR)
+                                </button>
+                                <p class="text-[10px] text-indigo-400 mt-2 font-bold"><i
+                                        class="fas fa-magic mr-1"></i>ดึงชื่อและที่อยู่ตามทะเบียนบ้านอัตโนมัติ</p>
+                            </div>
+
+                            <form id="reliefForm" onsubmit="saveReliefData(event)" class="space-y-4">
+
                                 <div>
                                     <label
-                                        class="text-[10px] font-bold text-slate-400 uppercase ml-1">จำนวนผู้อาศัย</label>
-                                    <select id="rel_members"
-                                        class="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-amber-400"></select>
+                                        class="text-[10px] font-bold text-slate-400 uppercase ml-1">ชื่อ-นามสกุลผู้รับ</label>
+                                    <input type="text" id="rel_name"
+                                        class="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-50 transition-all"
+                                        required>
                                 </div>
-                            </div>
 
-                            <!-- ส่วนที่อัปเดต: เปลี่ยนเป็นช่องค้นหา AutoComplete -->
-                            <div class="relative z-50">
-                                <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">ที่อยู่ปัจจุบัน
-                                    (ที่รับของ) - พิมพ์เพื่อค้นหา</label>
-                                <input type="text" id="rel_address_search"
-                                    onkeyup="handleReliefAddressSearch(this.value)" autocomplete="off"
-                                    class="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100 transition-all"
-                                    placeholder="พิมพ์ชื่อถนน, ชุมชน หรือพิมพ์ที่อยู่ใหม่..." required>
-
-                                <!-- กล่องแสดงผลค้นหาจะลอยอยู่เหนือฟิลด์ด้านล่าง -->
-                                <div id="rel_address_results"
-                                    class="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl hidden max-h-48 overflow-y-auto z-[100] custom-scrollbar">
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">สถานะ</label>
+                                        <select id="rel_status"
+                                            class="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-amber-400">
+                                            <option value="เจ้าบ้าน">เจ้าบ้าน</option>
+                                            <option value="ผู้อาศัย">ผู้อาศัย</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label
+                                            class="text-[10px] font-bold text-slate-400 uppercase ml-1">จำนวนผู้อาศัย</label>
+                                        <select id="rel_members"
+                                            class="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-amber-400"></select>
+                                    </div>
                                 </div>
-                            </div>
 
-                            <!-- ส่วนทะเบียนบ้าน (ถูกดันไปอยู่ Layer ต่ำกว่าเพื่อไม่ให้บังกล่องค้นหา) -->
-                            <div class="pt-2 relative z-0">
-                                <div class="flex items-center gap-2 mb-2">
-                                    <input type="checkbox" id="rel_same_addr" onchange="copyAddress(this.checked)"
-                                        class="w-4 h-4 text-amber-500 border-slate-300 rounded focus:ring-amber-500 cursor-pointer">
-                                    <label for="rel_same_addr"
-                                        class="text-xs text-slate-500 font-bold cursor-pointer select-none">ที่อยู่ทะเบียนบ้าน
-                                        ตรงกับที่อยู่ปัจจุบัน</label>
+                                <!-- ส่วนค้นหา AutoComplete -->
+                                <div class="relative z-50">
+                                    <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">ที่อยู่ปัจจุบัน
+                                        (ที่รับของ) - พิมพ์เพื่อค้นหา</label>
+                                    <input type="text" id="rel_address_search"
+                                        onkeyup="handleReliefAddressSearch(this.value)" autocomplete="off"
+                                        class="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-100 transition-all"
+                                        placeholder="พิมพ์ชื่อถนน, ชุมชน หรือพิมพ์ที่อยู่ใหม่..." required>
+
+                                    <div id="rel_address_results"
+                                        class="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl hidden max-h-48 overflow-y-auto z-[100] custom-scrollbar">
+                                    </div>
                                 </div>
-                                <label
-                                    class="text-[10px] font-bold text-slate-400 uppercase ml-1">ที่อยู่ตามทะเบียนบ้าน</label>
-                                <textarea id="rel_regis_address"
-                                    class="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none h-20 focus:border-amber-400 focus:ring-2 focus:ring-amber-50 transition-all"
-                                    required></textarea>
-                            </div>
 
-                            <button type="submit"
-                                class="w-full bg-amber-500 text-white py-4 rounded-2xl font-black shadow-lg shadow-amber-200 hover:bg-amber-600 active:scale-95 transition-all mt-4">
-                                <i class="fas fa-save mr-2"></i> บันทึกข้อมูล
-                            </button>
-                        </form>
+                                <!-- ส่วนทะเบียนบ้าน -->
+                                <div class="pt-2 relative z-0">
+                                    <div class="flex items-center gap-2 mb-2">
+                                        <input type="checkbox" id="rel_same_addr" onchange="copyAddress(this.checked)"
+                                            class="w-4 h-4 text-amber-500 border-slate-300 rounded focus:ring-amber-500 cursor-pointer">
+                                        <label for="rel_same_addr"
+                                            class="text-xs text-slate-500 font-bold cursor-pointer select-none">ที่อยู่ทะเบียนบ้าน
+                                            ตรงกับที่อยู่ปัจจุบัน</label>
+                                    </div>
+                                    <label
+                                        class="text-[10px] font-bold text-slate-400 uppercase ml-1">ที่อยู่ตามทะเบียนบ้าน</label>
+                                    <textarea id="rel_regis_address"
+                                        class="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none h-20 focus:border-amber-400 focus:ring-2 focus:ring-amber-50 transition-all"
+                                        required></textarea>
+                                </div>
+
+                                <button type="submit"
+                                    class="w-full bg-amber-500 text-white py-4 rounded-2xl font-black shadow-lg shadow-amber-200 hover:bg-amber-600 active:scale-95 transition-all mt-4">
+                                    <i class="fas fa-save mr-2"></i> บันทึกข้อมูล
+                                </button>
+                            </form>
+                        </div>
                     </div>
                 </div>
 
