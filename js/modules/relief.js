@@ -83,13 +83,59 @@ window.currentReliefModalMode = 'zone';
 window.currentModalZone = 'zone1';
 window.modalZoneSearchQuery = '';
 
-const MODAL_ZONE_INFO = {
-    zone1: { name: 'โซน 1: ชุมชนตลาดกลางผลไม้', short: 'ตลาดกลาง' },
-    zone2: { name: 'โซน 2: หลังสระรพช-ตรอ', short: 'รพช-ตรอ' },
-    zone3: { name: 'โซน 3: เขาพระ-โรงฆ่าสัตว์', short: 'เขาพระ' },
-    zone4: { name: 'โซน 4: ดารุสสลาม-สุขาภิบาล', short: 'ดารุสสลาม' },
-    zone5: { name: 'โซน 5: บาลูกา', short: 'บาลูกา' }
+const MODAL_ZONE_CONFIG = {
+    zone1: {
+        name: 'โซน 1: ชุมชนตลาดกลางผลไม้',
+        short: 'ตลาดกลาง',
+        colorName: 'blue',
+        activeBtn: 'modal-zone-btn p-2.5 rounded-2xl border-2 border-blue-400 border-l-4 border-l-blue-500 bg-blue-50/80 text-blue-900 text-xs font-black shadow-sm transition-all text-center flex flex-col items-center justify-center ring-2 ring-blue-200',
+        inactiveBtn: 'modal-zone-btn p-2.5 rounded-2xl border border-slate-200 border-l-4 border-l-blue-400 bg-white hover:bg-blue-50/50 text-slate-700 text-xs font-bold transition-all text-center flex flex-col items-center justify-center',
+        activeBadge: 'mt-1 px-2 py-0.5 text-[9px] rounded-full bg-blue-200 text-blue-900 font-black',
+        inactiveBadge: 'mt-1 px-2 py-0.5 text-[9px] rounded-full bg-blue-50 text-blue-700 font-bold',
+        summaryBadge: 'text-[11px] font-black text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200'
+    },
+    zone2: {
+        name: 'โซน 2: หลังสระรพช-ตรอ',
+        short: 'รพช-ตรอ',
+        colorName: 'amber',
+        activeBtn: 'modal-zone-btn p-2.5 rounded-2xl border-2 border-amber-400 border-l-4 border-l-amber-500 bg-amber-50/80 text-amber-900 text-xs font-black shadow-sm transition-all text-center flex flex-col items-center justify-center ring-2 ring-amber-200',
+        inactiveBtn: 'modal-zone-btn p-2.5 rounded-2xl border border-slate-200 border-l-4 border-l-amber-400 bg-white hover:bg-amber-50/50 text-slate-700 text-xs font-bold transition-all text-center flex flex-col items-center justify-center',
+        activeBadge: 'mt-1 px-2 py-0.5 text-[9px] rounded-full bg-amber-200 text-amber-900 font-black',
+        inactiveBadge: 'mt-1 px-2 py-0.5 text-[9px] rounded-full bg-amber-50 text-amber-700 font-bold',
+        summaryBadge: 'text-[11px] font-black text-amber-700 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200'
+    },
+    zone3: {
+        name: 'โซน 3: เขาพระ-โรงฆ่าสัตว์',
+        short: 'เขาพระ',
+        colorName: 'rose',
+        activeBtn: 'modal-zone-btn p-2.5 rounded-2xl border-2 border-rose-400 border-l-4 border-l-rose-500 bg-rose-50/80 text-rose-900 text-xs font-black shadow-sm transition-all text-center flex flex-col items-center justify-center ring-2 ring-rose-200',
+        inactiveBtn: 'modal-zone-btn p-2.5 rounded-2xl border border-slate-200 border-l-4 border-l-rose-400 bg-white hover:bg-rose-50/50 text-slate-700 text-xs font-bold transition-all text-center flex flex-col items-center justify-center',
+        activeBadge: 'mt-1 px-2 py-0.5 text-[9px] rounded-full bg-rose-200 text-rose-900 font-black',
+        inactiveBadge: 'mt-1 px-2 py-0.5 text-[9px] rounded-full bg-rose-50 text-rose-700 font-bold',
+        summaryBadge: 'text-[11px] font-black text-rose-700 bg-rose-50 px-2.5 py-0.5 rounded-full border border-rose-200'
+    },
+    zone4: {
+        name: 'โซน 4: ดารุสสลาม-สุขาภิบาล',
+        short: 'ดารุสสลาม',
+        colorName: 'emerald',
+        activeBtn: 'modal-zone-btn p-2.5 rounded-2xl border-2 border-emerald-400 border-l-4 border-l-emerald-500 bg-emerald-50/80 text-emerald-900 text-xs font-black shadow-sm transition-all text-center flex flex-col items-center justify-center ring-2 ring-emerald-200',
+        inactiveBtn: 'modal-zone-btn p-2.5 rounded-2xl border border-slate-200 border-l-4 border-l-emerald-400 bg-white hover:bg-emerald-50/50 text-slate-700 text-xs font-bold transition-all text-center flex flex-col items-center justify-center',
+        activeBadge: 'mt-1 px-2 py-0.5 text-[9px] rounded-full bg-emerald-200 text-emerald-900 font-black',
+        inactiveBadge: 'mt-1 px-2 py-0.5 text-[9px] rounded-full bg-emerald-50 text-emerald-700 font-bold',
+        summaryBadge: 'text-[11px] font-black text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200'
+    },
+    zone5: {
+        name: 'โซน 5: บาลูกา',
+        short: 'บาลูกา',
+        colorName: 'purple',
+        activeBtn: 'modal-zone-btn p-2.5 rounded-2xl border-2 border-purple-400 border-l-4 border-l-purple-500 bg-purple-50/80 text-purple-900 text-xs font-black shadow-sm transition-all text-center flex flex-col items-center justify-center ring-2 ring-purple-200 col-span-2 sm:col-span-1',
+        inactiveBtn: 'modal-zone-btn p-2.5 rounded-2xl border border-slate-200 border-l-4 border-l-purple-400 bg-white hover:bg-purple-50/50 text-slate-700 text-xs font-bold transition-all text-center flex flex-col items-center justify-center col-span-2 sm:col-span-1',
+        activeBadge: 'mt-1 px-2 py-0.5 text-[9px] rounded-full bg-purple-200 text-purple-900 font-black',
+        inactiveBadge: 'mt-1 px-2 py-0.5 text-[9px] rounded-full bg-purple-50 text-purple-700 font-bold',
+        summaryBadge: 'text-[11px] font-black text-purple-700 bg-purple-50 px-2.5 py-0.5 rounded-full border border-purple-200'
+    }
 };
+const MODAL_ZONE_INFO = MODAL_ZONE_CONFIG;
 
 window.switchReliefModalMode = function (mode) {
     window.currentReliefModalMode = mode;
@@ -127,18 +173,23 @@ window.selectModalZone = function (zoneKey) {
     const zones = ['zone1', 'zone2', 'zone3', 'zone4', 'zone5'];
     zones.forEach(z => {
         const btn = document.getElementById(`mzone-btn-${z}`);
-        if (!btn) return;
-        const isSpan2 = (z === 'zone5') ? ' col-span-2 sm:col-span-1' : '';
+        const countBadge = document.getElementById(`mzone-count-${z}`);
+        const cfg = MODAL_ZONE_CONFIG[z];
+        if (!btn || !cfg) return;
+
         if (z === zoneKey) {
-            btn.className = 'modal-zone-btn p-2.5 rounded-2xl border-2 border-amber-400 bg-amber-50 text-amber-900 text-xs font-black shadow-sm transition-all text-center flex flex-col items-center justify-center ring-2 ring-amber-200' + isSpan2;
+            btn.className = cfg.activeBtn;
+            if (countBadge) countBadge.className = cfg.activeBadge;
         } else {
-            btn.className = 'modal-zone-btn p-2.5 rounded-2xl border border-slate-200 bg-white text-slate-600 text-xs font-bold hover:bg-slate-50 transition-all text-center flex flex-col items-center justify-center' + isSpan2;
+            btn.className = cfg.inactiveBtn;
+            if (countBadge) countBadge.className = cfg.inactiveBadge;
         }
     });
 
     const badge = document.getElementById('modalZoneSummaryBadge');
-    if (badge && MODAL_ZONE_INFO[zoneKey]) {
-        badge.innerText = MODAL_ZONE_INFO[zoneKey].name;
+    if (badge && MODAL_ZONE_CONFIG[zoneKey]) {
+        badge.innerText = MODAL_ZONE_CONFIG[zoneKey].name;
+        badge.className = MODAL_ZONE_CONFIG[zoneKey].summaryBadge;
     }
 
     window.renderModalZoneAddresses();
@@ -426,6 +477,7 @@ window.openReliefModal = function () {
     if (modal) modal.classList.remove('hidden');
 
     // เริ่มต้นแสดงผลโหมดที่เลือกไว้ (ค่าเริ่มต้นคือแบบเลือกตามโซน)
+    window.selectModalZone(window.currentModalZone || 'zone1');
     window.switchReliefModalMode(window.currentReliefModalMode || 'zone');
 };
 
