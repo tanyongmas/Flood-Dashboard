@@ -3274,10 +3274,33 @@
                             </div>
 
                             <div>
-                                <label class="text-[10px] font-bold text-slate-400 uppercase ml-1 block mb-1">URL ภาพ Snapshot (สำหรับแสดงในการ์ด LINE OA / ภาพนิ่ง)</label>
-                                <input type="text" id="cctv_form_snapshot_url" placeholder="เช่น https://cam-1.tanyongmat-cctv.online/snapshot.cgi หรือลิงก์ภาพนิ่ง HTTPS"
-                                    class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none text-xs font-mono text-slate-700 focus:ring-2 focus:ring-sky-400">
-                                <p class="text-[9px] text-slate-400 mt-1 ml-1">💡 สำหรับกล้องสตรีม MJPEG ต่อเนื่อง ให้ระบุ URL ภาพนิ่ง Snapshot ที่นี่ เพื่อให้การ์ดใน LINE OA แสดงภาพได้สวยงาม</p>
+                                <label class="text-[10px] font-bold text-slate-400 uppercase ml-1 block mb-1">
+                                    <i class="fas fa-camera text-sky-500 mr-1"></i> อัปโหลดภาพ Snapshot (สำหรับแสดงในการ์ด LINE OA / บันทึกลง Database)
+                                </label>
+                                <div class="space-y-2">
+                                    <div class="flex items-center gap-2">
+                                        <label class="flex-1 cursor-pointer flex items-center justify-center gap-2 px-4 py-3 bg-sky-50 hover:bg-sky-100 border border-sky-200 rounded-xl text-xs font-bold text-sky-700 transition active:scale-98 shadow-xs">
+                                            <i class="fas fa-cloud-arrow-up text-sm"></i>
+                                            <span id="cctv_upload_label">เลือกไฟล์รูปภาพเพื่ออัปโหลด</span>
+                                            <input type="file" id="cctv_form_snapshot_file" accept="image/*" class="hidden" onchange="handleCctvSnapshotFileChange(this)">
+                                        </label>
+                                        <button type="button" id="cctv_form_clear_btn" onclick="clearCctvSnapshotFile()" class="hidden px-3 py-3 bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-500 rounded-xl text-xs font-bold transition" title="ลบภาพที่เลือก">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+
+                                    <!-- กล่องพรีวิวภาพที่เลือก -->
+                                    <div id="cctv_snapshot_preview_container" class="hidden relative aspect-video w-full max-w-sm mx-auto rounded-xl overflow-hidden border border-slate-200 shadow-sm bg-black">
+                                        <img id="cctv_snapshot_preview_img" src="" class="w-full h-full object-cover" alt="พรีวิวภาพ Snapshot">
+                                        <span class="absolute top-2 left-2 px-2 py-0.5 rounded-full bg-black/60 text-white text-[9px] font-mono backdrop-blur-xs flex items-center gap-1">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> ภาพบันทึกลง Database
+                                        </span>
+                                    </div>
+
+                                    <!-- เก็บค่า Data URL สำหรับบันทึกลง Supabase -->
+                                    <input type="hidden" id="cctv_form_snapshot_url">
+                                    <p class="text-[9px] text-slate-400 ml-1">💡 ภาพที่อัปโหลดจะถูกบันทึกตรงเข้าสู่ฐานข้อมูล Database สำหรับให้ LINE OA นำไปแสดงผลเป็นการ์ดภาพนิ่งได้อย่างคมชัด</p>
+                                </div>
                             </div>
 
                             <div class="grid grid-cols-2 gap-3">

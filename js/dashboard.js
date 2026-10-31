@@ -4880,8 +4880,25 @@ let dashLayerStates = {
                     document.getElementById('cctv_form_lat').value = cam.lat || '';
                     document.getElementById('cctv_form_lng').value = cam.lng || '';
                     document.getElementById('cctv_form_stream_url').value = cam.streamUrl || cam.stream_url || '';
+                    const snapUrl = cam.snapshotUrl || cam.snapshot_url || '';
                     const snapInput = document.getElementById('cctv_form_snapshot_url');
-                    if (snapInput) snapInput.value = cam.snapshotUrl || cam.snapshot_url || '';
+                    if (snapInput) snapInput.value = snapUrl;
+
+                    const prevContainer = document.getElementById('cctv_snapshot_preview_container');
+                    const prevImg = document.getElementById('cctv_snapshot_preview_img');
+                    const clearBtn = document.getElementById('cctv_form_clear_btn');
+                    const uploadLabel = document.getElementById('cctv_upload_label');
+
+                    if (snapUrl) {
+                        if (prevImg) prevImg.src = snapUrl;
+                        if (prevContainer) prevContainer.classList.remove('hidden');
+                        if (clearBtn) clearBtn.classList.remove('hidden');
+                        if (uploadLabel) uploadLabel.innerText = 'เปลี่ยนรูปภาพ Snapshot ใหม่';
+                    } else {
+                        if (prevContainer) prevContainer.classList.add('hidden');
+                        if (clearBtn) clearBtn.classList.add('hidden');
+                        if (uploadLabel) uploadLabel.innerText = 'เลือกไฟล์รูปภาพเพื่ออัปโหลด';
+                    }
                     document.getElementById('cctv_form_water_point').value = cam.waterPoint || cam.water_point || '';
                     document.getElementById('cctv_form_level').value = cam.level !== null ? cam.level : '';
                     document.getElementById('cctv_form_warning').value = cam.warningThreshold || '1.50';
@@ -4891,6 +4908,7 @@ let dashLayerStates = {
                 title.innerText = 'เพิ่มกล้อง CCTV ตรวจวัดระดับน้ำใหม่';
                 editId.value = '';
                 document.getElementById('cctvForm').reset();
+                if (typeof window.clearCctvSnapshotFile === 'function') window.clearCctvSnapshotFile();
                 document.getElementById('cctv_form_lat').value = '6.29445';
                 document.getElementById('cctv_form_lng').value = '101.72362';
             }
@@ -4917,6 +4935,42 @@ let dashLayerStates = {
         window.closeCctvModal = function () {
             const modal = document.getElementById('cctvModal');
             if (modal) modal.classList.add('hidden');
+        };
+
+        window.handleCctvSnapshotFileChange = async function(input) {
+            if (!input || !input.files || !input.files[0]) return;
+            const file = input.files[0];
+            try {
+                const compressed = await compressImage(file, 800, 450, 0.75);
+                const urlInput = document.getElementById('cctv_form_snapshot_url');
+                if (urlInput) urlInput.value = compressed;
+
+                const prevContainer = document.getElementById('cctv_snapshot_preview_container');
+                const prevImg = document.getElementById('cctv_snapshot_preview_img');
+                const clearBtn = document.getElementById('cctv_form_clear_btn');
+                const uploadLabel = document.getElementById('cctv_upload_label');
+
+                if (prevImg) prevImg.src = compressed;
+                if (prevContainer) prevContainer.classList.remove('hidden');
+                if (clearBtn) clearBtn.classList.remove('hidden');
+                if (uploadLabel) uploadLabel.innerText = 'เปลี่ยนรูปภาพ Snapshot ใหม่';
+            } catch (e) {
+                console.warn("บีบอัดรูปภาพ Snapshot ไม่สำเร็จ:", e);
+            }
+        };
+
+        window.clearCctvSnapshotFile = function() {
+            const fileInput = document.getElementById('cctv_form_snapshot_file');
+            const urlInput = document.getElementById('cctv_form_snapshot_url');
+            const prevContainer = document.getElementById('cctv_snapshot_preview_container');
+            const clearBtn = document.getElementById('cctv_form_clear_btn');
+            const uploadLabel = document.getElementById('cctv_upload_label');
+
+            if (fileInput) fileInput.value = '';
+            if (urlInput) urlInput.value = '';
+            if (prevContainer) prevContainer.classList.add('hidden');
+            if (clearBtn) clearBtn.classList.add('hidden');
+            if (uploadLabel) uploadLabel.innerText = 'เลือกไฟล์รูปภาพเพื่ออัปโหลด';
         };
 
         window.handleCctvSubmit = async function (event) {

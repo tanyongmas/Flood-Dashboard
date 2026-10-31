@@ -1944,10 +1944,53 @@ function getLatestSnapshotFromSupabase(camId) {
  * แก้ปัญหากล้อง CAM-01 สตรีม MJPEG ตลอดเวลา ทำให้ไม่มีภาพแสดงในการ์ดตอบกลับของไลน์
  */
 function getDirectCctvSnapshotUrl(cam) {
+  const rawSnap = (cam.snapshot_url || cam.snapshotUrl || "").trim();
+
+  // 0. ถ้าเป็น Base64 Data URL (จากการอัปโหลดไฟล์ภาพ Snapshot บันทึกลงฐานข้อมูล)
+  if (rawSnap.startsWith("data:image")) {
+    try {
+      let folder;
+      if (DRIVE_FOLDER_ID) {
+        try { folder = DriveApp.getFolderById(DRIVE_FOLDER_ID); } catch(e) {}
+      }
+      if (!folder) {
+        const folders = DriveApp.getFoldersByName('Flood_Images');
+        folder = folders.hasNext() ? folders.next() : DriveApp.createFolder('Flood_Images');
+      }
+      const parts = rawSnap.split(",");
+      const mimeMatch = parts[0].match(/:(.*?);/);
+      const mime = mimeMatch ? mimeMatch[1] : "image/jpeg";
+      const blob = Utilities.newBlob(Utilities.base64Decode(parts[1]), mime, "cctv_snap_" + (cam.id || Date.now()) + ".jpg");
+      const file = folder.createFile(blob);
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      const directUrl = "https://lh3.googleusercontent.com/d/" + file.getId();
+
+      // บันทึก URL ที่แปลงแล้วกลับไปยัง Supabase cctv_cameras อัตโนมัติ เพื่อไม่ต้องแปลงซ้ำ
+      if (cam.id) {
+        try {
+          UrlFetchApp.fetch("https://wixjaufsizqurdiovjdf.supabase.co/rest/v1/cctv_cameras?id=eq." + cam.id, {
+            method: "patch",
+            headers: {
+              "apikey": "sb_publishable_cGgfJgxM5zQ1tqmvH9i2qQ_RgI9pING",
+              "Authorization": "Bearer sb_publishable_cGgfJgxM5zQ1tqmvH9i2qQ_RgI9pING",
+              "Content-Type": "application/json"
+            },
+            payload: JSON.stringify({ snapshot_url: directUrl }),
+            muteHttpExceptions: true
+          });
+        } catch (patchErr) {
+          console.warn("Patch Supabase cctv_cameras failed: " + patchErr.toString());
+        }
+      }
+      return directUrl;
+    } catch(b64Err) {
+      console.warn("Convert cctv snapshot base64 error: " + b64Err.toString());
+    }
+  }
+
   // 1. ถ้ามี snapshot_url ระบุไว้ชัดเจนและเป็น HTTPS ภาพนิ่ง (ไม่ใช่สตรีม) ให้ใช้ทันที
-  const snapUrl = (cam.snapshot_url || cam.snapshotUrl || "").trim();
-  if (snapUrl && snapUrl.startsWith("https://") && !isMjpegStreamUrl(snapUrl)) {
-    return snapUrl;
+  if (rawSnap && rawSnap.startsWith("https://") && !isMjpegStreamUrl(rawSnap)) {
+    return rawSnap;
   }
 
   // 2. ค้นหาภาพ Snapshot ล่าสุดจากตาราง cctv_snapshots ใน Supabase
@@ -1998,8 +2041,11 @@ function getCctvCarouselFlexMessage() {
     const camName = cam.name || ("กล้อง CCTV จุดที่ " + (idx + 1));
     const location = cam.water_point || cam.location || "จุดเฝ้าระวัง เทศบาลตำบลตันหยงมัส";
     const isOnline = (cam.status || 'online').toLowerCase() === 'online';
-    const statusLabel = isOnline ? "LIVE STREAM" : "OFFLINE";
-    const statusBg = isOnline ? "#dc2626" : "#64748b"; // LIVE สีแดงโดดเด่นสไตล์กล้องวงจรปิด
+    const statusLabel = isOnline ? "ออนไลน์" : "ออฟไลน์";
+    const statusBg = isOnline ? "#059669" : "#64748b"; // สีเขียวถ้าออนไลน์
+    const statusBorder = isOnline ? "#86efac" : "#cbd5e1";
+    const statusBgBox = isOnline ? "#dcfce7" : "#f1f5f9";
+    const statusIcon = isOnline ? "🟢 " : "⚪ ";
     
     // ดึง URL ภาพ Snapshot ที่เสถียร รองรับ LINE Messaging API 100%
     const imgUrl = getDirectCctvSnapshotUrl(cam);
@@ -2062,7 +2108,9 @@ function getCctvCarouselFlexMessage() {
               {
                 "type": "box",
                 "layout": "horizontal",
-                "backgroundColor": isOnline ? "#fee2e2" : "#f1f5f9",
+                "backgroundColor": statusBgBox,
+                "borderColor": statusBorder,
+                "borderWidth": "1px",
                 "cornerRadius": "6px",
                 "paddingStart": "6px",
                 "paddingEnd": "6px",
@@ -2071,7 +2119,7 @@ function getCctvCarouselFlexMessage() {
                 "contents": [
                   {
                     "type": "text",
-                    "text": (isOnline ? "🔴 " : "⚪ ") + statusLabel,
+                    "text": statusIcon + statusLabel,
                     "color": statusBg,
                     "size": "xxs",
                     "weight": "bold"
@@ -2116,15 +2164,6 @@ function getCctvCarouselFlexMessage() {
                 "contents": [
                   { "type": "text", "text": "🌊", "size": "xxs", "flex": 1 },
                   { "type": "text", "text": "ระดับน้ำ: " + waterLevelText, "size": "xs", "color": waterLevelColor, "weight": "bold", "flex": 10 }
-                ]
-              },
-              {
-                "type": "box",
-                "layout": "baseline",
-                "spacing": "xs",
-                "contents": [
-                  { "type": "text", "text": "⚡", "size": "xxs", "flex": 1 },
-                  { "type": "text", "text": "โหมดถ่ายทอด: MJPEG สด 24 ชม.", "size": "xxs", "color": "#64748b", "flex": 10 }
                 ]
               }
             ]
