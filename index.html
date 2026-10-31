@@ -3267,10 +3267,17 @@
 
 
                             <div>
-                                <label class="text-[10px] font-bold text-slate-400 uppercase ml-1 block mb-1">URL สตรีมภาพ หรือ Snapshot URL</label>
+                                <label class="text-[10px] font-bold text-slate-400 uppercase ml-1 block mb-1">URL สตรีมภาพสด (MJPEG / HLS / RTSP-Web)</label>
                                 <input type="text" id="cctv_form_stream_url" placeholder="https://cam-1.tanyongmat-cctv.online/videostream.cgi?user=admin&pwd=..."
                                     class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none text-xs font-mono text-slate-700 focus:ring-2 focus:ring-sky-400">
-                                <p class="text-[9px] text-slate-400 mt-1 ml-1">รองรับภาพนิ่ง HTTP JPG/MJPEG หรือ HLS (.m3u8) / URL สตรีมกล้อง</p>
+                                <p class="text-[9px] text-slate-400 mt-1 ml-1">รองรับภาพสตรีมสด HTTP MJPEG หรือ HLS (.m3u8) / WebRTC</p>
+                            </div>
+
+                            <div>
+                                <label class="text-[10px] font-bold text-slate-400 uppercase ml-1 block mb-1">URL ภาพ Snapshot (สำหรับแสดงในการ์ด LINE OA / ภาพนิ่ง)</label>
+                                <input type="text" id="cctv_form_snapshot_url" placeholder="เช่น https://cam-1.tanyongmat-cctv.online/snapshot.cgi หรือลิงก์ภาพนิ่ง HTTPS"
+                                    class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none text-xs font-mono text-slate-700 focus:ring-2 focus:ring-sky-400">
+                                <p class="text-[9px] text-slate-400 mt-1 ml-1">💡 สำหรับกล้องสตรีม MJPEG ต่อเนื่อง ให้ระบุ URL ภาพนิ่ง Snapshot ที่นี่ เพื่อให้การ์ดใน LINE OA แสดงภาพได้สวยงาม</p>
                             </div>
 
                             <div class="grid grid-cols-2 gap-3">

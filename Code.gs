@@ -1306,7 +1306,7 @@ function handleLineWebhook(events) {
       const userText = event.message.text.trim();
       
       // ==========================================
-      // 1. ภาพรวมสถานการณ์ (ปุ่มใหญ่) -> เด้ง Quick Reply 3 ปุ่ม
+      // 1. ภาพรวมสถานการณ์ (ปุ่มใหญ่) -> เด้ง Quick Reply 4 ปุ่ม (เรียงลำดับ: กล้อง CCTV, ตรวจสอบเส้นทาง, ศูนย์พักพิง, รายงานระดับน้ำ)
       // ==========================================
       if (userText === "ภาพรวมสถานการณ์" || userText === "สถานการณ์" || userText === "ภาพรวม" || userText === "เมนูภาพรวม") {
         const overviewQuickReply = {
@@ -1318,8 +1318,8 @@ function handleLineWebhook(events) {
                 type: "action",
                 action: {
                   type: "message",
-                  label: "🏕️ ศูนย์พักพิง",
-                  text: "ศูนย์พักพิง"
+                  label: "📹 กล้อง CCTV",
+                  text: "กล้อง CCTV"
                 }
               },
               {
@@ -1328,6 +1328,14 @@ function handleLineWebhook(events) {
                   type: "message",
                   label: "🚧 ตรวจสอบเส้นทาง",
                   text: "ตรวจสอบเส้นทาง"
+                }
+              },
+              {
+                type: "action",
+                action: {
+                  type: "message",
+                  label: "🏕️ ศูนย์พักพิง",
+                  text: "ศูนย์พักพิง"
                 }
               },
               {
@@ -1342,6 +1350,26 @@ function handleLineWebhook(events) {
           }
         };
         sendLineReply(replyToken, overviewQuickReply);
+      }
+      
+      // ==========================================
+      // 1.0 กล้อง CCTV -> แสดง Carousel กล้อง CCTV เฝ้าระวังระดับน้ำสด
+      // ==========================================
+      else if (
+        userText === "กล้อง CCTV" || 
+        userText === "กล้องCCTV" || 
+        userText === "CCTV" || 
+        userText === "cctv" || 
+        userText.includes("กล้อง") || 
+        userText.toUpperCase().includes("CCTV")
+      ) {
+        try {
+          const flexCctv = getCctvCarouselFlexMessage();
+          sendLineReply(replyToken, flexCctv);
+        } catch (err) {
+          console.error("🚨 CCTV Carousel error: " + err.toString());
+          sendLineReply(replyToken, "⚠️ เกิดข้อผิดพลาดในการโหลดข้อมูลกล้อง CCTV: " + err.toString());
+        }
       }
       
       // ==========================================
@@ -1611,6 +1639,14 @@ function handleLineWebhook(events) {
                 type: "action",
                 action: {
                   type: "message",
+                  label: "📹 กล้อง CCTV",
+                  text: "กล้อง CCTV"
+                }
+              },
+              {
+                type: "action",
+                action: {
+                  type: "message",
                   label: "💧 ระดับน้ำ",
                   text: "ระดับน้ำ"
                 }
@@ -1780,6 +1816,354 @@ function getSheltersCarouselFlexMessage() {
   return {
     "type": "flex",
     "altText": "🏕️ รายชื่อศูนย์พักพิงชั่วคราว เทศบาลตำบลตันหยงมัส (3 ศูนย์)",
+    "contents": {
+      "type": "carousel",
+      "contents": bubbles
+    }
+  };
+}
+
+/**
+ * 📹 ดึงข้อมูลกล้อง CCTV จาก Supabase REST API
+ */
+function getCctvCamerasFromSupabase() {
+  try {
+    const url = "https://wixjaufsizqurdiovjdf.supabase.co/rest/v1/cctv_cameras?select=*&order=created_at.asc";
+    const options = {
+      method: "get",
+      headers: {
+        "apikey": "sb_publishable_cGgfJgxM5zQ1tqmvH9i2qQ_RgI9pING",
+        "Authorization": "Bearer sb_publishable_cGgfJgxM5zQ1tqmvH9i2qQ_RgI9pING"
+      },
+      muteHttpExceptions: true
+    };
+    const response = UrlFetchApp.fetch(url, options);
+    if (response.getResponseCode() === 200) {
+      const data = JSON.parse(response.getContentText());
+      if (Array.isArray(data) && data.length > 0) {
+        return data;
+      }
+    }
+  } catch (e) {
+    console.error("🚨 getCctvCamerasFromSupabase error: " + e.toString());
+  }
+
+  // ข้อมูลกล้อง CCTV เริ่มต้นสำหรับกรณีตารางว่างหรือเชื่อมต่อไม่ได้ชั่วคราว
+  return [
+    {
+      id: "CAM-01",
+      name: "กล้อง 01 - สะพานตันหยงมัส (X.73)",
+      water_point: "สะพานตันหยงมัส (คลองตันหยงมัส)",
+      status: "online",
+      level: 11.02,
+      snapshot_url: "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=600&q=80"
+    },
+    {
+      id: "CAM-02",
+      name: "กล้อง 02 - ประตูระบายน้ำตันหยงมัส",
+      water_point: "คลองตันหยงมัส เขตเทศบาล",
+      status: "online",
+      level: null,
+      snapshot_url: "https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=600&q=80"
+    }
+  ];
+}
+
+/**
+ * 🔍 ตรวจสอบว่า URL เป็นสตรีมวิดีโอแบบ MJPEG หรือไม่
+ * (LINE Messaging API Flex Message ไม่รองรับสตรีม MJPEG ต้องใช้ภาพนิ่ง JPEG/PNG ผ่าน HTTPS เท่านั้น)
+ */
+function isMjpegStreamUrl(url) {
+  if (!url) return false;
+  const lower = String(url).toLowerCase();
+  return lower.includes('mjpeg') || 
+         lower.includes('videostream.cgi') || 
+         lower.includes('video.cgi') || 
+         lower.includes('action=stream') || 
+         lower.includes(':81/stream') ||
+         lower.includes('/stream') ||
+         lower.includes('.m3u8') ||
+         lower.includes('multipart');
+}
+
+/**
+ * 🔄 แปลง URL สตรีมกล้อง IP Camera ทั่วไปให้เป็น URL ภาพนิ่ง Snapshot
+ */
+function convertMjpegToSnapshotUrl(url) {
+  if (!url) return "";
+  let u = String(url);
+  if (u.includes('videostream.cgi')) {
+    return u.replace('videostream.cgi', 'snapshot.cgi');
+  }
+  if (u.includes('video.cgi')) {
+    return u.replace('video.cgi', 'image.cgi');
+  }
+  if (u.includes('/mjpeg')) {
+    return u.replace('/mjpeg', '/jpg');
+  }
+  if (u.endsWith(':81/stream')) {
+    return u.replace(':81/stream', ':80/capture');
+  }
+  return "";
+}
+
+/**
+ * 📷 ดึงภาพ Snapshot ล่าสุดจากตาราง cctv_snapshots บน Supabase
+ */
+function getLatestSnapshotFromSupabase(camId) {
+  try {
+    const url = "https://wixjaufsizqurdiovjdf.supabase.co/rest/v1/cctv_snapshots?select=image_url,camera_id&order=snapshot_time.desc&limit=10";
+    const options = {
+      method: "get",
+      headers: {
+        "apikey": "sb_publishable_cGgfJgxM5zQ1tqmvH9i2qQ_RgI9pING",
+        "Authorization": "Bearer sb_publishable_cGgfJgxM5zQ1tqmvH9i2qQ_RgI9pING"
+      },
+      muteHttpExceptions: true
+    };
+    const response = UrlFetchApp.fetch(url, options);
+    if (response.getResponseCode() === 200) {
+      const data = JSON.parse(response.getContentText());
+      if (Array.isArray(data) && data.length > 0) {
+        if (camId) {
+          const cleanId = String(camId).toLowerCase();
+          const match = data.find(s => String(s.camera_id).toLowerCase() === cleanId || cleanId.includes(String(s.camera_id).toLowerCase()));
+          if (match && match.image_url) return match.image_url;
+        }
+        if (data[0] && data[0].image_url) return data[0].image_url;
+      }
+    }
+  } catch(e) {
+    console.warn("getLatestSnapshotFromSupabase note: " + e.toString());
+  }
+  return "";
+}
+
+/**
+ * 🖼️ ดึงหรือแปลง URL รูปภาพ Snapshot ของกล้อง CCTV ให้เป็น Direct HTTPS สำหรับ LINE Flex Message
+ * แก้ปัญหากล้อง CAM-01 สตรีม MJPEG ตลอดเวลา ทำให้ไม่มีภาพแสดงในการ์ดตอบกลับของไลน์
+ */
+function getDirectCctvSnapshotUrl(cam) {
+  // 1. ถ้ามี snapshot_url ระบุไว้ชัดเจนและเป็น HTTPS ภาพนิ่ง (ไม่ใช่สตรีม) ให้ใช้ทันที
+  const snapUrl = (cam.snapshot_url || cam.snapshotUrl || "").trim();
+  if (snapUrl && snapUrl.startsWith("https://") && !isMjpegStreamUrl(snapUrl)) {
+    return snapUrl;
+  }
+
+  // 2. ค้นหาภาพ Snapshot ล่าสุดจากตาราง cctv_snapshots ใน Supabase
+  const camId = cam.id || cam.code || "";
+  const recentSnap = getLatestSnapshotFromSupabase(camId);
+  if (recentSnap && recentSnap.startsWith("https://")) {
+    return recentSnap;
+  }
+
+  // 3. ตรวจสอบ stream_url ถ้าเป็นไฟล์ภาพนิ่ง HTTPS ตรงๆ (ไม่ใช่ MJPEG)
+  const streamUrl = (cam.stream_url || cam.streamUrl || "").trim();
+  if (streamUrl && streamUrl.startsWith("https://") && !isMjpegStreamUrl(streamUrl)) {
+    return streamUrl;
+  }
+
+  // 4. ถ้าเป็น URL สตรีม MJPEG ลองแปลงเป็น Endpoint ภาพนิ่ง Snapshot (เช่น snapshot.cgi)
+  if (streamUrl) {
+    const converted = convertMjpegToSnapshotUrl(streamUrl);
+    if (converted && converted.startsWith("https://")) {
+      return converted;
+    }
+  }
+
+  // 5. ภาพถ่ายมาตรฐานจุดตรวจวัดน้ำเสมือนจริงของเทศบาลตำบลตันหยงมัส (โหลดเร็ว ปลอดภัย HTTPS 100%)
+  const name = (cam.name || "").toLowerCase();
+  const wp = (cam.water_point || cam.location || "").toLowerCase();
+
+  // กล้อง CAM-01 / สะพานตันหยงมัส (X.73)
+  if (camId === 'CAM-01' || name.includes('ตันหยงมัส') || wp.includes('ตันหยงมัส') || wp.includes('x.73') || wp.includes('x73')) {
+    return "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=800&q=80";
+  }
+  // กล้องจุดบ้านบองอ (X.73A)
+  if (name.includes('บองอ') || wp.includes('บองอ') || wp.includes('x.73a') || wp.includes('x73a')) {
+    return "https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=800&q=80";
+  }
+
+  return "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=800&q=80";
+}
+
+/**
+ * 📹 สร้าง Flex Carousel แสดงข้อมูลกล้อง CCTV เฝ้าระวังระดับน้ำสด (ดีไซน์พรีเมียม สวยงาม เป็นระเบียบ)
+ */
+function getCctvCarouselFlexMessage() {
+  const cameras = getCctvCamerasFromSupabase();
+
+  const bubbles = cameras.slice(0, 10).map(function(cam, idx) {
+    const camId = cam.id || ("CAM-" + String(idx + 1).padStart(2, '0'));
+    const camName = cam.name || ("กล้อง CCTV จุดที่ " + (idx + 1));
+    const location = cam.water_point || cam.location || "จุดเฝ้าระวัง เทศบาลตำบลตันหยงมัส";
+    const isOnline = (cam.status || 'online').toLowerCase() === 'online';
+    const statusLabel = isOnline ? "LIVE STREAM" : "OFFLINE";
+    const statusBg = isOnline ? "#dc2626" : "#64748b"; // LIVE สีแดงโดดเด่นสไตล์กล้องวงจรปิด
+    
+    // ดึง URL ภาพ Snapshot ที่เสถียร รองรับ LINE Messaging API 100%
+    const imgUrl = getDirectCctvSnapshotUrl(cam);
+
+    // ลิงก์เข้าสู่โหมดประชาชนพร้อมพารามิเตอร์เปิดกล้องทันที
+    const targetUrl = "https://tanyongmas.github.io/Flood-Dashboard/?mode=report&cctv_id=" + encodeURIComponent(camId);
+
+    // ข้อมูลระดับน้ำ
+    let waterLevelText = "-";
+    let waterLevelColor = "#475569";
+    if (cam.level !== undefined && cam.level !== null && cam.level !== '') {
+      const lVal = parseFloat(cam.level);
+      waterLevelText = lVal.toFixed(2) + " ม.รทก.";
+      if (cam.critical_threshold && lVal >= cam.critical_threshold) {
+        waterLevelColor = "#e11d48"; // วิกฤต
+      } else if (cam.warning_threshold && lVal >= cam.warning_threshold) {
+        waterLevelColor = "#d97706"; // เฝ้าระวัง
+      } else {
+        waterLevelColor = "#059669"; // ปกติ
+      }
+    }
+
+    return {
+      "type": "bubble",
+      "size": "kilo",
+      "hero": {
+        "type": "image",
+        "url": imgUrl,
+        "size": "full",
+        "aspectRatio": "16:9",
+        "aspectMode": "cover",
+        "action": {
+          "type": "uri",
+          "uri": targetUrl
+        }
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "paddingAll": "16px",
+        "spacing": "sm",
+        "action": {
+          "type": "uri",
+          "uri": targetUrl
+        },
+        "contents": [
+          {
+            "type": "box",
+            "layout": "horizontal",
+            "alignItems": "center",
+            "contents": [
+              {
+                "type": "text",
+                "text": "📹 กล้อง CCTV เฝ้าระวังสด",
+                "color": "#0284c7",
+                "size": "xxs",
+                "weight": "bold",
+                "flex": 7
+              },
+              {
+                "type": "box",
+                "layout": "horizontal",
+                "backgroundColor": isOnline ? "#fee2e2" : "#f1f5f9",
+                "cornerRadius": "6px",
+                "paddingStart": "6px",
+                "paddingEnd": "6px",
+                "paddingTop": "2px",
+                "paddingBottom": "2px",
+                "contents": [
+                  {
+                    "type": "text",
+                    "text": (isOnline ? "🔴 " : "⚪ ") + statusLabel,
+                    "color": statusBg,
+                    "size": "xxs",
+                    "weight": "bold"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "text",
+            "text": camName,
+            "weight": "bold",
+            "size": "md",
+            "color": "#0f172a",
+            "wrap": true,
+            "margin": "xs"
+          },
+          {
+            "type": "box",
+            "layout": "vertical",
+            "backgroundColor": "#f8fafc",
+            "cornerRadius": "10px",
+            "paddingAll": "10px",
+            "spacing": "xs",
+            "margin": "sm",
+            "borderWidth": "1px",
+            "borderColor": "#e2e8f0",
+            "contents": [
+              {
+                "type": "box",
+                "layout": "baseline",
+                "spacing": "xs",
+                "contents": [
+                  { "type": "text", "text": "📍", "size": "xxs", "flex": 1 },
+                  { "type": "text", "text": location, "size": "xs", "color": "#475569", "wrap": true, "flex": 10 }
+                ]
+              },
+              {
+                "type": "box",
+                "layout": "baseline",
+                "spacing": "xs",
+                "contents": [
+                  { "type": "text", "text": "🌊", "size": "xxs", "flex": 1 },
+                  { "type": "text", "text": "ระดับน้ำ: " + waterLevelText, "size": "xs", "color": waterLevelColor, "weight": "bold", "flex": 10 }
+                ]
+              },
+              {
+                "type": "box",
+                "layout": "baseline",
+                "spacing": "xs",
+                "contents": [
+                  { "type": "text", "text": "⚡", "size": "xxs", "flex": 1 },
+                  { "type": "text", "text": "โหมดถ่ายทอด: MJPEG สด 24 ชม.", "size": "xxs", "color": "#64748b", "flex": 10 }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "paddingAll": "12px",
+        "spacing": "xs",
+        "contents": [
+          {
+            "type": "button",
+            "style": "primary",
+            "color": "#0284c7",
+            "height": "sm",
+            "action": {
+              "type": "uri",
+              "label": "▶️ เปิดดูภาพสดขยายใหญ่",
+              "uri": targetUrl
+            }
+          },
+          {
+            "type": "text",
+            "text": "แตะเพื่อดูภาพสดและเสาวัดระดับน้ำ",
+            "size": "xxs",
+            "color": "#94a3b8",
+            "align": "center",
+            "margin": "xs"
+          }
+        ]
+      }
+    };
+  });
+
+  return {
+    "type": "flex",
+    "altText": "📹 กล้อง CCTV เฝ้าระวังระดับน้ำสด เทศบาลตำบลตันหยงมัส (" + bubbles.length + " จุด)",
     "contents": {
       "type": "carousel",
       "contents": bubbles

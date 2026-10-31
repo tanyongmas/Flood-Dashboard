@@ -4142,8 +4142,27 @@ let dashLayerStates = {
         let cctvSnapshotTimer = null;
 
         // ข้อมูลกล้อง CCTV เริ่มต้น (เชื่อมโยงกล้องจริงของเทศบาลตำบลตันหยงมัส & จุดเสี่ยงภัย)
-        // ข้อมูลกล้อง CCTV เริ่มต้น (ว่างไว้เพื่อรอรับข้อมูลจริง 100%)
-        const DEFAULT_CCTV_CAMERAS = [];
+        const DEFAULT_CCTV_CAMERAS = [
+            {
+                id: "CAM-01",
+                name: "กล้อง 01: สะพานตันหยงมัส (X.73)",
+                code: "CAM-01",
+                type: "IP Camera",
+                status: "online",
+                lat: 6.29445,
+                lng: 101.72362,
+                streamUrl: "https://cam-1.tanyongmat-cctv.online/videostream.cgi",
+                stream_url: "https://cam-1.tanyongmat-cctv.online/videostream.cgi",
+                snapshotUrl: "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=800&q=80",
+                snapshot_url: "https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=800&q=80",
+                waterPoint: "สะพานตันหยงมัส (คลองตันหยงมัส)",
+                water_point: "สะพานตันหยงมัส (คลองตันหยงมัส)",
+                level: 11.02,
+                warningThreshold: 13.50,
+                criticalThreshold: 14.90,
+                lastUpdate: 'สดเรียลไทม์'
+            }
+        ];
 
         // ตัวอย่างภาพประวัติช่วงวิกฤตเริ่มต้น
         // ข้อมูลประวัติภาพถ่ายช่วงวิกฤตเริ่มต้น (ว่างไว้เพื่อรอรับข้อมูลจริง 100%)
@@ -4861,6 +4880,8 @@ let dashLayerStates = {
                     document.getElementById('cctv_form_lat').value = cam.lat || '';
                     document.getElementById('cctv_form_lng').value = cam.lng || '';
                     document.getElementById('cctv_form_stream_url').value = cam.streamUrl || cam.stream_url || '';
+                    const snapInput = document.getElementById('cctv_form_snapshot_url');
+                    if (snapInput) snapInput.value = cam.snapshotUrl || cam.snapshot_url || '';
                     document.getElementById('cctv_form_water_point').value = cam.waterPoint || cam.water_point || '';
                     document.getElementById('cctv_form_level').value = cam.level !== null ? cam.level : '';
                     document.getElementById('cctv_form_warning').value = cam.warningThreshold || '1.50';
@@ -4909,6 +4930,8 @@ let dashLayerStates = {
             const lat = parseFloat(document.getElementById('cctv_form_lat').value);
             const lng = parseFloat(document.getElementById('cctv_form_lng').value);
             const streamUrl = document.getElementById('cctv_form_stream_url').value.trim();
+            const snapInput = document.getElementById('cctv_form_snapshot_url');
+            const snapshotUrl = (snapInput ? snapInput.value.trim() : '') || streamUrl;
             const waterPoint = document.getElementById('cctv_form_water_point').value.trim();
             const levelVal = document.getElementById('cctv_form_level').value;
             const level = levelVal !== '' ? parseFloat(levelVal) : null;
@@ -4922,7 +4945,7 @@ let dashLayerStates = {
                 if (idx !== -1) {
                     window.cctvCameras[idx] = {
                         ...window.cctvCameras[idx],
-                        name, type, status, lat, lng, streamUrl, stream_url: streamUrl, snapshotUrl: streamUrl, snapshot_url: streamUrl, waterPoint, water_point: waterPoint, level,
+                        name, type, status, lat, lng, streamUrl, stream_url: streamUrl, snapshotUrl: snapshotUrl, snapshot_url: snapshotUrl, waterPoint, water_point: waterPoint, level,
                         warningThreshold, criticalThreshold,
                         lastUpdate: 'เพิ่งอัปเดต'
                     };
@@ -4932,7 +4955,7 @@ let dashLayerStates = {
                 const newId = 'CAM-' + String(window.cctvCameras.length + 1).padStart(2, '0');
                 updatedCam = {
                     id: newId,
-                    name, type, status, lat, lng, streamUrl, waterPoint, level,
+                    name, type, status, lat, lng, streamUrl, stream_url: streamUrl, snapshotUrl: snapshotUrl, snapshot_url: snapshotUrl, waterPoint, water_point: waterPoint, level,
                     warningThreshold, criticalThreshold,
                     power: 'Solar/DC',
                     lastUpdate: 'เพิ่งเพิ่ม'

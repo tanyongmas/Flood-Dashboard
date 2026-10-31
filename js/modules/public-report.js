@@ -1011,7 +1011,7 @@ window.renderPublicPortal = async function () {
 
         
         <!-- 3.8. กล่องกล้อง CCTV เฝ้าระวังระดับน้ำสด (Live CCTV Stream) -->
-        <section class="bg-white rounded-[2.5rem] p-6 shadow-sm border border-slate-100 space-y-4">
+        <section id="public_cctv_section" class="bg-white rounded-[2.5rem] p-6 shadow-sm border border-slate-100 space-y-4">
             <div class="flex items-center justify-between flex-wrap gap-2">
                 <div class="flex items-center gap-3">
                     <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-sky-500 to-indigo-600 text-white flex items-center justify-center text-lg shadow-md shadow-sky-500/20">
@@ -1187,6 +1187,57 @@ window.renderPublicPortal = async function () {
                 openCitizenWaterReportModal();
             }
         }, 500);
+    }
+
+    // 5. ตรวจสอบพารามิเตอร์เปิดและโฟกัสกล้อง CCTV อัตโนมัติ (จาก LINE OA Carousel หรือ Quick Reply)
+    try {
+        const urlParams = new URLSearchParams(window.location.search);
+        let focusCctvId = urlParams.get('cctv_id') || urlParams.get('cctv') || urlParams.get('cam');
+        if (!focusCctvId && window.location.hash.includes('cctv')) {
+            focusCctvId = window.location.hash.replace(/^#cctv_?/, '');
+        }
+
+        const isCctvRequested = Boolean(focusCctvId || window.location.href.includes('open=cctv') || window.location.href.includes('view=cctv'));
+
+        if (isCctvRequested) {
+            console.log("📹 [Citizen Mode] ตรวจพบคำขอเปิดกล้อง CCTV อัตโนมัติ:", focusCctvId || 'default');
+            let pollAttempts = 0;
+            const maxPoll = 25; // ตรวจจับซ้ำทุก 150ms นานสูงสุด 3.75 วินาที
+            const pollInterval = setInterval(() => {
+                pollAttempts++;
+                const modal = document.getElementById('publicCctvLightbox');
+                const cameras = window.cctvCameras || [];
+
+                if (modal && (cameras.length > 0 || pollAttempts >= 8)) {
+                    clearInterval(pollInterval);
+                    const matchedCam = typeof window.findCctvCamera === 'function' ? window.findCctvCamera(focusCctvId) : (cameras[0] || null);
+                    const targetId = matchedCam ? matchedCam.id : (focusCctvId || 'CAM-01');
+
+                    // 1. เลื่อนหน้าจอไปยังกล่องกล้องและไฮไลต์
+                    const cardEl = document.getElementById(`cctv_card_${targetId}`) || document.getElementById('public_cctv_section') || document.getElementById('publicCctvContainer');
+                    if (cardEl) {
+                        cardEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        cardEl.classList.add('ring-4', 'ring-sky-400', 'ring-offset-2', 'transition-all', 'duration-500');
+                        setTimeout(() => cardEl.classList.remove('ring-4', 'ring-sky-400', 'ring-offset-2'), 4500);
+                    }
+
+                    // 2. เด้งเปิดหน้าต่างแสดงภาพสด (Lightbox) ทันที!
+                    if (typeof openPublicCctvLightbox === 'function') {
+                        openPublicCctvLightbox(targetId);
+                    }
+                    return;
+                }
+
+                if (pollAttempts >= maxPoll) {
+                    clearInterval(pollInterval);
+                    if (typeof openPublicCctvLightbox === 'function') {
+                        openPublicCctvLightbox(focusCctvId || 'CAM-01');
+                    }
+                }
+            }, 150);
+        }
+    } catch(cctvUrlErr) {
+        console.warn('CCTV auto-focus note:', cctvUrlErr);
     }
 };
 
@@ -2186,7 +2237,7 @@ function renderPublicCctvCardsHtml() {
                 const displayImg = streamRaw || 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=600&q=80';
 
                 return `
-                    <div class="bg-slate-50/80 border border-slate-100 rounded-2xl overflow-hidden flex flex-col justify-between hover:bg-slate-100/80 transition-all shadow-xs group">
+                    <div id="cctv_card_${cam.id}" class="bg-slate-50/80 border border-slate-100 rounded-2xl overflow-hidden flex flex-col justify-between hover:bg-slate-100/80 transition-all shadow-xs group">
                         <div>
                             <div class="p-3 bg-white border-b border-slate-100 flex items-center justify-between">
                                 <div class="flex items-center gap-2 min-w-0 pr-2">
@@ -2251,8 +2302,55 @@ function renderPublicCctvCardsHtml() {
     `;
 }
 
+window.findCctvCamera = function(camId) {
+    let cameras = window.cctvCameras || [];
+    if (!cameras || cameras.length === 0) {
+        try {
+            const local = localStorage.getItem('cctv_cameras');
+            if (local) {
+                const parsed = JSON.parse(local);
+                if (Array.isArray(parsed) && parsed.length > 0) cameras = parsed;
+            }
+        } catch(e) {}
+    }
+    if (!cameras || cameras.length === 0) return null;
+    if (!camId) return cameras[0];
+
+    const clean = String(camId).trim().toLowerCase().replace(/^#?cctv_?/, '');
+
+    // 1. ตรวจสอบตรงตัว (ID หรือ Code)
+    let match = cameras.find(c => 
+        String(c.id).trim().toLowerCase() === clean ||
+        (c.code && String(c.code).trim().toLowerCase() === clean)
+    );
+    if (match) return match;
+
+    // 2. ตรวจสอบบางส่วน (ID, Code หรือชื่อกล้อง)
+    match = cameras.find(c => 
+        String(c.id).toLowerCase().includes(clean) ||
+        clean.includes(String(c.id).toLowerCase()) ||
+        (c.code && String(c.code).toLowerCase().includes(clean)) ||
+        (c.name && c.name.toLowerCase().includes(clean))
+    );
+    if (match) return match;
+
+    // 3. ตรวจสอบเฉพาะตัวเลข (เช่น 01 หรือ 1)
+    const num = clean.replace(/\D/g, '');
+    if (num) {
+        match = cameras.find(c => 
+            String(c.id).toLowerCase().includes(num) ||
+            (c.code && String(c.code).toLowerCase().includes(num)) ||
+            (c.name && c.name.toLowerCase().includes(num))
+        );
+        if (match) return match;
+    }
+
+    // 4. คืนค่ากล้องตัวแรกของระบบเสมอ
+    return cameras[0];
+};
+
 window.openPublicCctvLightbox = function(camId) {
-    const cam = (window.cctvCameras || []).find(c => c.id === camId);
+    const cam = typeof window.findCctvCamera === 'function' ? window.findCctvCamera(camId) : (window.cctvCameras || [])[0];
     if (!cam) return;
 
     const modal = document.getElementById('publicCctvLightbox');
