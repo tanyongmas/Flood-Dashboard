@@ -399,9 +399,9 @@ function doPost(e) {
     // ==========================================
     // ฟังก์ชันสกัดข้อมูลจาก HTML (Web Scraping)
     // ==========================================
-    if (params.action === 'broadcastLine') {
-    return broadcastLineMessage(params.alertType);
-}
+    if (params.action === 'broadcastLine' || params.action === 'pushLineGroup') {
+      return broadcastLineMessage(params.alertType, params.customTitle, params.customMessage);
+    }
     // ==========================================
     // Messaging API logic
     // ==========================================
@@ -700,13 +700,14 @@ function getRIDWaterLevelFromHTML() {
 // ==========================================
 // Messaging API
 // ==========================================
-function broadcastLineMessage(type) {
-  // 🔑 ดึงจาก Token ส่วนกลาง
+function broadcastLineMessage(type, customTitle, customMessage) {
+  // 🔑 ดึง Token และ Group ID จาก ScriptProperties (มี Default รองรับ)
   const channelAccessToken = LINE_CHANNEL_ACCESS_TOKEN;
+  const targetGroupId = getScriptProperty('LINE_TARGET_GROUP_ID', 'C7d6743c9c787948ec097b47b921bd0e3');
   
   let title = "", message = "", color = "", icon = "";
 
-  // 💡 กำหนดข้อความและสีตามระดับภัย
+  // 💡 กำหนดข้อความและสีตามระดับภัย (เป็นค่าเริ่มต้น)
   if (type === 'normal') {
     title = "สถานการณ์ปกติ";
     message = "ขณะนี้ระดับน้ำคลองตันหยงมัสอยู่ในเกณฑ์ปกติ โปรดติดตามข่าวสารจากทางเทศบาล";
@@ -724,17 +725,25 @@ function broadcastLineMessage(type) {
     icon = "🚨";
   }
 
-  // สร้างวันที่และเวลาปัจจุบัน
+  // 📝 หากเจ้าหน้าที่มีการแก้ไขหรือกำหนดข้อความเอง ให้ใช้ข้อความที่กำหนดเอง
+  if (customTitle && typeof customTitle === 'string' && customTitle.trim()) {
+    title = customTitle.trim();
+  }
+  if (customMessage && typeof customMessage === 'string' && customMessage.trim()) {
+    message = customMessage.trim();
+  }
+
+  // สร้างวันที่และเวลาปัจจุบัน (เวลาไทย GMT+7)
   const dateTimeString = Utilities.formatDate(new Date(), "GMT+7", "dd/MM/yyyy เวลา HH:mm น.");
 
-  // 🎨 โครงสร้าง Flex Message ที่จัดระเบียบขนาดและสัดส่วนใหม่
+  // 🎨 โครงสร้าง Flex Message ที่จัดระเบียบขนาดและสัดส่วน
   const payload = {
+    "to": targetGroupId,
     "messages": [{
       "type": "flex",
       "altText": icon + " แจ้งเตือนภัย: " + title,
       "contents": {
         "type": "bubble",
-        // ลบ "size": "kilo" ออก เพื่อให้กลับไปใช้ขนาดมาตรฐานที่กว้างและอ่านสบายตาขึ้น
         "header": {
           "type": "box",
           "layout": "vertical",
@@ -744,7 +753,8 @@ function broadcastLineMessage(type) {
               "text": icon + " " + title,
               "weight": "bold",
               "color": "#ffffff",
-              "size": "xl"
+              "size": "xl",
+              "wrap": true
             }
           ],
           "backgroundColor": color,
@@ -757,7 +767,7 @@ function broadcastLineMessage(type) {
           "type": "box",
           "layout": "vertical",
           "contents": [
-            // ส่วนที่ 1: ผู้ประกาศ (จัดแบบ 2 คอลัมน์ให้เป็นระเบียบ)
+            // ส่วนที่ 1: ผู้ประกาศ
             {
               "type": "box",
               "layout": "horizontal",
@@ -767,15 +777,15 @@ function broadcastLineMessage(type) {
                   "text": "ประกาศจาก :",
                   "color": "#64748b",
                   "size": "sm",
-                  "flex": 3 // สัดส่วนความกว้างของคอลัมน์ซ้าย
+                  "flex": 3
                 },
                 {
                   "type": "text",
                   "text": "เทศบาลตำบลตันหยงมัส",
                   "weight": "bold",
-                  "color": "#1e293b", // สีเทาเข้มเพื่อให้อ่านง่าย
+                  "color": "#1e293b",
                   "size": "sm",
-                  "flex": 6, // สัดส่วนความกว้างของคอลัมน์ขวา
+                  "flex": 6,
                   "wrap": true
                 }
               ]
@@ -783,7 +793,7 @@ function broadcastLineMessage(type) {
             {
               "type": "separator",
               "margin": "lg",
-              "color": "#f1f5f9" // เส้นคั่นสีเทาอ่อน
+              "color": "#f1f5f9"
             },
             // ส่วนที่ 2: เนื้อหาประกาศ
             {
@@ -807,7 +817,7 @@ function broadcastLineMessage(type) {
               "margin": "xl",
               "color": "#f1f5f9"
             },
-            // ส่วนที่ 3: วันที่และเวลา (จัดคอลัมน์และเน้นสี)
+            // ส่วนที่ 3: วันที่และเวลา
             {
               "type": "box",
               "layout": "horizontal",
@@ -825,7 +835,7 @@ function broadcastLineMessage(type) {
                   "type": "text",
                   "text": dateTimeString,
                   "size": "sm",
-                  "color": color, // สีของเวลาจะเปลี่ยนตามระดับภัย (เขียว/ส้ม/แดง)
+                  "color": color,
                   "weight": "bold",
                   "flex": 6,
                   "wrap": true,
@@ -834,7 +844,7 @@ function broadcastLineMessage(type) {
               ]
             }
           ],
-          "paddingAll": "xl" // เพิ่มระยะขอบด้านในให้ข้อความไม่ติดขอบกล่อง
+          "paddingAll": "xl"
         }
       }
     }]
@@ -846,20 +856,32 @@ function broadcastLineMessage(type) {
       "Content-Type": "application/json",
       "Authorization": "Bearer " + channelAccessToken
     },
-    "payload": JSON.stringify(payload)
+    "payload": JSON.stringify(payload),
+    "muteHttpExceptions": true
   };
 
   try {
-    UrlFetchApp.fetch("https://api.line.me/v2/bot/message/broadcast", options);
-    return createResponse({ success: true });
+    // 🚀 ส่ง Push Message ตรงเข้ากลุ่มไลน์ เฝ้าระวังอุทกภัย'69
+    const response = UrlFetchApp.fetch("https://api.line.me/v2/bot/message/push", options);
+    const resCode = response.getResponseCode();
+    const resBody = response.getContentText();
+
+    if (resCode >= 200 && resCode < 300) {
+      console.log("✅ [LINE Push Success] Status Code:", resCode);
+      return createResponse({ success: true, resCode: resCode });
+    } else {
+      console.error("❌ [LINE Push Failed] Status Code:", resCode, "Body:", resBody);
+      return createResponse({ success: false, error: "LINE API Error (" + resCode + "): " + resBody });
+    }
   } catch (e) {
+    console.error("🚨 [LINE Push Exception]:", e.toString());
     return createResponse({ success: false, error: e.toString() });
   }
 }
+
 // ==========================================
 //  🟢 ฟังก์ชันใหม่: ดึงรายชื่อที่อยู่จากชีท "Address"
 // ==========================================
-
 function loadRegisAddressList() {
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();

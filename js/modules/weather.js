@@ -170,80 +170,157 @@ function setWeatherMode(mode) {
 async function sendMessagingAPI(type) {
     const config = {
         normal: {
-            title: 'สถานะ: ปกติ',
-            text: 'ยืนยันแจ้งสถานการณ์ปกติ?',
-            iconHtml: '<div class="w-16 h-16 bg-green-50 border-2 border-green-200 text-green-500 rounded-full flex items-center justify-center shadow-sm mx-auto"><i class="fas fa-check-circle text-3xl"></i></div>',
-            color: '#22c55e'
+            title: 'สถานการณ์ปกติ',
+            badge: '🟢 สภาพการณ์ปกติ',
+            badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+            text: 'ขณะนี้ระดับน้ำคลองตันหยงมัสอยู่ในเกณฑ์ปกติ โปรดติดตามข่าวสารจากทางเทศบาล',
+            iconHtml: '<div class="w-14 h-14 bg-green-50 border-2 border-green-200 text-green-500 rounded-2xl flex items-center justify-center shadow-sm mx-auto"><i class="fas fa-check-circle text-2xl"></i></div>',
+            color: '#22c55e',
+            btnConfirmText: 'ส่งประกาศ (ปกติ)'
         },
         warning: {
-            title: 'สถานะ: เฝ้าระวัง',
-            text: 'ยืนยันแจ้งเตือนเฝ้าระวังภัย?',
-            iconHtml: '<div class="w-16 h-16 bg-amber-50 border-2 border-amber-200 text-amber-500 rounded-full flex items-center justify-center shadow-sm mx-auto"><i class="fas fa-exclamation-triangle text-3xl"></i></div>',
-            color: '#f59e0b'
+            title: 'เฝ้าระวังระดับน้ำ',
+            badge: '🟡 เฝ้าระวังระดับน้ำ',
+            badgeClass: 'bg-amber-50 text-amber-700 border-amber-200',
+            text: 'ระดับน้ำคลองตันหยงมัสกำลังเพิ่มสูงขึ้น ขอให้ประชาชนในพื้นที่ลุ่มต่ำเฝ้าติดตามข่าวสารอย่างใกล้ชิด',
+            iconHtml: '<div class="w-14 h-14 bg-amber-50 border-2 border-amber-200 text-amber-500 rounded-2xl flex items-center justify-center shadow-sm mx-auto"><i class="fas fa-exclamation-triangle text-2xl"></i></div>',
+            color: '#f59e0b',
+            btnConfirmText: 'ส่งประกาศ (เฝ้าระวัง)'
         },
         danger: {
-            title: 'สถานะ: วิกฤต',
-            text: 'ยืนยันประกาศภาวะวิกฤต?',
-            iconHtml: '<div class="w-16 h-16 bg-red-50 border-2 border-red-200 text-red-500 rounded-full flex items-center justify-center shadow-sm mx-auto"><i class="fas fa-bullhorn text-3xl animate-pulse"></i></div>',
-            color: '#ef4444'
+            title: 'วิกฤต! เตรียมอพยพ',
+            badge: '🔴 วิกฤต! เตรียมอพยพ',
+            badgeClass: 'bg-rose-50 text-rose-700 border-rose-200',
+            text: 'ระดับน้ำล้นตลิ่งและเข้าสู่สภาวะวิกฤต โปรดเคลื่อนย้ายทรัพย์สินขึ้นที่สูงและเตรียมพร้อมอพยพทันที!',
+            iconHtml: '<div class="w-14 h-14 bg-red-50 border-2 border-red-200 text-red-500 rounded-2xl flex items-center justify-center shadow-sm mx-auto"><i class="fas fa-bullhorn text-2xl animate-pulse"></i></div>',
+            color: '#ef4444',
+            btnConfirmText: 'ส่งประกาศ (วิกฤต)'
         }
     };
 
     const setup = config[type];
     if (!setup) return;
 
+    if (typeof checkAdminReadOnlyAction === 'function' && checkAdminReadOnlyAction()) return;
+
+    const modalHTML = `
+        <div class="text-left space-y-3 mt-2">
+            <!-- ป้ายแสดงระดับภัยและกลุ่มเป้าหมาย -->
+            <div class="flex items-center justify-between pb-2.5 border-b border-slate-100">
+                <span class="text-xs font-black px-2.5 py-1 rounded-full border ${setup.badgeClass}">
+                    ${setup.badge}
+                </span>
+                <span class="text-[11px] font-bold text-slate-500 flex items-center gap-1">
+                    <i class="fab fa-line text-emerald-500 text-sm"></i>
+                    ส่งเข้ากลุ่ม: <b class="text-slate-700">เฝ้าระวังอุทกภัย'69</b>
+                </span>
+            </div>
+
+            <!-- ช่องแก้ไขหัวข้อประกาศ -->
+            <div>
+                <label class="block text-[11px] font-bold text-slate-600 mb-1">
+                    <i class="fas fa-heading text-slate-400 mr-1"></i>หัวข้อประกาศ:
+                </label>
+                <input type="text" id="swal_line_title" value="${setup.title}"
+                    class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
+                    placeholder="ระบุหัวข้อประกาศ...">
+            </div>
+
+            <!-- ช่องแก้ไขรายละเอียดข้อความ -->
+            <div>
+                <label class="block text-[11px] font-bold text-slate-600 mb-1">
+                    <i class="fas fa-align-left text-slate-400 mr-1"></i>เนื้อหาข้อความประกาศ (แก้ไข/พิมพ์เพิ่มได้):
+                </label>
+                <textarea id="swal_line_message" rows="4"
+                    class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all custom-scrollbar leading-relaxed"
+                    placeholder="พิมพ์รายละเอียดสถานการณ์ คำแนะนำ หรือข้อมูลเพิ่มเติมที่นี่...">${setup.text}</textarea>
+            </div>
+
+            <!-- ข้อมูลแจ้งเตือนปลายทาง -->
+            <div class="p-2.5 bg-emerald-50/70 border border-emerald-200/60 rounded-xl flex items-center gap-2 text-[10px] text-emerald-800">
+                <i class="fas fa-info-circle text-xs text-emerald-600 shrink-0"></i>
+                <span>ข้อความนี้จะส่งตรงเข้ากลุ่มไลน์ <b>เฝ้าระวังอุทกภัย'69 ทต.ตันหยงมัส</b> ในรูปแบบ Flex Card (ไม่สิ้นเปลืองโควต้าบรอดแคสต์)</span>
+            </div>
+        </div>
+    `;
+
     const result = await Swal.fire({
-        title: setup.title,
-        text: setup.text,
+        html: modalHTML,
         iconHtml: setup.iconHtml,
         showCancelButton: true,
         confirmButtonColor: setup.color,
         cancelButtonColor: '#94a3b8',
-        confirmButtonText: 'ยืนยันส่ง',
+        confirmButtonText: `<i class="fas fa-paper-plane mr-1.5"></i> ${setup.btnConfirmText}`,
         cancelButtonText: 'ยกเลิก',
         reverseButtons: true,
-        borderRadius: '1.25rem',
-        width: '300px',
+        borderRadius: '1.5rem',
+        width: '440px',
         customClass: {
-            icon: 'border-none w-auto h-auto m-0 mt-5 bg-transparent',
-            title: 'text-lg font-black text-slate-800 mt-2',
-            htmlContainer: 'text-xs text-slate-500 font-medium'
+            icon: 'border-none w-auto h-auto m-0 mt-4 bg-transparent',
+            popup: 'p-5 md:p-6 rounded-[2rem]'
+        },
+        preConfirm: () => {
+            const titleInput = document.getElementById('swal_line_title');
+            const messageInput = document.getElementById('swal_line_message');
+            const customTitle = titleInput ? titleInput.value.trim() : '';
+            const customMessage = messageInput ? messageInput.value.trim() : '';
+
+            if (!customTitle) {
+                Swal.showValidationMessage('กรุณาระบุหัวข้อประกาศ');
+                return false;
+            }
+            if (!customMessage) {
+                Swal.showValidationMessage('กรุณาระบุเนื้อหาข้อความประกาศ');
+                return false;
+            }
+            return { customTitle, customMessage };
         }
     });
 
-    if (result.isConfirmed) {
+    if (result.isConfirmed && result.value) {
+        const { customTitle, customMessage } = result.value;
+
         Swal.fire({
-            title: 'กำลังส่ง...',
+            title: 'กำลังส่งประกาศเข้ากลุ่มไลน์...',
+            text: 'กลุ่ม: เฝ้าระวังอุทกภัย\'69 ทต.ตันหยงมัส',
             allowOutsideClick: false,
-            width: '250px',
+            width: '300px',
+            borderRadius: '1.25rem',
             didOpen: () => { Swal.showLoading(); }
         });
 
         try {
             const res = await fetch(API_URL, {
                 method: 'POST',
-                body: JSON.stringify({ action: 'broadcastLine', alertType: type })
+                body: JSON.stringify({
+                    action: 'broadcastLine',
+                    alertType: type,
+                    customTitle: customTitle,
+                    customMessage: customMessage
+                })
             });
             const data = await res.json();
 
             if (data.success) {
                 Swal.fire({
                     icon: 'success',
-                    title: 'สำเร็จ',
-                    timer: 1500,
+                    title: 'ส่งประกาศสำเร็จ',
+                    html: `<p class="text-xs text-slate-500 mt-1">ส่งประกาศเข้ากลุ่มไลน์ <b class="text-slate-700">เฝ้าระวังอุทกภัย'69</b> เรียบร้อยแล้ว</p>`,
+                    timer: 2500,
                     showConfirmButton: false,
-                    width: '250px',
+                    width: '320px',
                     borderRadius: '1.25rem'
                 });
             } else {
-                throw new Error(data.error);
+                throw new Error(data.error || 'ไม่สามารถส่งข้อความได้');
             }
         } catch (e) {
             Swal.fire({
                 icon: 'error',
-                title: 'ล้มเหลว',
+                title: 'ส่งประกาศล้มเหลว',
                 text: e.message,
-                width: '300px'
+                width: '320px',
+                borderRadius: '1.25rem'
             });
         }
     }
