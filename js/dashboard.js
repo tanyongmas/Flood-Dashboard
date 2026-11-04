@@ -1295,8 +1295,14 @@ let dashLayerStates = {
                     let iconClass = 'fa-house-user';
                     let bgHeaderColor = 'bg-orange-500';
                     let statusBadge = '';
+                    const isSos = (status && (status.includes('SOS') || status.includes('ช่วยเหลือ'))) || (destType && destType.includes('ช่วยเหลือ'));
 
-                    if (status === 'ปลอดภัย') {
+                    if (isSos) {
+                        markerColor = '#e11d48';
+                        iconClass = 'fa-life-ring';
+                        bgHeaderColor = 'bg-gradient-to-r from-rose-600 via-red-600 to-amber-600';
+                        statusBadge = '<span class="bg-rose-100 text-rose-700 px-2 py-0.5 rounded text-[9px] font-black ml-2 animate-pulse border border-rose-300 shadow-xs"><i class="fas fa-triangle-exclamation mr-1"></i>SOS ขอความช่วยเหลือ</span>';
+                    } else if (status === 'ปลอดภัย') {
                         markerColor = '#10b981';
                         iconClass = 'fa-check-circle';
                         bgHeaderColor = 'bg-emerald-500';
@@ -1314,9 +1320,9 @@ let dashLayerStates = {
                         className: 'custom-evac-marker bg-transparent border-0',
                         html: `
                     <div class="relative flex flex-col items-center">
-                        <div style="color: ${markerColor}; border-color: ${markerColor}" class="bg-white w-8 h-8 rounded-full flex items-center justify-center border-2 shadow-md text-sm z-10 relative">
+                        <div style="color: ${markerColor}; border-color: ${markerColor}" class="bg-white w-8 h-8 rounded-full flex items-center justify-center border-2 shadow-md text-sm z-10 relative ${isSos ? 'ring-4 ring-rose-400/80 animate-bounce' : ''}">
                             <i class="fas ${iconClass}"></i>
-                            <span class="absolute -top-1.5 -right-1.5 ${status === 'ปลอดภัย' ? 'bg-emerald-500' : 'bg-blue-600'} text-white text-[8px] font-black min-w-[16px] h-[16px] flex items-center justify-center rounded-full border border-white shadow-sm leading-none px-1">${count}</span>
+                            <span class="absolute -top-1.5 -right-1.5 ${isSos ? 'bg-rose-600 text-white animate-pulse' : (status === 'ปลอดภัย' ? 'bg-emerald-500' : 'bg-blue-600')} text-white text-[8px] font-black min-w-[16px] h-[16px] flex items-center justify-center rounded-full border border-white shadow-sm leading-none px-1">${count}</span>
                         </div>
                         <div style="border-top-color: ${markerColor}" class="w-0 h-0 border-l-[5px] border-r-[5px] border-t-[6px] border-l-transparent border-r-transparent mx-auto -mt-[1px] z-0"></div>
                     </div>
@@ -1347,27 +1353,58 @@ let dashLayerStates = {
                         `;
                     }
 
+                    // สกัดเบอร์โทรศัพท์สำหรับสร้างปุ่มโทรด่วนให้เจ้าหน้าที่
+                    const phoneMatch = (evacName + ' ' + note).match(/(\d{9,10})/);
+                    const extractedPhone = phoneMatch ? phoneMatch[1] : '';
+                    const phoneCallBtn = (isSos && extractedPhone) ? `
+                        <a href="tel:${extractedPhone}" style="color: #ffffff !important; text-decoration: none;" class="sos-phone-call-btn mt-2.5 w-full py-2 px-3 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-700 hover:to-red-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all text-center">
+                            <i class="fas fa-phone-alt animate-pulse" style="color: #ffffff !important;"></i>
+                            <span style="color: #ffffff !important;">โทรติดต่อผู้ประสบภัย:</span>
+                            <span style="color: #ffffff !important; font-weight: 900; letter-spacing: 0.5px; text-decoration: underline;">${extractedPhone}</span>
+                        </a>
+                    ` : '';
+
+                    let evacNameDisplay = evacName;
+                    if (isSos && extractedPhone) {
+                        const cleanName = evacName.replace(/\s*\(โทร\.?\s*[\d-]+\)/i, '').replace(/โทร\.?\s*[\d-]+/i, '').trim() || evacName;
+                        evacNameDisplay = `<span>${cleanName}</span> <span class="sos-phone-badge ml-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-rose-600 text-white font-mono font-black text-[10.5px] shadow-xs" style="color: #ffffff !important;"><i class="fas fa-phone-alt text-[8px]" style="color: #ffffff !important;"></i> ${extractedPhone}</span>`;
+                    }
+
                     const popupHTML = `
-                <div class="w-full font-sans bg-white relative min-w-[200px]">
+                <div class="w-full font-sans bg-white relative min-w-[210px] rounded-xl overflow-hidden">
                     <div class="${bgHeaderColor} p-3 flex justify-between items-center text-white relative overflow-hidden">
                         <i class="fas ${iconClass} absolute -right-2 -bottom-2 text-5xl opacity-20 transform -rotate-12"></i>
                         <span class="text-[10px] font-black uppercase tracking-widest bg-white/20 backdrop-blur-sm px-2.5 py-1 rounded-lg border border-white/20 z-10 shadow-sm">
-                            <i class="fas fa-users mr-1"></i> ผู้อพยพ/ผู้รายงาน ${count} คน
+                            <i class="fas ${isSos ? 'fa-triangle-exclamation' : 'fa-users'} mr-1"></i> ${isSos ? 'ขอความช่วยเหลือ SOS' : 'ผู้อพยพ/ผู้รายงาน'} ${count} คน
                         </span>
                     </div>
-                    <div class="p-4">
-                        <h4 class="font-black text-slate-800 text-[14px] leading-tight mb-2 flex items-center">
-                            ${address} ${statusBadge}
+                    <div class="p-3.5">
+                        <h4 class="font-black text-slate-800 text-[14px] leading-tight mb-2 flex items-center flex-wrap gap-1">
+                            <span>${address}</span> ${statusBadge}
                         </h4>
                         
                         <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-100 shadow-inner space-y-1.5">
                             <p class="text-[11px] text-slate-600 flex items-start border-b border-slate-200 pb-1.5 mb-1.5">
                                 <span class="font-bold text-slate-500 w-16 shrink-0">ชื่อ-สกุล:</span> 
-                                <span class="font-bold ${status === 'ปลอดภัย' ? 'text-emerald-600' : 'text-blue-600'}">${evacName}</span>
+                                <span class="font-bold ${isSos ? 'text-rose-600' : (status === 'ปลอดภัย' ? 'text-emerald-600' : 'text-blue-600')}">${evacNameDisplay}</span>
                             </p>
-                            ${destHtml}
-                            ${shelterMembersHtml}
-                            <p class="text-[11px] text-slate-600 flex items-start">
+                            ${isSos ? `
+                                <div class="bg-rose-50 p-2.5 rounded-xl border border-rose-200 text-rose-900 text-xs my-2">
+                                    <p class="font-bold text-rose-700 flex items-center gap-1 mb-1">
+                                        <i class="fas fa-bullhorn text-rose-600"></i> สิ่งที่ต้องการ: ${destName || 'ขอความช่วยเหลือเร่งด่วน'}
+                                    </p>
+                                    ${note ? `<p class="text-[10.5px] text-slate-700 bg-white/80 p-2 rounded-lg border border-rose-100 mt-1">${note}</p>` : ''}
+                                </div>
+                                ${phoneCallBtn}
+                            ` : `
+                                ${destHtml}
+                                ${shelterMembersHtml}
+                                <div class="mt-2 pt-2 border-t border-slate-200">
+                                    <p class="text-[10px] font-bold text-slate-500 mb-1">รายละเอียด / ความช่วยเหลือ:</p>
+                                    <p class="text-[11px] text-slate-700 bg-white p-2 rounded-lg border border-slate-200">${note || '-'}</p>
+                                </div>
+                            `}
+                            <p class="text-[11px] text-slate-600 flex items-start pt-1">
                                 <span class="font-bold text-slate-500 w-16 shrink-0">ผู้รายงาน:</span> 
                                 <span>${reporter}</span>
                             </p>
@@ -1375,11 +1412,6 @@ let dashLayerStates = {
                                 <span class="font-bold text-slate-500 w-16 shrink-0">เวลา:</span> 
                                 <span>${timestamp}</span>
                             </p>
-                            
-                            <div class="mt-2 pt-2 border-t border-slate-200">
-                                <p class="text-[10px] font-bold text-slate-500 mb-1">รายละเอียด / ความช่วยเหลือ:</p>
-                                <p class="text-[11px] text-slate-700 bg-white p-2 rounded-lg border border-slate-200">${note}</p>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -2129,6 +2161,7 @@ let dashLayerStates = {
                     const customCoords = r[6] ? r[6].toString().trim() : '';
                     const evacName = r[7] ? r[7].toString().trim() : 'ไม่ระบุชื่อ';
                     const status = r[8] ? r[8].toString().trim() : 'อพยพ';
+                    const note = r[9] ? r[9].toString().trim() : '';
 
                     let pos = null;
                     if (customCoords && customCoords.includes(',')) {
@@ -2144,8 +2177,10 @@ let dashLayerStates = {
                     }
 
                     if (pos) {
-                        let color = '#8b5cf6', iconClass = 'fa-house-user', statusBadge = 'อพยพ', badgeBg = 'bg-purple-950';
-                        if (status === 'ปลอดภัย') {
+                        let color = '#8b5cf6', iconClass = 'fa-house-user', statusBadge = 'อพยพ', badgeBg = 'bg-purple-950', isSos = false;
+                        if ((status && (status.includes('SOS') || status.includes('ช่วยเหลือ'))) || (destType && destType.includes('ช่วยเหลือ'))) {
+                            color = '#e11d48'; iconClass = 'fa-life-ring'; statusBadge = 'SOS ช่วยเหลือด่วน'; badgeBg = 'bg-rose-950'; isSos = true;
+                        } else if (status === 'ปลอดภัย') {
                             color = '#10b981'; iconClass = 'fa-check-circle'; statusBadge = 'ปลอดภัย'; badgeBg = 'bg-emerald-950';
                         } else if (destType === 'ศูนย์' || shelterHouseData) {
                             color = '#3b82f6'; iconClass = 'fa-campground'; statusBadge = 'อพยพเข้าศูนย์'; badgeBg = 'bg-blue-950';
@@ -2155,10 +2190,10 @@ let dashLayerStates = {
                             className: 'custom-one-evac-marker bg-transparent border-0',
                             html: `
                                 <div class="relative flex flex-col items-center">
-                                    <div style="background-color: ${color};" class="text-white w-8 h-8 rounded-full border-2 border-white shadow-lg flex items-center justify-center text-sm font-black">
+                                    <div style="background-color: ${color};" class="text-white w-9 h-9 rounded-full border-2 border-white shadow-xl flex items-center justify-center text-sm font-black ${isSos ? 'ring-4 ring-rose-400/80 animate-bounce' : ''}">
                                         <i class="fas ${iconClass}"></i>
                                     </div>
-                                    <span class="${badgeBg} text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-md mt-0.5 whitespace-nowrap border border-white/20">${statusBadge} ${count} คน</span>
+                                    <span class="${badgeBg} text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-md mt-0.5 whitespace-nowrap border border-white/20 ${isSos ? 'bg-rose-600 text-white font-bold animate-pulse' : ''}">${statusBadge} ${count} คน</span>
                                 </div>
                             `,
                             iconSize: [42, 54],
@@ -2178,16 +2213,40 @@ let dashLayerStates = {
                             `;
                         }
 
+                        const phoneMatch = (evacName + ' ' + note).match(/(\d{9,10})/);
+                        const extractedPhone = phoneMatch ? phoneMatch[1] : '';
+                        const phoneCallBtn = (isSos && extractedPhone) ? `
+                            <a href="tel:${extractedPhone}" style="color: #ffffff !important; text-decoration: none;" class="sos-phone-call-btn mt-2 w-full py-1.5 px-3 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-700 hover:to-red-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition-all text-center">
+                                <i class="fas fa-phone-alt animate-pulse" style="color: #ffffff !important;"></i>
+                                <span style="color: #ffffff !important;">โทรติดต่อ:</span>
+                                <span style="color: #ffffff !important; font-weight: 900; letter-spacing: 0.5px; text-decoration: underline;">${extractedPhone}</span>
+                            </a>
+                        ` : '';
+
+                        let evacNameDisplay = evacName;
+                        if (isSos && extractedPhone) {
+                            const cleanName = evacName.replace(/\s*\(โทร\.?\s*[\d-]+\)/i, '').replace(/โทร\.?\s*[\d-]+/i, '').trim() || evacName;
+                            evacNameDisplay = `<span>${cleanName}</span> <span class="sos-phone-badge ml-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-rose-600 text-white font-mono font-black text-[10px] shadow-xs" style="color: #ffffff !important;"><i class="fas fa-phone-alt text-[8px]" style="color: #ffffff !important;"></i> ${extractedPhone}</span>`;
+                        }
+
                         const popup = `
-                            <div class="font-sans p-2">
-                                <div class="flex items-center justify-between border-b pb-1 mb-1">
+                            <div class="font-sans p-2 min-w-[210px]">
+                                <div class="flex items-center justify-between border-b pb-1 mb-1.5">
                                     <span class="font-black text-xs text-slate-800">${address}</span>
-                                    <span class="text-[9px] font-bold px-2 py-0.5 rounded text-white" style="background-color:${color}">${statusBadge}</span>
+                                    <span class="text-[9px] font-bold px-2 py-0.5 rounded text-white ${isSos ? 'bg-rose-600 animate-pulse font-black' : ''}" style="background-color:${color}">${statusBadge}</span>
                                 </div>
-                                <p class="text-xs text-slate-700">ชื่อ: <b>${evacName}</b> (${count} คน)</p>
-                                ${status !== 'ปลอดภัย' ? `<p class="text-[11px] text-slate-500">ปลายทาง: ${destName || (shelterHouseData ? Array.from(shelterHouseData.shelters).join(', ') : '-')} (${destType || 'ศูนย์'})</p>` : ''}
-                                ${shelterMembersHtml}
-                                <p class="text-[10px] text-slate-400 mt-1">ผู้รายงาน: ${reporter}</p>
+                                <p class="text-xs text-slate-700">ชื่อ: <b>${evacNameDisplay}</b> (${count} คน)</p>
+                                ${isSos ? `
+                                    <div class="my-1.5 p-2 bg-rose-50 border border-rose-200 rounded-xl text-rose-900 text-[11px] leading-tight">
+                                        <p class="font-bold text-rose-700 mb-0.5"><i class="fas fa-triangle-exclamation mr-1"></i>${destName || 'ขอความช่วยเหลือเร่งด่วน'}</p>
+                                        ${note ? `<p class="text-[10px] text-slate-600 mt-1">${note}</p>` : ''}
+                                    </div>
+                                    ${phoneCallBtn}
+                                ` : `
+                                    ${status !== 'ปลอดภัย' ? `<p class="text-[11px] text-slate-500">ปลายทาง: ${destName || (shelterHouseData ? Array.from(shelterHouseData.shelters).join(', ') : '-')} (${destType || 'ศูนย์'})</p>` : ''}
+                                    ${shelterMembersHtml}
+                                `}
+                                <p class="text-[10px] text-slate-400 mt-1.5">ผู้รายงาน: ${reporter}</p>
                             </div>
                         `;
 

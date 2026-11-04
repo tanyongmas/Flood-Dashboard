@@ -178,6 +178,428 @@ async function saveEvacuationData(data) {
     }
 }
 
+// เลื่อนหน้าจอไปยังส่วนต่าง ๆ ในโหมดประชาชน
+window.scrollToPublicSection = function (id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const headerOffset = 70;
+    const elementPosition = el.getBoundingClientRect().top;
+    const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+    window.scrollTo({
+        top: Math.max(0, offsetPosition),
+        behavior: 'smooth'
+    });
+    el.classList.add('ring-2', 'ring-sky-400', 'transition-all');
+    setTimeout(() => {
+        el.classList.remove('ring-2', 'ring-sky-400');
+    }, 1500);
+};
+
+// สลับการเลือกความช่วยเหลือที่ต้องการใน SOS Modal
+window.toggleSosHelpOption = function (btn, type) {
+    if (!btn) return;
+    const isActive = btn.classList.contains('sos-btn-active');
+    if (isActive) {
+        btn.classList.remove('sos-btn-active', 'border-rose-500', 'bg-rose-50', 'text-rose-700', 'ring-2', 'ring-rose-400');
+        btn.classList.add('border-slate-200', 'bg-slate-50', 'text-slate-700');
+    } else {
+        btn.classList.add('sos-btn-active', 'border-rose-500', 'bg-rose-50', 'text-rose-700', 'ring-2', 'ring-rose-400');
+        btn.classList.remove('border-slate-200', 'bg-slate-50', 'text-slate-700');
+    }
+
+    if (type === 'other') {
+        const box = document.getElementById('sos_other_detail_box');
+        if (box) {
+            if (!isActive) box.classList.remove('hidden');
+            else box.classList.add('hidden');
+        }
+    }
+};
+
+// เริ่มต้นแผนที่ขนาดเล็กสำหรับระบุพิกัดขอความช่วยเหลือเร่งด่วน (SOS)
+window.initUrgentSosModalMap = function (initialLat, initialLng) {
+    setTimeout(() => {
+        const mapContainer = document.getElementById('swal_sos_map');
+        if (!mapContainer) return;
+
+        if (window._urgentSosModalMap) {
+            try { window._urgentSosModalMap.remove(); } catch (e) { }
+            window._urgentSosModalMap = null;
+        }
+
+        const map = L.map('swal_sos_map', {
+            zoomControl: false,
+            attributionControl: false,
+            scrollWheelZoom: false
+        }).setView([initialLat, initialLng], 15);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 18
+        }).addTo(map);
+
+        if (typeof window.addMunicipalityMaskToMap === 'function') {
+            window.addMunicipalityMaskToMap(map, {
+                fillColor: '#0f172a',
+                fillOpacity: 0.55,
+                borderColor: '#e11d48',
+                borderWeight: 2,
+                borderDashArray: '4, 4'
+            });
+        }
+
+        const sosIcon = L.divIcon({
+            className: 'sos-custom-icon',
+            html: '<div class="w-8 h-8 rounded-full bg-rose-600 text-white flex items-center justify-center text-sm shadow-lg border-2 border-white animate-bounce"><i class="fas fa-life-ring"></i></div>',
+            iconSize: [32, 32],
+            iconAnchor: [16, 16]
+        });
+
+        const marker = L.marker([initialLat, initialLng], {
+            draggable: true,
+            icon: sosIcon
+        }).addTo(map);
+
+        const updateCoords = (lat, lng) => {
+            const latInput = document.getElementById('sos_lat');
+            const lngInput = document.getElementById('sos_lng');
+            const preview = document.getElementById('sos_coords_preview');
+            if (latInput) latInput.value = lat.toFixed(6);
+            if (lngInput) lngInput.value = lng.toFixed(6);
+            if (preview) preview.textContent = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+        };
+
+        marker.on('dragend', function (e) {
+            const pos = e.target.getLatLng();
+            updateCoords(pos.lat, pos.lng);
+        });
+
+        map.on('click', function (e) {
+            marker.setLatLng(e.latlng);
+            updateCoords(e.latlng.lat, e.latlng.lng);
+        });
+
+        window._urgentSosModalMap = map;
+        window._urgentSosMarker = marker;
+
+        setTimeout(() => {
+            try { map.invalidateSize(); } catch (e) { }
+        }, 150);
+    }, 250);
+};
+
+// ดึงพิกัด GPS อัตโนมัติสำหรับหน้าต่าง SOS
+window.getUrgentSosGps = function () {
+    const preview = document.getElementById('sos_coords_preview');
+    if (preview) preview.textContent = 'กำลังค้นหา GPS...';
+
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                const lat = pos.coords.latitude;
+                const lng = pos.coords.longitude;
+                const latInput = document.getElementById('sos_lat');
+                const lngInput = document.getElementById('sos_lng');
+                if (latInput) latInput.value = lat.toFixed(6);
+                if (lngInput) lngInput.value = lng.toFixed(6);
+                if (preview) preview.textContent = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+
+                if (window._urgentSosModalMap && window._urgentSosMarker) {
+                    window._urgentSosMarker.setLatLng([lat, lng]);
+                    window._urgentSosModalMap.setView([lat, lng], 16);
+                }
+            },
+            (err) => {
+                console.warn(err);
+                if (preview) preview.textContent = 'กรุณาแตะบนแผนที่เพื่อระบุพิกัด';
+            },
+            { enableHighAccuracy: true, timeout: 10000 }
+        );
+    }
+};
+
+// 🚨 หน้าต่างแจ้งขอความช่วยเหลือเร่งด่วน (SOS Urgent Rescue Modal)
+window.openUrgentSosModal = function () {
+    let defaultLat = 6.294450;
+    let defaultLng = 101.723620;
+
+    Swal.fire({
+        width: 'min(96vw, 540px)',
+        html: `
+            <div class="text-left font-prompt text-xs">
+                <!-- ส่วนหัวกะทัดรัด ฉุกเฉินเด่นชัด -->
+                <div class="flex items-center justify-between pb-2.5 mb-2.5 border-b border-rose-100">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-9 h-9 rounded-2xl bg-gradient-to-tr from-rose-600 via-red-500 to-amber-500 text-white flex items-center justify-center text-base shadow-md shadow-rose-500/30 shrink-0 animate-pulse">
+                            <i class="fas fa-life-ring"></i>
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-1.5">
+                                <h3 class="font-black text-rose-700 text-sm sm:text-base leading-tight">แจ้งขอความช่วยเหลือเร่งด่วน (SOS)</h3>
+                                <span class="px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 text-[9px] font-bold">24 ชม.</span>
+                            </div>
+                            <p class="text-[10px] text-slate-400 font-medium">ศูนย์ปฏิบัติการฉุกเฉิน เทศบาลตำบลตันหยงมัส</p>
+                        </div>
+                    </div>
+                    <button type="button" onclick="Swal.close()" class="w-7 h-7 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-400 hover:text-slate-600 flex items-center justify-center text-xs transition-colors shrink-0" title="ปิด">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+
+                <div class="space-y-3 sm:space-y-3.5 pb-1">
+                    <!-- 1. ต้องการความช่วยเหลืออะไร (เลือกได้หลายข้อ) -->
+                    <div>
+                        <label class="font-black text-slate-800 text-xs flex items-center justify-between mb-1.5">
+                            <span class="flex items-center gap-1.5"><i class="fas fa-bullhorn text-rose-500"></i> 1. ต้องการความช่วยเหลืออะไร? *</span>
+                            <span class="text-[10px] text-slate-400 font-normal">(แตะเลือกได้มากกว่า 1 ข้อ)</span>
+                        </label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button type="button" onclick="toggleSosHelpOption(this, 'evac')" data-type="อพยพออก" class="sos-help-btn p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 text-left transition-all flex items-center gap-2 active:scale-95">
+                                <div class="w-7 h-7 rounded-lg bg-rose-100 text-rose-600 flex items-center justify-center text-xs shrink-0"><i class="fas fa-person-running"></i></div>
+                                <div>
+                                    <div class="font-bold text-xs leading-tight">อพยพออก</div>
+                                    <div class="text-[9px] text-slate-400 leading-tight">น้ำท่วมสูง/ติดในบ้าน</div>
+                                </div>
+                            </button>
+                            <button type="button" onclick="toggleSosHelpOption(this, 'medical')" data-type="เคลื่อนย้ายผู้ป่วย" class="sos-help-btn p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 text-left transition-all flex items-center gap-2 active:scale-95">
+                                <div class="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center text-xs shrink-0"><i class="fas fa-wheelchair"></i></div>
+                                <div>
+                                    <div class="font-bold text-xs leading-tight">เคลื่อนย้ายผู้ป่วย</div>
+                                    <div class="text-[9px] text-slate-400 leading-tight">ผู้สูงอายุ/ผู้พิการ/ติดเตียง</div>
+                                </div>
+                            </button>
+                            <button type="button" onclick="toggleSosHelpOption(this, 'food')" data-type="อาหารและน้ำดื่ม" class="sos-help-btn p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 text-left transition-all flex items-center gap-2 active:scale-95">
+                                <div class="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs shrink-0"><i class="fas fa-box-open"></i></div>
+                                <div>
+                                    <div class="font-bold text-xs leading-tight">อาหารและน้ำดื่ม</div>
+                                    <div class="text-[9px] text-slate-400 leading-tight">ถุงยังชีพ/ขาดแคลนเสบียง</div>
+                                </div>
+                            </button>
+                            <button type="button" onclick="toggleSosHelpOption(this, 'other')" data-type="อื่น ๆ" class="sos-help-btn p-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 text-left transition-all flex items-center gap-2 active:scale-95">
+                                <div class="w-7 h-7 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center text-xs shrink-0"><i class="fas fa-ellipsis-h"></i></div>
+                                <div>
+                                    <div class="font-bold text-xs leading-tight">อื่น ๆ (ระบุ)</div>
+                                    <div class="text-[9px] text-slate-400 leading-tight">ต้องการเรือ/ไฟดับ ฯลฯ</div>
+                                </div>
+                            </button>
+                        </div>
+                        <div id="sos_other_detail_box" class="hidden mt-2">
+                            <input type="text" id="sos_other_detail" class="w-full p-2.5 border border-slate-200 rounded-xl outline-none text-xs bg-slate-50 focus:border-rose-400 focus:bg-white" placeholder="โปรดระบุความช่วยเหลืออื่น ๆ เช่น ไฟฟ้าช็อต, ต้องการเรือติดเครื่องยนต์, สัตว์มีพิษ...">
+                        </div>
+                    </div>
+
+                    <!-- 2. ตำแหน่งที่อยู่ & พิกัดบนแผนที่ขนาดเล็ก -->
+                    <div>
+                        <div class="flex items-center justify-between mb-1.5">
+                            <label class="font-black text-slate-800 text-xs flex items-center gap-1.5">
+                                <i class="fas fa-map-pin text-rose-500"></i> 2. ตำแหน่งปัจจุบัน / จุดสังเกต *
+                            </label>
+                            <button type="button" onclick="getUrgentSosGps()" class="px-2.5 py-1 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-[10px] flex items-center gap-1 transition-all active:scale-95 shadow-xs">
+                                <i class="fas fa-crosshairs text-[10px]"></i>
+                                <span>ดึงตำแหน่ง GPS</span>
+                            </button>
+                        </div>
+
+                        <input type="text" id="sos_address_text" class="w-full p-2.5 border border-slate-200 rounded-xl outline-none text-xs bg-slate-50/80 font-bold focus:border-rose-400 focus:bg-white transition-all mb-2" placeholder="ระบุบ้านเลขที่ / ซอย / ชุมชน / จุดสังเกต">
+
+                        <input type="hidden" id="sos_lat" value="${defaultLat.toFixed(6)}">
+                        <input type="hidden" id="sos_lng" value="${defaultLng.toFixed(6)}">
+
+                        <!-- Leaflet Mini Map -->
+                        <div class="rounded-2xl overflow-hidden border border-rose-200/80 relative shadow-inner">
+                            <div id="swal_sos_map" class="w-full h-32 bg-slate-100"></div>
+                            <div class="absolute bottom-1.5 left-1.5 right-1.5 bg-white/95 backdrop-blur-sm px-2.5 py-1 rounded-xl text-[9px] text-slate-600 font-bold border border-slate-200 shadow-xs pointer-events-none flex items-center justify-between gap-1">
+                                <span class="truncate"><i class="fas fa-hand-pointer text-rose-500 mr-1"></i>แตะแผนที่หรือลากหมุดเพื่อปรับพิกัด</span>
+                                <span class="text-rose-600 font-mono shrink-0 font-bold" id="sos_coords_preview">${defaultLat.toFixed(4)}, ${defaultLng.toFixed(4)}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3. ข้อมูลผู้ติดต่อ & จำนวนสมาชิก -->
+                    <div>
+                        <label class="font-black text-slate-800 text-xs block mb-1.5">
+                            <i class="fas fa-user-shield text-slate-600 mr-1.5"></i> 3. ข้อมูลผู้ติดต่อ *
+                        </label>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
+                            <div>
+                                <input type="text" id="sos_contact_name" class="w-full p-2.5 border border-slate-200 rounded-xl outline-none text-xs bg-slate-50 focus:border-rose-400 focus:bg-white" placeholder="ชื่อ-สกุล ผู้ติดต่อ *" required>
+                            </div>
+                            <div>
+                                <input type="tel" id="sos_contact_phone" class="w-full p-2.5 border border-slate-200 rounded-xl outline-none text-xs bg-slate-50 focus:border-rose-400 focus:bg-white" placeholder="เบอร์โทรศัพท์ติดต่อ *" required>
+                            </div>
+                        </div>
+
+                        <!-- จำนวนคน -->
+                        <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                            <div class="text-[10px] font-bold text-slate-500 mb-1.5">จำนวนคนที่ต้องการช่วยเหลือในจุดนี้:</div>
+                            <div class="grid grid-cols-3 gap-2 text-center">
+                                <div>
+                                    <label class="text-[9.5px] text-slate-500 block mb-0.5">ผู้ใหญ่</label>
+                                    <input type="number" id="sos_count_adult" min="0" value="1" class="w-full p-1.5 border border-slate-200 rounded-lg text-center text-xs font-bold bg-white outline-none focus:border-rose-400">
+                                </div>
+                                <div>
+                                    <label class="text-[9.5px] text-slate-500 block mb-0.5">เด็ก/ทารก</label>
+                                    <input type="number" id="sos_count_child" min="0" value="0" class="w-full p-1.5 border border-slate-200 rounded-lg text-center text-xs font-bold bg-white outline-none focus:border-rose-400">
+                                </div>
+                                <div>
+                                    <label class="text-[9.5px] text-rose-600 font-bold block mb-0.5">ผู้ป่วย/ติดเตียง</label>
+                                    <input type="number" id="sos_count_patient" min="0" value="0" class="w-full p-1.5 border border-rose-200 rounded-lg text-center text-xs font-bold bg-rose-50 text-rose-700 outline-none focus:border-rose-400">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 4. รายละเอียดเพิ่มเติม -->
+                    <div>
+                        <label class="font-bold text-slate-700 block mb-1 text-xs">
+                            <i class="far fa-comment-dots text-slate-400 mr-1.5"></i> 4. รายละเอียดเพิ่มเติม (ถ้ามี)
+                        </label>
+                        <textarea id="sos_notes" rows="2" class="w-full p-2.5 border border-slate-200 rounded-xl outline-none text-xs bg-slate-50 focus:border-rose-400 focus:bg-white transition-all" placeholder="เช่น น้ำสูงระดับอก, กระแสน้ำไหลแรง, คนแก่อยู่ชั้น 2, อาหารหมด..."></textarea>
+                    </div>
+
+                    <!-- 5. กล่องแจ้งสถานะเดิม (ปลอดภัย vs อพยพไปศูนย์พักพิง) ยังแสดงอยู่ต่อจากส่วนใหม่ที่เพิ่ม -->
+                    <div class="pt-2.5 border-t border-dashed border-slate-200">
+                        <div class="text-[10px] text-slate-400 font-bold mb-2 flex items-center gap-1.5">
+                            <i class="fas fa-info-circle text-slate-400"></i>
+                            <span>หรือหากต้องการเพียงแจ้งสถานะการอยู่อาศัย (ไม่เร่งด่วน):</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <button type="button" onclick="Swal.close(); setTimeout(() => openEvacReportModal('ปลอดภัย'), 300);" class="p-2.5 rounded-xl border border-emerald-200 bg-emerald-50/70 hover:bg-emerald-100/80 text-emerald-700 text-left transition-all flex items-center gap-2 active:scale-95 group">
+                                <div class="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center text-xs shrink-0 group-hover:scale-110 transition-transform">
+                                    <i class="fas fa-check-circle"></i>
+                                </div>
+                                <div class="min-w-0">
+                                    <div class="font-bold text-[11px] leading-tight truncate">แจ้งสถานะ: ปลอดภัย</div>
+                                    <div class="text-[8.5px] text-emerald-600/80 leading-tight truncate">น้ำไม่ท่วม/รับมือได้</div>
+                                </div>
+                            </button>
+                            <button type="button" onclick="Swal.close(); setTimeout(() => openEvacReportModal('อพยพ'), 300);" class="p-2.5 rounded-xl border border-amber-200 bg-amber-50/70 hover:bg-amber-100/80 text-amber-700 text-left transition-all flex items-center gap-2 active:scale-95 group">
+                                <div class="w-6 h-6 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center text-xs shrink-0 group-hover:scale-110 transition-transform">
+                                    <i class="fas fa-campground"></i>
+                                </div>
+                                <div class="min-w-0">
+                                    <div class="font-bold text-[11px] leading-tight truncate">อพยพไปศูนย์พักพิง</div>
+                                    <div class="text-[8.5px] text-amber-600/80 leading-tight truncate">ลงทะเบียนเข้าศูนย์</div>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: '<i class="fas fa-bullhorn mr-1.5"></i> ส่งข้อมูลขอความช่วยเหลือทันที (SOS)',
+        cancelButtonText: 'ปิดหน้าต่าง',
+        confirmButtonColor: '#e11d48',
+        cancelButtonColor: '#64748b',
+        customClass: {
+            popup: 'rounded-3xl sm:rounded-[2rem] !p-3 sm:!p-4 max-w-lg w-full shadow-2xl border border-rose-100 !flex !flex-col my-auto',
+            htmlContainer: '!m-0 !p-0 !overflow-y-auto max-h-[72vh] sm:max-h-[76vh] custom-scrollbar touch-pan-y',
+            actions: 'w-full !mt-2.5 !mb-0 px-1 sm:px-2 flex flex-col-reverse sm:flex-row gap-2 justify-end',
+            confirmButton: 'w-full sm:w-auto !m-0 py-2.5 px-5 rounded-2xl font-bold text-xs sm:text-sm bg-gradient-to-r from-rose-600 via-red-600 to-amber-600 hover:from-rose-700 hover:to-amber-700 text-white shadow-lg shadow-rose-500/30 active:scale-95 transition-all order-2 sm:order-1',
+            cancelButton: 'w-full sm:w-auto !m-0 py-2.5 px-4 rounded-2xl font-bold text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 active:scale-95 transition-all order-1 sm:order-2'
+        },
+        didOpen: () => {
+            initUrgentSosModalMap(defaultLat, defaultLng);
+            getUrgentSosGps();
+        },
+        preConfirm: () => {
+            const selectedHelps = [];
+            document.querySelectorAll('.sos-help-btn.sos-btn-active').forEach(btn => {
+                const helpType = btn.getAttribute('data-type');
+                if (helpType) selectedHelps.push(helpType);
+            });
+            const otherDetail = (document.getElementById('sos_other_detail')?.value || '').trim();
+            if (otherDetail && selectedHelps.includes('อื่น ๆ')) {
+                selectedHelps[selectedHelps.indexOf('อื่น ๆ')] = `อื่น ๆ (${otherDetail})`;
+            }
+
+            const addressText = (document.getElementById('sos_address_text')?.value || '').trim();
+            const contactName = (document.getElementById('sos_contact_name')?.value || '').trim();
+            const contactPhone = (document.getElementById('sos_contact_phone')?.value || '').trim();
+            const lat = parseFloat(document.getElementById('sos_lat')?.value) || defaultLat;
+            const lng = parseFloat(document.getElementById('sos_lng')?.value) || defaultLng;
+            const adultCount = parseInt(document.getElementById('sos_count_adult')?.value) || 0;
+            const childCount = parseInt(document.getElementById('sos_count_child')?.value) || 0;
+            const patientCount = parseInt(document.getElementById('sos_count_patient')?.value) || 0;
+            const notes = (document.getElementById('sos_notes')?.value || '').trim();
+
+            if (selectedHelps.length === 0 && !notes) {
+                Swal.showValidationMessage('กรุณาเลือกความช่วยเหลือที่ต้องการอย่างน้อย 1 รายการ หรือระบุรายละเอียด');
+                return false;
+            }
+            if (!contactName) {
+                Swal.showValidationMessage('กรุณาระบุชื่อ-สกุล ผู้ติดต่อ');
+                return false;
+            }
+            if (!contactPhone || contactPhone.length < 9) {
+                Swal.showValidationMessage('กรุณาระบุเบอร์โทรศัพท์ที่ถูกต้อง เพื่อให้เจ้าหน้าที่โทรกลับ');
+                return false;
+            }
+            if (!addressText && (lat === defaultLat && lng === defaultLng)) {
+                Swal.showValidationMessage('กรุณาระบุที่อยู่ / จุดสังเกต หรือแตะตำแหน่งบนแผนที่');
+                return false;
+            }
+
+            const totalCount = Math.max(1, adultCount + childCount + patientCount);
+            return {
+                selectedHelps,
+                addressText,
+                contactName,
+                contactPhone,
+                lat,
+                lng,
+                adultCount,
+                childCount,
+                patientCount,
+                totalCount,
+                notes
+            };
+        }
+    }).then(async (result) => {
+        if (result.isConfirmed && result.value) {
+            const data = result.value;
+            const breakdownParts = [];
+            if (data.adultCount > 0) breakdownParts.push(`ผู้ใหญ่ ${data.adultCount} คน`);
+            if (data.childCount > 0) breakdownParts.push(`เด็ก ${data.childCount} คน`);
+            if (data.patientCount > 0) breakdownParts.push(`ผู้ป่วย/ติดเตียง ${data.patientCount} คน`);
+            const headcountSummary = breakdownParts.length > 0 ? breakdownParts.join(', ') : `${data.totalCount} คน`;
+
+            const fullNote = `[SOS: ${data.selectedHelps.join(', ')}] สมาชิก: ${headcountSummary}${data.notes ? ' | รายละเอียด: ' + data.notes : ''}`;
+
+            const payload = {
+                action: 'saveEvacuation',
+                address: data.addressText || `พิกัด GPS (${data.lat.toFixed(5)}, ${data.lng.toFixed(5)})`,
+                count: data.totalCount,
+                type: 'ขอความช่วยเหลือเร่งด่วน',
+                dest: data.selectedHelps.join(', ') || 'ขอความช่วยเหลือฉุกเฉิน',
+                user: 'ประชาชน (SOS)',
+                coords: `${data.lat.toFixed(6)},${data.lng.toFixed(6)}`,
+                evacName: `${data.contactName} (โทร. ${data.contactPhone})`,
+                status: 'ขอความช่วยเหลือเร่งด่วน (SOS)',
+                note: fullNote,
+                period: typeof currentPeriod !== 'undefined' ? currentPeriod : '2569'
+            };
+
+            await saveEvacuationData(payload);
+
+            Swal.fire({
+                title: 'ส่งสัญญาณ SOS สำเร็จ!',
+                html: `
+                    <div class="text-left text-xs space-y-2 p-2">
+                        <p class="text-emerald-700 font-bold"><i class="fas fa-check-circle mr-1"></i> ระบบได้บันทึกคำขอความช่วยเหลือและส่งพิกัดตรงถึงศูนย์สั่งการเรียบร้อยแล้ว</p>
+                        <div class="p-3 bg-rose-50 rounded-xl border border-rose-100 text-rose-800">
+                            <b>หากสถานการณ์วิกฤตเร่งด่วนมาก:</b> กรุณาโทรตรงสายด่วน ปภ. ทต.ตันหยงมัส <a href="tel:073671886" class="font-black text-rose-700 underline ml-1">073-671886</a> หรือ กู้ชีพ <a href="tel:1669" class="font-black text-rose-700 underline ml-1">1669</a> ทันที
+                        </div>
+                    </div>
+                `,
+                icon: 'success',
+                confirmButtonText: 'รับทราบ',
+                confirmButtonColor: '#059669'
+            });
+        }
+    });
+};
+
 window.promptSafetyCheck = function () {
     Swal.fire({
         title: '<div class="text-2xl font-black text-slate-800">รายงานสถานะปัจจุบัน</div>',
@@ -635,8 +1057,10 @@ window.renderPublicPortal = async function () {
     if (!container) {
         container = document.createElement('div');
         container.id = 'publicPortalContainer';
-        container.className = "w-full max-w-4xl mx-auto px-4 py-6 md:py-10 space-y-6 animate-fade-in";
+        container.className = "w-full max-w-4xl mx-auto px-3 sm:px-4 py-3 sm:py-6 pb-28 space-y-4 sm:space-y-6 animate-fade-in";
         document.body.appendChild(container);
+    } else {
+        container.className = "w-full max-w-4xl mx-auto px-3 sm:px-4 py-3 sm:py-6 pb-28 space-y-4 sm:space-y-6 animate-fade-in";
     }
 
     const currentDateStr = new Date().toLocaleDateString('th-TH', {
@@ -646,32 +1070,83 @@ window.renderPublicPortal = async function () {
     });
 
     container.innerHTML = `
-        <!-- 1. Header: สัญลักษณ์เทศบาล & หัวข้อระบบ -->
-        <header class="bg-white rounded-[2.5rem] p-6 shadow-sm border border-slate-100 flex flex-col md:flex-row items-center justify-between gap-4">
-            <div class="flex items-center gap-4 text-center md:text-left">
-                <img src="assets/logo.png" class="w-16 h-16 md:w-20 md:h-20 object-contain drop-shadow-sm shrink-0" alt="ตราเทศบาลตำบลตันหยงมัส">
-                <div>
-                    <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold border ${statusTheme.badgeBg} mb-1">
-                        <span class="w-2 h-2 rounded-full ${statusTheme.dotColor} animate-ping"></span>
-                        <span>${statusTheme.title}</span>
-                    </span>
-                    <h1 class="text-xl md:text-2xl font-black text-slate-800 tracking-tight">รายงานสถานการณ์อุทกภัย</h1>
-                    <p class="text-xs text-slate-400 font-medium">เทศบาลตำบลตันหยงมัส อ.ระแงะ จ.นราธิวาส • ${currentDateStr}</p>
+        <!-- 1. Header Bar: แบบสองบรรทัด กะทัดรัด ตรึงด้านบนเสมอ (Sticky Top) -->
+        <header class="sticky top-2 z-40 bg-white/95 backdrop-blur-md rounded-2xl px-3.5 py-2 sm:py-2.5 shadow-md border border-slate-200/80 flex items-center justify-between gap-2 sm:gap-3 mb-2 transition-all">
+            <div class="flex items-center gap-2.5 min-w-0">
+                <img src="assets/logo.png" class="w-9 h-9 sm:w-10 sm:h-10 object-contain drop-shadow-xs shrink-0" alt="ตราเทศบาล">
+                <div class="min-w-0 leading-tight">
+                    <!-- Line 1: ชื่อระบบ -->
+                    <h1 class="text-xs sm:text-sm md:text-base font-black text-slate-800 tracking-tight truncate">รายงานสถานการณ์อุทกภัย</h1>
+                    <!-- Line 2: สังกัดพื้นที่ + วันที่ปัจจุบัน -->
+                    <p class="text-[10px] sm:text-[11px] text-slate-400 font-medium truncate mt-0.5">
+                        <i class="fas fa-map-marker-alt text-rose-500 mr-1 text-[9px]"></i>ทต.ตันหยงมัส อ.ระแงะ จ.นราธิวาส • ${currentDateStr}
+                    </p>
                 </div>
             </div>
-            <div class="flex items-center gap-2">
-                <button onclick="openCitizenWaterReportModal()" class="px-3.5 py-2 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white rounded-2xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md shadow-sky-500/20 active:scale-95">
-                    <i class="fas fa-droplet text-xs animate-bounce"></i>
-                    <span>รายงานระดับน้ำ</span>
-                </button>
-                <button onclick="location.reload()" class="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95">
-                    <i class="fas fa-rotate"></i>
-                    <span>รีเฟรช</span>
+            <!-- ด้านขวา: สถานะระดับน้ำ + ปุ่มรีเฟรช -->
+            <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                <span class="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-full text-[11px] sm:text-xs font-bold border ${statusTheme.badgeBg} shadow-xs shrink-0">
+                    <span class="w-2 h-2 rounded-full ${statusTheme.dotColor} animate-ping"></span>
+                    <span>${statusTheme.title}</span>
+                </span>
+                <button onclick="location.reload()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center text-xs transition-all active:scale-95 shrink-0" title="รีเฟรชข้อมูล">
+                    <i class="fas fa-rotate text-xs"></i>
                 </button>
             </div>
         </header>
 
-        <!-- 2. ส่วนกล่องการทำงานหลัก: แยกเป็น 2 กล่อง (แจ้งขอความช่วยเหลือ vs รายงานระดับน้ำ) โทนสีอ่อน สวยงามเป็นระเบียบ -->
+        <!-- 🌊 การ์ดระดับน้ำ X.73 พร้อมคลื่นน้ำและเกจวัดระดับน้ำ 2D (แสดงบนสุดในโหมดประชาชน) -->
+        ${typeof window.getHeroWaterGaugeHtml === 'function' ? window.getHeroWaterGaugeHtml() : ''}
+
+        <!-- 🗺️ แผนที่พิกัดน้ำท่วมและศูนย์พักพิง (Interactive Map) ย้ายมาแสดงต่อจากการ์ดระดับน้ำ -->
+        <section id="public_map_section" class="bg-white rounded-[2.5rem] p-6 shadow-sm border border-slate-100 space-y-4">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-2">
+                <div class="flex items-center gap-3">
+                    <div class="w-11 h-11 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg">
+                        <i class="fas fa-map-location-dot"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-slate-800 text-base">แผนที่พิกัดน้ำท่วม & ตำแหน่งศูนย์พักพิง</h3>
+                        <p class="text-[11px] text-slate-400">ตรวจสอบจุดที่มีน้ำท่วมขังและที่ตั้งศูนย์พักพิงในเขตเทศบาลตำบลตันหยงมัส</p>
+                    </div>
+                </div>
+                <button onclick="locateCitizenUser()" class="self-start md:self-auto px-4 py-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95">
+                    <i class="fas fa-crosshairs"></i>
+                    <span>หาตำแหน่งของฉัน (GPS)</span>
+                </button>
+            </div>
+
+            <div id="publicMiniMap" class="w-full h-80 md:h-96 rounded-2xl overflow-hidden border border-slate-200 relative z-0"></div>
+            
+            <div class="flex flex-wrap items-center gap-4 text-xs text-slate-500 pt-2 border-t border-slate-100">
+                <div class="flex items-center gap-1.5">
+                    <span class="w-3 h-3 rounded-full bg-indigo-600"></span>
+                    <span>ศูนย์พักพิงชั่วคราว</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <span class="w-3 h-3 rounded-full bg-blue-500"></span>
+                    <span>สะพานตันหยงมัส (X.73)</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <span class="w-3 h-3 rounded-full bg-rose-500"></span>
+                    <span>จุดที่มีรายงานน้ำท่วมขัง</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <span class="w-3 h-3 rounded-full bg-amber-600"></span>
+                    <span>เส้นทางปิด / ไม่สามารถสัญจรได้</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <span class="w-3 h-3 rounded-full bg-sky-500"></span>
+                    <span>รายงานระดับน้ำ (ประชาชน)</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <span class="w-3 h-3 rounded-full bg-gradient-to-r from-sky-500 to-indigo-600"></span>
+                    <span>กล้อง CCTV ตรวจวัดระดับน้ำ</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. ส่วนกล่องการทำงานหลัก: แยกเป็น 2 กล่อง (แจ้งขอความช่วยเหลือ vs รายงานระดับน้ำ) -->
         <div class="grid grid-cols-1 md:grid-cols-2 gap-5 items-stretch">
             
             <!-- กล่องที่ 1: แจ้งสถานะ / ขอความช่วยเหลือ (โทนสีส้ม-กุหลาบอ่อน สบายตา) -->
@@ -697,7 +1172,7 @@ window.renderPublicPortal = async function () {
                     </div>
 
                     <p class="text-xs text-slate-600 leading-relaxed bg-white/80 p-3.5 rounded-2xl border border-rose-100 shadow-xs mb-3">
-                        สำหรับประชาชนในพื้นที่แจ้งสถานะ <b>"ปลอดภัย"</b> หรือ <b>"ขอรับถุงยังชีพ / เรือรับส่ง / อพยพด่วน"</b> พร้อมพิกัด GPS เพื่อให้เจ้าหน้าที่เข้าช่วยเหลือได้ตรงจุด
+                        สำหรับประชาชนในพื้นที่แจ้งขอความช่วยเหลือเร่งด่วน <b>(อพยพออก / เคลื่อนย้ายผู้ป่วย / อาหารและน้ำดื่ม)</b> หรือแจ้งสถานะปลอดภัย พร้อมพิกัด GPS
                     </p>
 
                     <div class="flex flex-wrap items-center gap-2 mb-2">
@@ -710,15 +1185,15 @@ window.renderPublicPortal = async function () {
                     </div>
                 </div>
 
-                <button onclick="promptSafetyCheck()" 
+                <button onclick="openUrgentSosModal()" 
                     class="w-full mt-4 py-3.5 px-5 bg-gradient-to-r from-rose-500 via-rose-600 to-amber-600 hover:from-rose-600 hover:to-amber-700 text-white font-black text-sm rounded-2xl shadow-md shadow-rose-500/25 active:scale-98 transition-all flex items-center justify-center gap-2.5">
                     <i class="fas fa-paper-plane text-amber-200 text-sm"></i>
-                    <span>กดแจ้งสถานะ / ขอความช่วยเหลือ</span>
+                    <span>กดแจ้งขอความช่วยเหลือเร่งด่วน (SOS)</span>
                 </button>
             </div>
 
             <!-- กล่องที่ 2: รายงานระดับน้ำในพื้นที่ (โทนสีฟ้าอ่อน นุ่มนวล สบายตา) -->
-            <div class="bg-gradient-to-br from-sky-50/90 via-blue-50/30 to-white rounded-[2.5rem] p-6 md:p-7 border-2 border-sky-200/70 shadow-sm hover:shadow-md transition-all flex flex-col justify-between relative overflow-hidden group">
+            <div id="public_water_report_section" class="bg-gradient-to-br from-sky-50/90 via-blue-50/30 to-white rounded-[2.5rem] p-6 md:p-7 border-2 border-sky-200/70 shadow-sm hover:shadow-md transition-all flex flex-col justify-between relative overflow-hidden group">
                 <div class="absolute -right-6 -bottom-6 w-32 h-32 bg-sky-200/20 rounded-full blur-2xl pointer-events-none"></div>
                 <div>
                     <div class="flex items-center justify-between gap-2 mb-4">
@@ -762,77 +1237,8 @@ window.renderPublicPortal = async function () {
 
         </div>
 
-        <!-- 3. Grid ข้อมูลระดับน้ำ & สายด่วนแจ้งเหตุ -->
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            
-            <!-- กล่องการ์ด: ระดับน้ำเรียลไทม์ (สะพานตันหยงมัส X.73) -->
-            <div class="bg-white rounded-[2.5rem] p-6 shadow-sm border ${statusTheme.cardBorder} flex flex-col justify-between">
-                <div>
-                    <div class="flex items-center justify-between mb-4">
-                        <div class="flex items-center gap-3">
-                            <div class="w-11 h-11 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center text-lg">
-                                <i class="fas fa-water"></i>
-                            </div>
-                            <div>
-                                <h3 class="font-bold text-slate-800 text-base">ระดับน้ำสะพานตันหยงมัส</h3>
-                                <p class="text-[11px] text-slate-400">สถานีโทรมาตร X.73 • อัปเดต ${latestTimeStr}</p>
-                            </div>
-                        </div>
-                        <span class="px-2.5 py-1 rounded-xl text-[9px] font-bold bg-blue-50 text-blue-600 border border-blue-100 flex items-center gap-1">
-                            <i class="fas fa-satellite-dish"></i>
-                            <span>${dataSourceBadge}</span>
-                        </span>
-                    </div>
-
-                    <div class="bg-slate-50 rounded-2xl p-4 mb-4 flex items-baseline justify-between border border-slate-100">
-                        <div>
-                            <span class="text-xs text-slate-400 font-bold block mb-1">ระดับน้ำตรวจวัดจริง</span>
-                            <div class="flex items-baseline gap-2">
-                                <span class="text-4xl md:text-5xl font-black ${statusTheme.waterColor} tracking-tight">${latestLevel.toFixed(2)}</span>
-                                <span class="text-sm font-bold text-slate-500">ม. (รทก.)</span>
-                            </div>
-                            <span class="text-[10px] font-bold text-slate-500 mt-1 block">
-                                แนวโน้ม: <span class="text-blue-600 font-extrabold">${waterTrend}</span>
-                            </span>
-                        </div>
-                        <div class="text-right text-xs space-y-1">
-                            <div class="bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-sm">
-                                <span class="text-slate-400 text-[10px] block font-bold">ระดับตลิ่ง</span>
-                                <span class="text-amber-600 font-black">${BANK_LEVEL.toFixed(2)} ม.</span>
-                            </div>
-                            <div class="bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-sm">
-                                <span class="text-slate-400 text-[10px] block font-bold">ระดับวิกฤต</span>
-                                <span class="text-rose-600 font-black">&gt; ${CRITICAL_LEVEL.toFixed(2)} ม.</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Progress Bar ระดับน้ำ -->
-                    <div class="space-y-1.5 mb-3">
-                        <div class="flex justify-between text-[10px] text-slate-400 font-bold">
-                            <span>ปกติ (&lt; ${WARNING_LEVEL.toFixed(2)})</span>
-                            <span class="text-amber-500">เฝ้าระวัง (${WARNING_LEVEL.toFixed(2)} - ${BANK_LEVEL.toFixed(2)})</span>
-                            <span class="text-rose-500 font-bold">วิกฤต (&gt; ${CRITICAL_LEVEL.toFixed(2)})</span>
-                        </div>
-                        <div class="w-full h-3 bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-200">
-                            <div class="h-full rounded-full transition-all duration-700 ${statusTheme.barColor}" style="width: ${statusTheme.progressWidth}%"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <p class="text-xs text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-100">
-                    <i class="fas fa-info-circle text-blue-500 mr-1.5"></i>
-                    ${statusTheme.sub}
-                </p>
-
-                <button onclick="openCitizenWaterReportModal()" class="w-full mt-3 py-2.5 rounded-2xl bg-sky-50 hover:bg-sky-100 text-sky-700 font-bold text-xs border border-sky-200 transition-all flex items-center justify-center gap-2 active:scale-95 shadow-sm">
-                    <i class="fas fa-droplet text-sky-500"></i>
-                    <span>ร่วมรายงานระดับน้ำในจุดของคุณ (Crowdsource)</span>
-                </button>
-            </div>
-
-            <!-- กล่องการ์ด: สายด่วนฉุกเฉิน 24 ชั่วโมง (พร้อมเบอร์โทรทางการ) -->
-            <div class="bg-white rounded-[2.5rem] p-6 shadow-sm border border-slate-100 flex flex-col justify-between">
+        <!-- 3. กล่องการ์ด: สายด่วนช่วยเหลือฉุกเฉิน 24 ชั่วโมง (พร้อมเบอร์โทรทางการ) -->
+        <div id="public_hotline_section" class="bg-white rounded-[2.5rem] p-6 md:p-7 shadow-sm border border-slate-100 flex flex-col justify-between">
                 <div>
                     <div class="flex items-center gap-3 mb-4">
                         <div class="w-11 h-11 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center text-lg">
@@ -844,7 +1250,7 @@ window.renderPublicPortal = async function () {
                         </div>
                     </div>
 
-                    <div class="space-y-2.5">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                         <!-- 1. งานป้องกันและบรรเทาสาธารณภัย (ปภ.) ทต.ตันหยงมัส -->
                         <a href="tel:073671886" class="p-3.5 bg-rose-50/70 hover:bg-rose-100/90 border border-rose-100 rounded-2xl flex items-center justify-between transition-all group active:scale-98">
                             <div class="flex items-center gap-3 min-w-0 pr-2">
@@ -910,7 +1316,6 @@ window.renderPublicPortal = async function () {
                         </a>
                     </div>
                 </div>
-            </div>
         </div>
 
         <!-- 3.5. กล่องรายงานเส้นทางปิด / ไม่สามารถสัญจรได้ (Road Closures Alert) -->
@@ -1052,7 +1457,7 @@ window.renderPublicPortal = async function () {
 
 
         <!-- 4. รายชื่อศูนย์พักพิงชั่วคราว พร้อมพิกัดและความจุ & ปุ่มนำทาง Google Maps -->
-        <section class="bg-white rounded-[2.5rem] p-6 shadow-sm border border-slate-100 space-y-4">
+        <section id="public_shelter_section" class="bg-white rounded-[2.5rem] p-6 shadow-sm border border-slate-100 space-y-4">
             <div class="flex items-center justify-between">
                 <div class="flex items-center gap-3">
                     <div class="w-11 h-11 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-lg">
@@ -1092,54 +1497,6 @@ window.renderPublicPortal = async function () {
             </div>
         </section>
 
-        <!-- 5. แผนที่พิกัดน้ำท่วมและศูนย์พักพิง (Interactive Map) -->
-        <section class="bg-white rounded-[2.5rem] p-6 shadow-sm border border-slate-100 space-y-4">
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-2">
-                <div class="flex items-center gap-3">
-                    <div class="w-11 h-11 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg">
-                        <i class="fas fa-map-location-dot"></i>
-                    </div>
-                    <div>
-                        <h3 class="font-bold text-slate-800 text-base">แผนที่พิกัดน้ำท่วม & ตำแหน่งศูนย์พักพิง</h3>
-                        <p class="text-[11px] text-slate-400">ตรวจสอบจุดที่มีน้ำท่วมขังและที่ตั้งศูนย์พักพิงในเขตเทศบาลตำบลตันหยงมัส</p>
-                    </div>
-                </div>
-                <button onclick="locateCitizenUser()" class="self-start md:self-auto px-4 py-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 active:scale-95">
-                    <i class="fas fa-crosshairs"></i>
-                    <span>หาตำแหน่งของฉัน (GPS)</span>
-                </button>
-            </div>
-
-            <div id="publicMiniMap" class="w-full h-80 md:h-96 rounded-2xl overflow-hidden border border-slate-200 relative z-0"></div>
-            
-            <div class="flex flex-wrap items-center gap-4 text-xs text-slate-500 pt-2 border-t border-slate-100">
-                <div class="flex items-center gap-1.5">
-                    <span class="w-3 h-3 rounded-full bg-indigo-600"></span>
-                    <span>ศูนย์พักพิงชั่วคราว</span>
-                </div>
-                <div class="flex items-center gap-1.5">
-                    <span class="w-3 h-3 rounded-full bg-blue-500"></span>
-                    <span>สะพานตันหยงมัส (X.73)</span>
-                </div>
-                <div class="flex items-center gap-1.5">
-                    <span class="w-3 h-3 rounded-full bg-rose-500"></span>
-                    <span>จุดที่มีรายงานน้ำท่วมขัง</span>
-                </div>
-                <div class="flex items-center gap-1.5">
-                    <span class="w-3 h-3 rounded-full bg-amber-600"></span>
-                    <span>เส้นทางปิด / ไม่สามารถสัญจรได้</span>
-                </div>
-                <div class="flex items-center gap-1.5">
-                    <span class="w-3 h-3 rounded-full bg-sky-500"></span>
-                    <span>รายงานระดับน้ำ (ประชาชน)</span>
-                </div>
-                <div class="flex items-center gap-1.5">
-                    <span class="w-3 h-3 rounded-full bg-gradient-to-r from-sky-500 to-indigo-600"></span>
-                    <span>กล้อง CCTV ตรวจวัดระดับน้ำ</span>
-                </div>
-            </div>
-        </section>
-
         <!-- 6. Footer ประชาสัมพันธ์ -->
         <footer class="text-center py-6 text-xs text-slate-400 space-y-2">
             <p class="font-medium">ระบบรายงานสถานการณ์อุทกภัย เทศบาลตำบลตันหยงมัส เพื่อประโยชน์สาธารณะ</p>
@@ -1147,6 +1504,51 @@ window.renderPublicPortal = async function () {
                 หากท่านเป็นเจ้าหน้าที่ สามารถ <a href="index.html" class="underline hover:text-blue-500 font-bold">เข้าสู่ระบบสำหรับเจ้าหน้าที่</a>
             </p>
         </footer>
+
+        <!-- 🧭 แถบเมนูด้านล่าง (Fixed Bottom Navigation Bar) -->
+        <nav id="publicBottomNav" class="fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur-lg border-t border-slate-200/90 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] px-2 py-1 safe-area-pb">
+            <div class="max-w-md mx-auto grid grid-cols-5 items-end justify-items-center relative">
+                <!-- 1. รายงานระดับน้ำ (ซ้ายสุด) -->
+                <button type="button" onclick="scrollToPublicSection('public_water_report_section')" class="flex flex-col items-center justify-center py-1 px-1 text-slate-500 hover:text-sky-600 transition-colors active:scale-95 group w-full">
+                    <div class="w-8 h-8 rounded-full flex items-center justify-center text-sky-500 group-hover:bg-sky-50 transition-colors text-base">
+                        <i class="fas fa-droplet"></i>
+                    </div>
+                    <span class="text-[10px] font-bold text-slate-600 group-hover:text-sky-600 mt-0.5 leading-tight text-center">รายงานน้ำ</span>
+                </button>
+
+                <!-- 2. ศูนย์พักพิง (ซ้ายถัดมา) -->
+                <button type="button" onclick="scrollToPublicSection('public_shelter_section')" class="flex flex-col items-center justify-center py-1 px-1 text-slate-500 hover:text-indigo-600 transition-colors active:scale-95 group w-full">
+                    <div class="w-8 h-8 rounded-full flex items-center justify-center text-indigo-500 group-hover:bg-indigo-50 transition-colors text-base">
+                        <i class="fas fa-campground"></i>
+                    </div>
+                    <span class="text-[10px] font-bold text-slate-600 group-hover:text-indigo-600 mt-0.5 leading-tight text-center">ศูนย์พักพิง</span>
+                </button>
+
+                <!-- 3. SOS ขอความช่วยเหลือ (ปุ่มใหญ่ตรงกลาง) -->
+                <button type="button" onclick="openUrgentSosModal()" class="flex flex-col items-center -mt-6 group focus:outline-none">
+                    <div class="w-14 h-14 rounded-full bg-gradient-to-tr from-rose-600 via-red-500 to-amber-500 text-white flex items-center justify-center text-2xl shadow-lg shadow-rose-500/40 border-4 border-white transform group-hover:scale-105 active:scale-95 transition-all sos-float-btn">
+                        <i class="fas fa-life-ring"></i>
+                    </div>
+                    <span class="text-[10px] font-black text-rose-600 mt-1 leading-tight tracking-tight text-center">SOS ช่วยเหลือ</span>
+                </button>
+
+                <!-- 4. CCTV (ขวาถัดจากกลาง) -->
+                <button type="button" onclick="scrollToPublicSection('public_cctv_section')" class="flex flex-col items-center justify-center py-1 px-1 text-slate-500 hover:text-blue-600 transition-colors active:scale-95 group w-full">
+                    <div class="w-8 h-8 rounded-full flex items-center justify-center text-blue-500 group-hover:bg-blue-50 transition-colors text-base">
+                        <i class="fas fa-video"></i>
+                    </div>
+                    <span class="text-[10px] font-bold text-slate-600 group-hover:text-blue-600 mt-0.5 leading-tight text-center">กล้อง CCTV</span>
+                </button>
+
+                <!-- 5. สายด่วนฉุกเฉิน (ขวาสุด) -->
+                <button type="button" onclick="scrollToPublicSection('public_hotline_section')" class="flex flex-col items-center justify-center py-1 px-1 text-slate-500 hover:text-emerald-600 transition-colors active:scale-95 group w-full">
+                    <div class="w-8 h-8 rounded-full flex items-center justify-center text-emerald-600 group-hover:bg-emerald-50 transition-colors text-base">
+                        <i class="fas fa-phone-volume"></i>
+                    </div>
+                    <span class="text-[10px] font-bold text-slate-600 group-hover:text-emerald-600 mt-0.5 leading-tight text-center">สายด่วน</span>
+                </button>
+            </div>
+        </nav>
 
         <!-- Modal: ขยายภาพกล้อง CCTV สำหรับประชาชน (Public CCTV Lightbox) -->
         <div id="publicCctvLightbox" class="hidden fixed inset-0 z-[9999] bg-black/95 backdrop-blur-md flex items-center justify-center p-0 sm:p-3 md:p-6" onclick="closePublicCctvLightbox()">
@@ -1174,6 +1576,11 @@ window.renderPublicPortal = async function () {
             </div>
         </div>
     `;
+
+    // 2.5 อัปเดตข้อมูลแท่งเกจวัดและคลื่นระดับน้ำ X.73 ในโหมดประชาชน
+    if (typeof window.updateHeroWaterGauge === 'function') {
+        window.updateHeroWaterGauge(latestLevel, ridResult);
+    }
 
     // 3. เริ่มต้นแผนที่ Mini Map หลังสร้าง DOM เสร็จ
     setTimeout(() => {
@@ -1249,8 +1656,17 @@ function initPublicMiniMap(currentWaterLevel = 14.20) {
     if (!mapEl) return;
 
     if (publicMiniMapInstance) {
-        publicMiniMapInstance.invalidateSize();
-        return;
+        try {
+            if (publicMiniMapInstance.getContainer() !== mapEl) {
+                publicMiniMapInstance.remove();
+                publicMiniMapInstance = null;
+            } else {
+                publicMiniMapInstance.invalidateSize();
+                return;
+            }
+        } catch (e) {
+            publicMiniMapInstance = null;
+        }
     }
 
     try {

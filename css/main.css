@@ -648,3 +648,69 @@ body.view-only-mode textarea {
         font-size: 1rem !important;
     }
 }
+
+
+/* ===================================================
+   🌊 Water Wave Animations for Hero Water Gauge Card (Seamless Continuous)
+   =================================================== */
+@keyframes waveFlowFront {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+}
+
+@keyframes waveFlowMid {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+}
+
+@keyframes waveFlowBack {
+    0% { transform: translateX(-50%); }
+    100% { transform: translateX(0); }
+}
+
+.hero-wave-front {
+    animation: waveFlowFront 12s linear infinite;
+    will-change: transform;
+}
+
+.hero-wave-mid {
+    animation: waveFlowMid 18s linear infinite;
+    will-change: transform;
+}
+
+.hero-wave-back {
+    animation: waveFlowBack 25s linear infinite;
+    will-change: transform;
+}
+
+/* ===================================================
+   🚨 Citizen Portal: Bottom Navigation Bar & SOS Floating Button
+   =================================================== */
+.safe-area-pb {
+    padding-bottom: calc(0.375rem + env(safe-area-inset-bottom, 0px));
+}
+
+@keyframes sosPulseGlow {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(225, 29, 72, 0.6), 0 10px 25px -5px rgba(225, 29, 72, 0.4);
+    }
+    50% {
+        box-shadow: 0 0 0 10px rgba(225, 29, 72, 0), 0 10px 25px -5px rgba(225, 29, 72, 0.5);
+    }
+}
+
+.sos-float-btn {
+    animation: sosPulseGlow 2s infinite;
+}
+
+/* ===================================================
+   📞 Leaflet Popup: หมายเลขโทรศัพท์และปุ่มโทรฉุกเฉินให้เป็นสีขาวชัดเจน 100%
+   =================================================== */
+.leaflet-popup-content a[href^="tel:"],
+.leaflet-popup-content a[href^="tel:"] *,
+.leaflet-popup-content .sos-phone-badge,
+.leaflet-popup-content .sos-phone-badge * {
+    color: #ffffff !important;
+}
+
+
