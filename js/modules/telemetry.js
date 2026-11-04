@@ -529,35 +529,35 @@ function getHeroWaterGaugeHtml() {
         <div class="lg:col-span-7 flex flex-col justify-between space-y-3">
             
             <!-- ฝั่งซ้ายส่วนบน: กล่องข้อมูลสถานีขนาดกะทัดรัด สไตล์ Mobile-First -->
-            <div class="p-3 sm:p-3.5 md:p-4 rounded-2xl bg-white/10 backdrop-blur-xl border border-white/20 shadow-lg flex items-center justify-between gap-2.5">
-                <div class="flex items-center gap-2.5 min-w-0">
+            <div class="p-3 sm:p-3.5 md:p-4 rounded-2xl bg-white/10 backdrop-blur-xl border border-white/20 shadow-lg flex items-center justify-between gap-2 sm:gap-3">
+                <div class="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
                     <div id="x73_hero_icon_box"
-                        class="w-10 h-10 sm:w-11 sm:h-11 md:w-12 md:h-12 rounded-xl bg-sky-500/25 border border-sky-400/40 flex items-center justify-center text-sky-300 text-lg sm:text-xl md:text-2xl shadow-inner shrink-0 backdrop-blur-md">
+                        class="w-9 h-9 sm:w-11 sm:h-11 md:w-12 md:h-12 rounded-xl bg-sky-500/25 border border-sky-400/40 flex items-center justify-center text-sky-300 text-base sm:text-xl md:text-2xl shadow-inner shrink-0 backdrop-blur-md">
                         <i class="fas fa-water"></i>
                     </div>
-                    <div class="min-w-0">
-                        <div class="flex items-center gap-1.5 flex-wrap">
-                            <span class="text-[8.5px] sm:text-[9px] md:text-[10px] font-black uppercase tracking-wider text-sky-300 bg-sky-500/20 border border-sky-400/30 px-2 py-0.5 rounded-full truncate">
-                                สถานีหลัก (ปลายน้ำ)
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-1 sm:gap-1.5 flex-wrap mb-0.5">
+                            <span class="text-[8px] sm:text-[9px] md:text-[10px] font-black uppercase tracking-wider text-sky-300 bg-sky-500/20 border border-sky-400/30 px-1.5 sm:px-2 py-0.5 rounded-full whitespace-nowrap">
+                                สถานีหลัก
                             </span>
-                            <span id="x73_hero_source" class="text-[8.5px] sm:text-[9px] text-slate-300 bg-white/10 px-1.5 py-0.5 rounded-full font-bold">
+                            <span id="x73_hero_source" class="text-[8px] sm:text-[9px] text-slate-300 bg-white/10 px-1.5 py-0.5 rounded-full font-bold whitespace-nowrap">
                                 <i class="fas fa-satellite-dish mr-1 text-emerald-400"></i>RID X.73
                             </span>
                         </div>
-                        <h2 class="text-base sm:text-lg md:text-xl font-black tracking-tight text-white mt-0.5 truncate">
-                            สถานี X.73 คลองตันหยงมัส
+                        <h2 class="text-xs sm:text-base md:text-xl font-black tracking-tight text-white leading-snug">
+                            <span class="whitespace-nowrap">สถานี X.73</span> <span class="text-sky-200 font-bold block sm:inline">คลองตันหยงมัส</span>
                         </h2>
                     </div>
                 </div>
 
                 <!-- 🌟 สลับข้อความ "ระดับน้ำปัจจุบัน" มาอยู่แทนที่กล่องสถานะเดิม (ขวาบน) -->
-                <div class="flex flex-col items-end justify-center shrink-0 pl-1.5">
-                    <span class="text-[9.5px] sm:text-[10px] md:text-[11px] font-bold text-slate-300">ระดับน้ำปัจจุบัน</span>
+                <div class="flex flex-col items-end justify-center shrink-0 pl-2 text-right">
+                    <span class="text-[9px] sm:text-[10px] md:text-[11px] font-bold text-slate-300 whitespace-nowrap">ระดับน้ำปัจจุบัน</span>
                     <div class="flex items-baseline gap-1">
-                        <span id="x73_hero_water_level" class="text-2xl sm:text-3xl md:text-4xl font-black tracking-tight text-white drop-shadow-md">--.--</span>
-                        <span class="text-[11px] sm:text-xs font-bold text-sky-200">ม.รทก.</span>
+                        <span id="x73_hero_water_level" class="text-xl sm:text-3xl md:text-4xl font-black tracking-tight text-white drop-shadow-md">--.--</span>
+                        <span class="text-[10px] sm:text-xs font-bold text-sky-200">ม.รทก.</span>
                     </div>
-                    <span id="x73_hero_update_time" class="text-[8.5px] sm:text-[9px] md:text-[10px] text-slate-400 font-medium">
+                    <span id="x73_hero_update_time" class="text-[8px] sm:text-[9px] md:text-[10px] text-slate-400 font-medium whitespace-nowrap">
                         <i class="fas fa-clock mr-1 text-sky-400"></i>อัปเดต: --:--
                     </span>
                 </div>
