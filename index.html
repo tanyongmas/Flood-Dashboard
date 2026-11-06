@@ -1841,6 +1841,10 @@
                             class="bg-slate-800 hover:bg-black text-white text-xs font-bold px-4 py-2 rounded-xl transition-all flex items-center shadow-lg">
                             <i class="fas fa-print mr-2"></i> พิมพ์รายงาน / PDF
                         </button>
+                        <button onclick="exportShelterEvacueesToCsv()"
+                            class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all flex items-center shadow-lg hover:shadow-emerald-600/30 active:scale-95">
+                            <i class="fas fa-file-csv mr-2 text-sm"></i> ดาวน์โหลด CSV
+                        </button>
                     </div>
 
                     <!-- กลุ่มการ์ดสถิติ (ปรับใหม่) -->
@@ -2053,6 +2057,12 @@
                                 <button onclick="printFilteredEvacuees()"
                                     class="bg-slate-700 hover:bg-slate-800 text-white px-4 py-2 rounded-xl text-[11px] font-bold transition-all active:scale-95 flex items-center justify-center shadow-md">
                                     <i class="fas fa-print mr-2"></i> พิมพ์ตาราง
+                                </button>
+
+                                <!-- 5. ปุ่มดาวน์โหลด CSV -->
+                                <button onclick="exportShelterEvacueesToCsv()"
+                                    class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-[11px] font-bold transition-all active:scale-95 flex items-center justify-center shadow-md hover:shadow-emerald-600/30">
+                                    <i class="fas fa-file-csv mr-2 text-sm"></i> ดาวน์โหลด CSV
                                 </button>
                             </div>
                         </div>

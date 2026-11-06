@@ -1,4 +1,5 @@
 let store = { waterPoints: [], waterLevels: [], reliefStock: [] };
+window.store = store;
 let currentUser = "";
 let userRole = "";
 
@@ -492,6 +493,7 @@ let dashLayerStates = {
                 }
 
                 store = data;
+                window.store = store;
                 if (typeof window.setAppCache === 'function') {
                     window.setAppCache(cacheKey, data, 3);
                 }
@@ -3419,6 +3421,10 @@ let dashLayerStates = {
             const returnedBadge = document.getElementById('returnedCountBadge');
 
             const allData = data || [];
+            window.lastEvacueeData = allData;
+            if (!window.currentTableData || window.currentTableData.length === 0) {
+                window.currentTableData = allData;
+            }
             const activeData = allData.filter(r => (r[10] || '').toString().trim() !== 'กลับบ้านแล้ว');
             const returnedData = allData.filter(r => (r[10] || '').toString().trim() === 'กลับบ้านแล้ว');
 
@@ -4178,6 +4184,246 @@ let dashLayerStates = {
                 printArea.removeChild(tempDiv);
                 originalChildren.forEach(item => { item.el.style.display = item.display; });
             }, 500);
+        };
+
+        // ==========================================
+        // ฟังก์ชันดาวน์โหลดตารางข้อมูลศูนย์พักพิงแบบ CSV (UTF-8 BOM สำหรับ Excel ภาษาไทย)
+        // ==========================================
+        window.exportShelterEvacueesToCsv = async function () {
+            // ดึงข้อมูลผู้ประสบภัยจากทุกแหล่งที่เป็นไปได้
+            const getDataSource = () => {
+                if (typeof store !== 'undefined' && store && Array.isArray(store.evacuees) && store.evacuees.length > 0) {
+                    return store.evacuees;
+                }
+                if (window.store && Array.isArray(window.store.evacuees) && window.store.evacuees.length > 0) {
+                    return window.store.evacuees;
+                }
+                if (window.currentFilteredData && Array.isArray(window.currentFilteredData) && window.currentFilteredData.length > 0) {
+                    return window.currentFilteredData;
+                }
+                if (window.currentTableData && Array.isArray(window.currentTableData) && window.currentTableData.length > 0) {
+                    return window.currentTableData;
+                }
+                if (window.lastEvacueeData && Array.isArray(window.lastEvacueeData) && window.lastEvacueeData.length > 0) {
+                    return window.lastEvacueeData;
+                }
+                return [];
+            };
+
+            const rawAll = getDataSource();
+            if (!rawAll || rawAll.length === 0) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'ไม่พบข้อมูล',
+                    text: 'ยังไม่มีข้อมูลผู้เข้าพักพิงในระบบสำหรับส่งออก CSV',
+                    confirmButtonText: 'ตกลง'
+                });
+                return;
+            }
+
+            const activeBtn = document.querySelector('.shelter-filter-btn.active-shelter-btn');
+            const currentShelterName = (activeBtn && activeBtn.getAttribute('data-center') !== 'all')
+                ? activeBtn.innerText.trim()
+                : 'ทุกศูนย์พักพิง';
+
+            const filteredData = (window.currentTableData && window.currentTableData.length > 0)
+                ? window.currentTableData
+                : ((window.lastEvacueeData && window.lastEvacueeData.length > 0)
+                    ? window.lastEvacueeData
+                    : ((window.currentFilteredData && window.currentFilteredData.length > 0)
+                        ? window.currentFilteredData
+                        : ((typeof store !== 'undefined' && store && Array.isArray(store.evacuees_display) && store.evacuees_display.length > 0)
+                            ? store.evacuees_display
+                            : rawAll)));
+
+            const currentShelterData = (typeof store !== 'undefined' && store && Array.isArray(store.evacuees_display) && store.evacuees_display.length > 0)
+                ? store.evacuees_display
+                : ((window.currentFilteredData && window.currentFilteredData.length > 0)
+                    ? window.currentFilteredData
+                    : rawAll);
+
+            const activeInFiltered = filteredData.filter(r => (r[10] || '').toString().trim() !== 'กลับบ้านแล้ว');
+            const returnedInFiltered = filteredData.filter(r => (r[10] || '').toString().trim() === 'กลับบ้านแล้ว');
+
+            // แสดง Modal ให้เลือกขอบเขตข้อมูลที่ต้องการส่งออก
+            const { value: exportScope } = await Swal.fire({
+                title: '<div class="text-base font-bold text-slate-800 flex items-center justify-center gap-2"><i class="fas fa-file-csv text-emerald-600 text-xl"></i> ดาวน์โหลดข้อมูลศูนย์พักพิง (CSV)</div>',
+                html: `
+                    <div class="text-left text-xs text-slate-600 space-y-2 pt-2">
+                        <p class="font-bold text-slate-700 pb-1.5 border-b border-slate-100 flex items-center justify-between">
+                            <span>ศูนย์ที่เลือก:</span>
+                            <span class="text-blue-600 font-black text-right">${currentShelterName}</span>
+                        </p>
+                        <p class="text-[11px] text-slate-500 mb-1.5 font-medium">กรุณาเลือกข้อมูลที่ต้องการนำออกเป็นไฟล์ CSV:</p>
+                        
+                        <label class="flex items-center gap-2.5 p-2.5 bg-slate-50 hover:bg-emerald-50/50 rounded-xl border border-slate-200 cursor-pointer transition">
+                            <input type="radio" name="csv_export_scope" value="filtered" checked class="text-emerald-600 focus:ring-emerald-500">
+                            <div>
+                                <span class="font-bold text-slate-800">1. ข้อมูลตามตัวกรองตารางปัจจุบัน</span>
+                                <span class="block text-[10px] text-slate-500 font-medium">ผลการค้นหา / ช่วงอายุ / สุขภาพ (${filteredData.length} รายการ)</span>
+                            </div>
+                        </label>
+
+                        <label class="flex items-center gap-2.5 p-2.5 bg-slate-50 hover:bg-emerald-50/50 rounded-xl border border-slate-200 cursor-pointer transition">
+                            <input type="radio" name="csv_export_scope" value="active" class="text-emerald-600 focus:ring-emerald-500">
+                            <div>
+                                <span class="font-bold text-slate-800">2. เฉพาะผู้ที่ยังพักพิงอยู่</span>
+                                <span class="block text-[10px] text-slate-500 font-medium">สถานะกำลังพักพิง (${activeInFiltered.length} คน)</span>
+                            </div>
+                        </label>
+
+                        <label class="flex items-center gap-2.5 p-2.5 bg-slate-50 hover:bg-emerald-50/50 rounded-xl border border-slate-200 cursor-pointer transition">
+                            <input type="radio" name="csv_export_scope" value="returned" class="text-emerald-600 focus:ring-emerald-500">
+                            <div>
+                                <span class="font-bold text-slate-800">3. เฉพาะผู้ที่เดินทางกลับบ้านแล้ว</span>
+                                <span class="block text-[10px] text-slate-500 font-medium">เดินทางกลับบ้านปลอดภัย (${returnedInFiltered.length} คน)</span>
+                            </div>
+                        </label>
+
+                        <label class="flex items-center gap-2.5 p-2.5 bg-slate-50 hover:bg-emerald-50/50 rounded-xl border border-slate-200 cursor-pointer transition">
+                            <input type="radio" name="csv_export_scope" value="all_center" class="text-emerald-600 focus:ring-emerald-500">
+                            <div>
+                                <span class="font-bold text-slate-800">4. ข้อมูลทั้งหมดของศูนย์นี้</span>
+                                <span class="block text-[10px] text-slate-500 font-medium">ทุกสถานะของศูนย์ที่เลือก (${currentShelterData.length} รายการ)</span>
+                            </div>
+                        </label>
+
+                        <label class="flex items-center gap-2.5 p-2.5 bg-slate-50 hover:bg-emerald-50/50 rounded-xl border border-slate-200 cursor-pointer transition">
+                            <input type="radio" name="csv_export_scope" value="system_all" class="text-emerald-600 focus:ring-emerald-500">
+                            <div>
+                                <span class="font-bold text-slate-800">5. ข้อมูลทั้งหมดทุกศูนย์ในระบบ</span>
+                                <span class="block text-[10px] text-slate-500 font-medium">รวมทุกศูนย์พักพิงทุกสถานะ (${rawAll.length} รายการ)</span>
+                            </div>
+                        </label>
+                    </div>
+                `,
+                showCancelButton: true,
+                confirmButtonText: '<i class="fas fa-download mr-1.5"></i> เริ่มดาวน์โหลด',
+                cancelButtonText: 'ยกเลิก',
+                confirmButtonColor: '#059669',
+                cancelButtonColor: '#94a3b8',
+                preConfirm: () => {
+                    const selected = document.querySelector('input[name="csv_export_scope"]:checked');
+                    return selected ? selected.value : 'filtered';
+                }
+            });
+
+            if (!exportScope) return;
+
+            let targetData = [];
+            let scopeName = '';
+
+            if (exportScope === 'filtered') {
+                targetData = filteredData;
+                scopeName = 'ตามตัวกรองตาราง';
+            } else if (exportScope === 'active') {
+                targetData = activeInFiltered;
+                scopeName = 'เฉพาะผู้พักพิงอยู่';
+            } else if (exportScope === 'returned') {
+                targetData = returnedInFiltered;
+                scopeName = 'เฉพาะผู้กลับบ้านแล้ว';
+            } else if (exportScope === 'all_center') {
+                targetData = currentShelterData;
+                scopeName = currentShelterName;
+            } else if (exportScope === 'system_all') {
+                targetData = rawAll;
+                scopeName = 'ทุกศูนย์ทั้งหมด';
+            }
+
+            if (!targetData || targetData.length === 0) {
+                Swal.fire('ไม่พบข้อมูล', `ไม่มีข้อมูลในกลุ่ม "${scopeName}" สำหรับส่งออก`, 'warning');
+                return;
+            }
+
+            // แปลงข้อมูลเป็น CSV Format
+            const headers = [
+                'ลำดับ',
+                'วันที่ลงทะเบียน',
+                'ศูนย์พักพิง',
+                'ชื่อ-นามสกุล',
+                'เลขประจำตัวประชาชน',
+                'เพศ',
+                'อายุ',
+                'เบอร์โทรศัพท์',
+                'สถานะสุขภาพ',
+                'รายละเอียดสุขภาพ',
+                'สถานะการพักพิง',
+                'วันที่เดินทางกลับบ้าน',
+                'ที่อยู่/ชุมชน'
+            ];
+
+            const escapeCsv = (val) => {
+                if (val === null || val === undefined) return '""';
+                let str = String(val).trim();
+                if (str.includes('"') || str.includes(',') || str.includes('\n') || str.includes('\r')) {
+                    str = '"' + str.replace(/"/g, '""') + '"';
+                } else {
+                    str = '"' + str + '"';
+                }
+                return str;
+            };
+
+            const formatExcelText = (val) => {
+                if (!val) return '""';
+                let str = String(val).trim().replace(/'/g, '');
+                return `="${str}"`;
+            };
+
+            const rows = targetData.map((r, idx) => {
+                const idCard = r[3] ? formatExcelText(r[3]) : '""';
+                const phone = r[7] ? formatExcelText(r[7]) : '""';
+                const status = (r[10] || '').toString().trim() || 'พักพิงอยู่';
+                const returnDate = r[11] || '-';
+                const healthStatus = r[8] || 'ปกติ';
+                const healthNote = r[9] || '-';
+
+                return [
+                    idx + 1,
+                    escapeCsv(r[0] || '-'),
+                    escapeCsv(r[1] || '-'),
+                    escapeCsv(r[4] || '-'),
+                    idCard,
+                    escapeCsv(r[6] || '-'),
+                    (r[5] !== undefined && r[5] !== '') ? r[5] : '-',
+                    phone,
+                    escapeCsv(healthStatus),
+                    escapeCsv(healthNote),
+                    escapeCsv(status),
+                    escapeCsv(returnDate),
+                    escapeCsv(r[2] || '-')
+                ].join(',');
+            });
+
+            // ใส่ UTF-8 BOM (\uFEFF) เสมอ เพื่อให้เปิดใน Microsoft Excel ภาษาไทยไม่เป็นภาษาต่างดาว
+            const csvContent = '\uFEFF' + headers.map(escapeCsv).join(',') + '\r\n' + rows.join('\r\n');
+
+            const now = new Date();
+            const dateStr = now.toISOString().slice(0, 10);
+            const timeStr = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
+            const cleanScopeName = scopeName.replace(/[\/\\:*?"<>|]/g, '_');
+            const fileName = `รายชื่อผู้ประสบภัย_${cleanScopeName}_${dateStr}_${timeStr}.csv`;
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', fileName);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            Swal.fire({
+                icon: 'success',
+                title: 'ดาวน์โหลดสำเร็จ',
+                html: `ดาวน์โหลดไฟล์ <b>${fileName}</b><br><span class="text-xs text-slate-500">จำนวน ${targetData.length} รายการ เรียบร้อยแล้ว</span>`,
+                timer: 2500,
+                showConfirmButton: false
+            });
+        };
+
+        window.exportShelterOverviewCsv = function () {
+            window.exportShelterEvacueesToCsv();
         };
         // =========================================================================
         // 🧩 โครงสร้างระบบแยกโมดูลย่อย (Modular Architecture)
