@@ -713,4 +713,126 @@ body.view-only-mode textarea {
     color: #ffffff !important;
 }
 
+/* ===================================================
+   🌧️ Hero Water Card: Rain Falling into Water Effect
+   =================================================== */
+.hero-rain-container {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 2;
+    transition: opacity 0.8s ease-in-out;
+}
+
+@keyframes rainDropFall {
+    0% {
+        transform: translate3d(0, -60px, 0) rotate(12deg);
+        opacity: 0;
+    }
+    15% {
+        opacity: 0.85;
+    }
+    85% {
+        opacity: 0.85;
+    }
+    100% {
+        transform: translate3d(-35px, 340px, 0) rotate(12deg);
+        opacity: 0.1;
+    }
+}
+
+.hero-rain-drop {
+    position: absolute;
+    top: -20px;
+    width: 1.5px;
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0), rgba(186, 230, 253, 0.75) 70%, #ffffff 100%);
+    border-radius: 999px;
+    opacity: 0;
+    will-change: transform, opacity;
+    animation: rainDropFall 0.85s linear infinite;
+}
+
+@keyframes rainRippleExpand {
+    0% {
+        transform: scale(0.15) rotateX(65deg);
+        opacity: 0.9;
+        border-width: 1.5px;
+    }
+    50% {
+        opacity: 0.6;
+    }
+    100% {
+        transform: scale(2.5) rotateX(65deg);
+        opacity: 0;
+        border-width: 0.5px;
+    }
+}
+
+.hero-rain-ripple {
+    position: absolute;
+    width: 30px;
+    height: 15px;
+    border-radius: 50%;
+    border: 1px solid rgba(186, 230, 253, 0.75);
+    box-shadow: 0 0 6px rgba(56, 189, 248, 0.5);
+    opacity: 0;
+    will-change: transform, opacity;
+    animation: rainRippleExpand 1.4s ease-out infinite;
+}
+
+/* บรรยากาศฟ้าครึ้มฝนเมื่อเปิดโหมดฝนตก */
+#x73_hero_card.is-raining-weather {
+    box-shadow: 0 25px 50px -12px rgba(12, 74, 110, 0.5), inset 0 1px 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+#x73_hero_card.is-raining-weather #x73_hero_glow {
+    background: radial-gradient(circle, rgba(56, 189, 248, 0.28) 0%, rgba(30, 58, 138, 0.15) 70%, transparent 100%);
+}
+
+/* ===================================================
+   ☀️ Hero Water Card: Sunny & Clear Sky Vibrant Theme
+   =================================================== */
+@keyframes spinSlow {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+.animate-spin-slow {
+    animation: spinSlow 15s linear infinite;
+}
+
+@keyframes sunGlowPulse {
+    0%, 100% {
+        opacity: 0.65;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.95;
+        transform: scale(1.12);
+    }
+}
+
+/* ปรับแต่งพื้นหลังการ์ดโทนฟ้าสดใส สว่างตา ประกายแสงแดด */
+#x73_hero_card.is-sunny-weather {
+    background: linear-gradient(135deg, #0284c7 0%, #0369a1 45%, #1e3a8a 100%) !important;
+    border-color: rgba(125, 211, 252, 0.5) !important;
+    box-shadow: 0 25px 50px -12px rgba(2, 132, 199, 0.45), inset 0 1px 2px 0 rgba(255, 255, 255, 0.35) !important;
+}
+
+#x73_hero_card.is-sunny-weather #x73_hero_glow {
+    background: radial-gradient(circle, rgba(253, 224, 71, 0.4) 0%, rgba(56, 189, 248, 0.25) 50%, transparent 75%) !important;
+    animation: sunGlowPulse 5s ease-in-out infinite;
+}
+
+/* คลื่นน้ำโทนสีฟ้าครามสดใสประกายน้ำใส */
+#x73_hero_card.is-sunny-weather .hero-wave-back {
+    opacity: 0.45;
+}
+#x73_hero_card.is-sunny-weather .hero-wave-mid {
+    opacity: 0.6;
+}
+#x73_hero_card.is-sunny-weather .hero-wave-front {
+    opacity: 0.85;
+}
+
 

@@ -1581,6 +1581,9 @@ window.renderPublicPortal = async function () {
     if (typeof window.updateHeroWaterGauge === 'function') {
         window.updateHeroWaterGauge(latestLevel, ridResult);
     }
+    if (typeof window.checkAndApplyHeroRainEffect === 'function') {
+        window.checkAndApplyHeroRainEffect();
+    }
 
     // 3. เริ่มต้นแผนที่ Mini Map หลังสร้าง DOM เสร็จ
     setTimeout(() => {

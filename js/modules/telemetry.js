@@ -493,6 +493,11 @@ function updateHeroWaterGauge(levelNum, result) {
         if (waveMid) waveMid.setAttribute('fill', '#0369a1');
         if (waveFront) waveFront.setAttribute('fill', '#0c4a6e');
     }
+
+    // 🌧️ ตรวจสอบสภาพอากาศเพื่อเปิด/ปิดเอฟเฟกต์ฝนตกลงผิวน้ำอัตโนมัติ
+    if (typeof checkAndApplyHeroRainEffect === 'function') {
+        checkAndApplyHeroRainEffect();
+    }
 }
 window.updateHeroWaterGauge = updateHeroWaterGauge;
 
@@ -517,6 +522,9 @@ function getHeroWaterGaugeHtml() {
         </svg>
     </div>
 
+    <!-- 🌧️ เลเยอร์ฝนตกลงผิวน้ำ (แสดงผลเมื่อพยากรณ์อากาศมีฝน) -->
+    <div id="x73_hero_rain_layer" class="hero-rain-container hidden"></div>
+
     <!-- แสง Glow ด้านหลัง -->
     <div id="x73_hero_glow"
         class="absolute -top-24 -right-24 w-96 h-96 bg-sky-500/20 rounded-full blur-3xl pointer-events-none transition-all duration-700">
@@ -531,8 +539,8 @@ function getHeroWaterGaugeHtml() {
             <!-- ฝั่งซ้ายส่วนบน: กล่องข้อมูลสถานีขนาดกะทัดรัด สไตล์ Mobile-First -->
             <div class="p-3 sm:p-3.5 md:p-4 rounded-2xl bg-white/10 backdrop-blur-xl border border-white/20 shadow-lg flex items-center justify-between gap-2 sm:gap-3">
                 <div class="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
-                    <div id="x73_hero_icon_box"
-                        class="w-9 h-9 sm:w-11 sm:h-11 md:w-12 md:h-12 rounded-xl bg-sky-500/25 border border-sky-400/40 flex items-center justify-center text-sky-300 text-base sm:text-xl md:text-2xl shadow-inner shrink-0 backdrop-blur-md">
+                    <div id="x73_hero_icon_box" onclick="window.toggleHeroRainEffect()" title="คลิกเพื่อทดสอบเปิด/ปิดลูกเล่นฝนตก"
+                        class="w-9 h-9 sm:w-11 sm:h-11 md:w-12 md:h-12 rounded-xl bg-sky-500/25 border border-sky-400/40 flex items-center justify-center text-sky-300 text-base sm:text-xl md:text-2xl shadow-inner shrink-0 backdrop-blur-md cursor-pointer hover:scale-105 active:scale-95 transition-transform">
                         <i class="fas fa-water"></i>
                     </div>
                     <div class="min-w-0 flex-1">
@@ -542,6 +550,9 @@ function getHeroWaterGaugeHtml() {
                             </span>
                             <span id="x73_hero_source" class="text-[8px] sm:text-[9px] text-slate-300 bg-white/10 px-1.5 py-0.5 rounded-full font-bold whitespace-nowrap">
                                 <i class="fas fa-satellite-dish mr-1 text-emerald-400"></i>RID X.73
+                            </span>
+                            <span id="x73_hero_rain_badge" class="hidden text-[8px] sm:text-[9px] text-sky-200 bg-sky-500/30 border border-sky-400/40 px-2 py-0.5 rounded-full font-bold whitespace-nowrap shadow-xs animate-pulse">
+                                <i class="fas fa-cloud-showers-heavy text-sky-300 mr-1"></i>พยากรณ์ฝนตก
                             </span>
                         </div>
                         <h2 class="text-xs sm:text-base md:text-xl font-black tracking-tight text-white leading-snug">
@@ -710,3 +721,201 @@ function getHeroWaterGaugeHtml() {
 </div>`;
 }
 window.getHeroWaterGaugeHtml = getHeroWaterGaugeHtml;
+
+// =========================================================================
+// 🌧️ ระบบลูกเล่นฝนตกลงผิวน้ำ & ท้องฟ้าสดใส (Dynamic Weather-Reactive Hero Card)
+// ทำงานสอดคล้องกับพยากรณ์อากาศของวันนี้จากกรมอุตุนิยมวิทยา (TMD)
+// =========================================================================
+
+/**
+ * กำหนดธีมสภาพอากาศของการ์ดระดับน้ำ X.73
+ * @param {'rain'|'sunny'|'default'} mode - โหมดสภาพอากาศ
+ * @param {String} detail - รายละเอียด เช่น "ท้องฟ้าสดใส (ไม่มีฝน)", "พยากรณ์ฝนตก 4.5 มม."
+ */
+function setHeroWeatherMode(mode, detail = '') {
+    const heroCards = document.querySelectorAll('#x73_hero_card');
+    const rainContainers = document.querySelectorAll('#x73_hero_rain_layer');
+    const weatherBadges = document.querySelectorAll('#x73_hero_rain_badge');
+
+    if (!heroCards.length) return;
+
+    // 1. ปรับเปลี่ยนคลาสสไตล์พื้นหลังของการ์ด
+    heroCards.forEach(card => {
+        card.classList.remove('is-raining-weather', 'is-sunny-weather');
+        if (mode === 'rain') {
+            card.classList.add('is-raining-weather');
+        } else if (mode === 'sunny') {
+            card.classList.add('is-sunny-weather');
+        }
+    });
+
+    // 2. ปรับเปลี่ยนป้ายสถานะสภาพอากาศที่หัวการ์ด
+    weatherBadges.forEach(badge => {
+        badge.classList.remove('hidden', 'bg-sky-500/30', 'border-sky-400/40', 'text-sky-200', 'bg-amber-500/30', 'border-amber-400/40', 'text-amber-200');
+
+        if (mode === 'rain') {
+            badge.className = 'text-[8px] sm:text-[9px] text-sky-200 bg-sky-500/30 border border-sky-400/40 px-2 py-0.5 rounded-full font-bold whitespace-nowrap shadow-xs animate-pulse';
+            badge.innerHTML = `<i class="fas fa-cloud-showers-heavy text-sky-300 mr-1"></i>${detail || 'พยากรณ์ฝนตก'}`;
+            badge.title = detail || 'พยากรณ์ฝนตกวันนี้';
+        } else if (mode === 'sunny') {
+            badge.className = 'text-[8px] sm:text-[9px] text-amber-200 bg-amber-500/30 border border-amber-400/40 px-2 py-0.5 rounded-full font-bold whitespace-nowrap shadow-xs';
+            badge.innerHTML = `<i class="fas fa-sun text-amber-300 mr-1 animate-spin-slow"></i>${detail || 'ท้องฟ้าสดใส'}`;
+            badge.title = detail || 'คาดการณ์ไม่มีฝน ท้องฟ้าสดใส';
+        } else {
+            badge.classList.add('hidden');
+        }
+    });
+
+    // 3. ควบคุมเลเยอร์เม็ดฝนและระลอกคลื่นน้ำ
+    rainContainers.forEach(container => {
+        if (mode !== 'rain') {
+            container.classList.add('hidden');
+            container.innerHTML = '';
+            return;
+        }
+
+        container.classList.remove('hidden');
+        if (container.children.length > 0) return; // มีเม็ดฝนอยู่แล้ว
+
+        // สร้างสายฝนเฉียงร่วงหล่นลงมา 28 เส้น
+        const dropCount = 28;
+        const dropsHtml = [];
+        for (let i = 0; i < dropCount; i++) {
+            const left = (i * (100 / dropCount) + (Math.random() * 3 - 1.5)).toFixed(1);
+            const height = Math.floor(Math.random() * 20) + 18; // 18px - 38px
+            const duration = (Math.random() * 0.4 + 0.65).toFixed(2); // 0.65s - 1.05s
+            const delay = (Math.random() * 1.5).toFixed(2); // 0s - 1.5s
+            const opacity = (Math.random() * 0.4 + 0.5).toFixed(2);
+
+            dropsHtml.push(`
+                <div class="hero-rain-drop" style="
+                    left: ${left}%;
+                    height: ${height}px;
+                    animation-duration: ${duration}s;
+                    animation-delay: ${delay}s;
+                    opacity: ${opacity};
+                "></div>
+            `);
+        }
+
+        // สร้างระลอกคลื่นน้ำกระเพื่อมบนผิวน้ำ 9 จุด
+        const rippleCount = 9;
+        const ripplesHtml = [];
+        for (let j = 0; j < rippleCount; j++) {
+            const left = (j * (100 / rippleCount) + (Math.random() * 6 - 3)).toFixed(1);
+            const bottom = Math.floor(Math.random() * 20) + 15; // ผิวน้ำช่วงล่าง 15%-35%
+            const duration = (Math.random() * 0.6 + 1.2).toFixed(2); // 1.2s - 1.8s
+            const delay = (Math.random() * 1.6).toFixed(2);
+
+            ripplesHtml.push(`
+                <div class="hero-rain-ripple" style="
+                    left: ${left}%;
+                    bottom: ${bottom}%;
+                    animation-duration: ${duration}s;
+                    animation-delay: ${delay}s;
+                "></div>
+            `);
+        }
+
+        container.innerHTML = dropsHtml.join('') + ripplesHtml.join('');
+    });
+}
+
+function setHeroCardRainEffect(enable, reason = '') {
+    setHeroWeatherMode(enable ? 'rain' : 'default', reason);
+}
+
+/**
+ * ตรวจสอบพยากรณ์อากาศของวันนี้ และเปิดธีมสภาพอากาศอัตโนมัติ (ฝนตก / ท้องฟ้าสดใส / ปกติ)
+ * @param {Object} overrideForecast - ข้อมูลสภาพอากาศหากส่งมาโดยตรง
+ */
+function checkAndApplyHeroRainEffect(overrideForecast = null) {
+    let forecastToday = overrideForecast;
+
+    // หากไม่มีการส่งเข้ามาตรงๆ ให้ดึงจาก App Cache
+    if (!forecastToday && typeof window.getAppCache === 'function') {
+        const cached = window.getAppCache('weather_data');
+        if (cached && cached.success && Array.isArray(cached.forecast) && cached.forecast[0]) {
+            forecastToday = cached.forecast[0];
+        }
+    }
+
+    if (!forecastToday) return;
+
+    const desc = (forecastToday.desc || '').toLowerCase();
+    const rainMm = parseFloat(forecastToday.rain || 0);
+    const icon = (forecastToday.icon || '').toLowerCase();
+
+    // 1. เงื่อนไขฝนตกจากกรมอุตุนิยมวิทยา
+    const isRain = desc.includes('ฝน') ||
+                   desc.includes('พายุ') ||
+                   desc.includes('คะนอง') ||
+                   rainMm > 0 ||
+                   icon.includes('rain') ||
+                   icon.includes('storm');
+
+    // 2. เงื่อนไขไม่มีฝน ท้องฟ้าโปร่ง/สดใส
+    const isSunny = !isRain && (
+        desc.includes('แดด') ||
+        desc.includes('แจ่มใส') ||
+        desc.includes('โปร่ง') ||
+        desc.includes('ร้อน') ||
+        icon.includes('sun') ||
+        icon.includes('clear') ||
+        rainMm === 0
+    );
+
+    if (isRain) {
+        const rainDetail = `${forecastToday.desc || 'พยากรณ์ฝนวันนี้'} (${rainMm > 0 ? rainMm + ' มม.' : 'มีโอกาสฝนตก'})`;
+        setHeroWeatherMode('rain', rainDetail);
+    } else if (isSunny) {
+        setHeroWeatherMode('sunny', `${forecastToday.desc || 'ท้องฟ้าสดใส'} (ไม่มีฝน)`);
+    } else {
+        setHeroWeatherMode('default', forecastToday.desc || '');
+    }
+}
+
+// ฟังก์ชันสลับโหมดสภาพอากาศเพื่อทดสอบ: ฝนตก (Rain) -> ท้องฟ้าสดใส (Sunny) -> ปกติ (Default)
+window.cycleHeroWeatherMode = function () {
+    const card = document.getElementById('x73_hero_card');
+    let nextMode = 'rain';
+
+    if (!card || (!card.classList.contains('is-raining-weather') && !card.classList.contains('is-sunny-weather'))) {
+        nextMode = 'rain';
+    } else if (card.classList.contains('is-raining-weather')) {
+        nextMode = 'sunny';
+    } else if (card.classList.contains('is-sunny-weather')) {
+        nextMode = 'default';
+    }
+
+    setHeroWeatherMode(nextMode, nextMode === 'rain' ? 'พยากรณ์ฝนตก (ทดสอบ)' : (nextMode === 'sunny' ? 'ท้องฟ้าสดใส (ทดสอบ)' : ''));
+
+    // แจ้งเตือน Toast สั้นๆ ให้ผู้ใช้ทราบว่าสลับเป็นโหมดอะไร
+    if (typeof Swal !== 'undefined' && Swal.mixin) {
+        const Toast = Swal.mixin({
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 1800,
+            timerProgressBar: true
+        });
+        Toast.fire({
+            icon: nextMode === 'rain' ? 'info' : (nextMode === 'sunny' ? 'warning' : 'question'),
+            title: nextMode === 'rain' ? '🌧️ สลับเป็น: ฝนตกโปรยปราย' : (nextMode === 'sunny' ? '☀️ สลับเป็น: ท้องฟ้าสดใส (ฟ้าสว่าง)' : '🌊 สลับเป็น: สีน้ำเงินเข้มปกติ')
+        });
+    }
+};
+
+window.toggleHeroRainEffect = function (enable) {
+    if (enable === undefined) {
+        window.cycleHeroWeatherMode();
+    } else if (enable) {
+        setHeroWeatherMode('rain', 'พยากรณ์ฝนตก (Manual)');
+    } else {
+        setHeroWeatherMode('default', '');
+    }
+};
+
+window.setHeroWeatherMode = setHeroWeatherMode;
+window.setHeroCardRainEffect = setHeroCardRainEffect;
+window.checkAndApplyHeroRainEffect = checkAndApplyHeroRainEffect;

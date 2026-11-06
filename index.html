@@ -414,6 +414,9 @@
                                 </svg>
                             </div>
 
+                            <!-- 🌧️ เลเยอร์ฝนตกลงผิวน้ำ (แสดงผลเมื่อพยากรณ์อากาศมีฝน) -->
+                            <div id="x73_hero_rain_layer" class="hero-rain-container hidden"></div>
+
                             <!-- แสง Glow ด้านหลัง -->
                             <div id="x73_hero_glow"
                                 class="absolute -top-24 -right-24 w-96 h-96 bg-sky-500/20 rounded-full blur-3xl pointer-events-none transition-all duration-700">
@@ -430,8 +433,8 @@
                                     <!-- ฝั่งซ้ายส่วนบน: กล่องข้อมูลสถานีขนาดกะทัดรัด สไตล์ Mobile-First -->
                                     <div class="p-3 sm:p-3.5 md:p-4 rounded-2xl bg-white/10 backdrop-blur-xl border border-white/20 shadow-lg flex items-center justify-between gap-2.5">
                                         <div class="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-1">
-                                            <div id="x73_hero_icon_box"
-                                                class="w-9 h-9 sm:w-11 sm:h-11 md:w-12 md:h-12 rounded-xl bg-sky-500/25 border border-sky-400/40 flex items-center justify-center text-sky-300 text-base sm:text-xl md:text-2xl shadow-inner shrink-0 backdrop-blur-md">
+                                            <div id="x73_hero_icon_box" onclick="window.toggleHeroRainEffect()" title="คลิกเพื่อทดสอบเปิด/ปิดลูกเล่นฝนตก"
+                                                class="w-9 h-9 sm:w-11 sm:h-11 md:w-12 md:h-12 rounded-xl bg-sky-500/25 border border-sky-400/40 flex items-center justify-center text-sky-300 text-base sm:text-xl md:text-2xl shadow-inner shrink-0 backdrop-blur-md cursor-pointer hover:scale-105 active:scale-95 transition-transform">
                                                 <i class="fas fa-water"></i>
                                             </div>
                                             <div class="min-w-0 flex-1">
@@ -441,6 +444,9 @@
                                                     </span>
                                                     <span id="x73_hero_source" class="text-[8px] sm:text-[9px] text-slate-300 bg-white/10 px-1.5 py-0.5 rounded-full font-bold whitespace-nowrap">
                                                         <i class="fas fa-satellite-dish mr-1 text-emerald-400"></i>RID X.73
+                                                    </span>
+                                                    <span id="x73_hero_rain_badge" class="hidden text-[8px] sm:text-[9px] text-sky-200 bg-sky-500/30 border border-sky-400/40 px-2 py-0.5 rounded-full font-bold whitespace-nowrap shadow-xs animate-pulse">
+                                                        <i class="fas fa-cloud-showers-heavy text-sky-300 mr-1"></i>พยากรณ์ฝนตก
                                                     </span>
                                                 </div>
                                                 <h2 class="text-xs sm:text-base md:text-xl font-black tracking-tight text-white leading-snug">

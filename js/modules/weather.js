@@ -126,6 +126,11 @@ async function loadWeatherForecast(forceRefresh = false) {
                 </div>
             `;
         }).join('');
+
+        // 🌧️ ตรวจสอบสภาพอากาศเพื่อเปิด/ปิดเอฟเฟกต์ฝนตกลงผิวน้ำบนการ์ดระดับน้ำ X.73
+        if (typeof window.checkAndApplyHeroRainEffect === 'function' && Array.isArray(result.forecast) && result.forecast[0]) {
+            window.checkAndApplyHeroRainEffect(result.forecast[0]);
+        }
     } else if (result) {
         console.error("🚨 Weather Forecast Load Error:", result.error);
         if (loadingEl) {
