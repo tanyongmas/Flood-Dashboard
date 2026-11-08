@@ -1612,7 +1612,7 @@ function handleLineWebhook(events) {
       }
 
       // ==========================================
-      // 4. เบอร์ติดต่อฉุกเฉิน
+      // 4. เบอร์ติดต่อฉุกเฉิน & บัตรเชิญเข้าร่วมกลุ่มไลน์ เฝ้าระวังอุทกภัย'69
       // ==========================================
       else if (
         userText.includes("เบอร์ติดต่อฉุกเฉิน") || 
@@ -1628,20 +1628,28 @@ function handleLineWebhook(events) {
         userText.includes("โรงพยาบาล") ||
         userText.includes("ตำรวจ") ||
         userText.includes("เบอร์") ||
-        userText.includes("โทร")
+        userText.includes("โทร") ||
+        userText.includes("กลุ่ม") ||
+        userText.includes("เข้ากลุ่ม") ||
+        userText.includes("กลุ่มไลน์")
       ) {
-        const emergencyText = "📞 เบอร์โทรติดต่อฉุกเฉิน เทศบาลตำบลตันหยงมัส\n\n" +
-                              "🚒 งานป้องกันและบรรเทาสาธารณภัย (กู้ชีพ-กู้ภัย/ดับเพลิง):\n" +
-                              "• 0-7367-1866 หรือ 0-7367-1886\n" +
-                              "• สายด่วน 199\n\n" +
-                              "🏛️ สำนักงานเทศบาลตำบลตันหยงมัส:\n" +
-                              "• 0-7367-1364\n\n" +
-                              "🏥 โรงพยาบาลระแงะ:\n" +
-                              "• 0-7367-1287\n\n" +
-                              "🚨 สถานีตำรวจภูธรระแงะ:\n" +
-                              "• 0-7367-1967\n\n" +
-                              "📢 แจ้งเหตุหรือขอความช่วยเหลือได้ตลอด 24 ชั่วโมง";
-        sendLineReply(replyToken, emergencyText);
+        try {
+          const emergencyFlex = createEmergencyCarouselFlexMessage();
+          sendLineReply(replyToken, emergencyFlex);
+        } catch (flexErr) {
+          console.error("🚨 Failed to generate emergency Flex Carousel: " + flexErr.toString());
+          const emergencyText = "📞 เบอร์โทรติดต่อฉุกเฉิน เทศบาลตำบลตันหยงมัส\n\n" +
+                                "🚒 งานป้องกันและบรรเทาสาธารณภัย (ปภ.):\n" +
+                                "• 0-7367-1866 หรือ สายด่วน 199\n\n" +
+                                "🚑 หน่วยแพทย์กู้ชีพ - ฉุกเฉิน: 1669\n" +
+                                "🏛️ สำนักงานเทศบาลตำบลตันหยงมัส: 0-7367-1364\n" +
+                                "🏥 โรงพยาบาลระแงะ: 0-7367-1287\n" +
+                                "🚨 สถานีตำรวจภูธรระแงะ: 0-7367-1967 (191)\n\n" +
+                                "💬 เข้าร่วมกลุ่มไลน์ เฝ้าระวังอุทกภัย'69 ทต.ตันหยงมัส:\n" +
+                                "https://line.me/R/ti/g/wrrpWNFBXz\n\n" +
+                                "📢 แจ้งเหตุหรือขอความช่วยเหลือได้ตลอด 24 ชั่วโมง";
+          sendLineReply(replyToken, emergencyText);
+        }
       } else {
         // ข้อความต้อนรับและปุ่มนำทางหลัก
         const welcomeMessage = {
@@ -1697,6 +1705,383 @@ function handleLineWebhook(events) {
     }
   }
   return createResponse({ success: true });
+}
+
+/**
+ * 📞 สร้าง Flex Message แบบ Carousel สำหรับสายด่วนฉุกเฉิน และ บัตรเชิญเข้าร่วมกลุ่มไลน์ เฝ้าระวังอุทกภัย'69
+ */
+function createEmergencyCarouselFlexMessage() {
+  const groupInviteUrl = getScriptProperty('LINE_GROUP_INVITE_URL', 'https://line.me/R/ti/g/wrrpWNFBXz');
+  const webAppUrl = getScriptProperty('LIFF_WEB_APP_URL', 'https://tanyongmas.github.io/Flood-Dashboard/');
+  const publicModeUrl = webAppUrl + (webAppUrl.includes('?') ? '&' : '?') + 'mode=report';
+
+  // 🔴 Bubble 1: เบอร์โทรติดต่อฉุกเฉิน 24 ชั่วโมง
+  const emergencyBubble = {
+    "type": "bubble",
+    "size": "mega",
+    "header": {
+      "type": "box",
+      "layout": "vertical",
+      "backgroundColor": "#dc2626",
+      "paddingAll": "16px",
+      "contents": [
+        {
+          "type": "box",
+          "layout": "horizontal",
+          "contents": [
+            {
+              "type": "text",
+              "text": "📞 สายด่วนฉุกเฉิน 24 ชม.",
+              "color": "#ffffff",
+              "size": "xs",
+              "weight": "bold"
+            },
+            {
+              "type": "text",
+              "text": "พร้อมช่วยเหลือ",
+              "color": "#fecaca",
+              "size": "xxs",
+              "align": "end",
+              "weight": "bold"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": "เทศบาลตำบลตันหยงมัส",
+          "color": "#ffffff",
+          "size": "lg",
+          "weight": "bold",
+          "margin": "xs"
+        },
+        {
+          "type": "text",
+          "text": "อ.ระแงะ จ.นราธิวาส • แจ้งเหตุตลอด 24 ชั่วโมง",
+          "color": "#fee2e2",
+          "size": "xxs",
+          "margin": "xs"
+        }
+      ]
+    },
+    "body": {
+      "type": "box",
+      "layout": "vertical",
+      "paddingAll": "16px",
+      "spacing": "sm",
+      "contents": [
+        // 1. งาน ปภ. ทต.ตันหยงมัส
+        {
+          "type": "box",
+          "layout": "vertical",
+          "backgroundColor": "#fef2f2",
+          "cornerRadius": "md",
+          "paddingAll": "10px",
+          "contents": [
+            {
+              "type": "text",
+              "text": "🚒 งานป้องกันและบรรเทาสาธารณภัย (ปภ.)",
+              "weight": "bold",
+              "size": "xs",
+              "color": "#b91c1c"
+            },
+            {
+              "type": "text",
+              "text": "📞 073-671866 หรือ สายด่วน 199",
+              "weight": "bold",
+              "size": "sm",
+              "color": "#0f172a",
+              "margin": "xs"
+            },
+            {
+              "type": "text",
+              "text": "เหตุน้ำท่วม / ขอเรืออพยพ / ขอแนวกระสอบทราย",
+              "size": "xxs",
+              "color": "#64748b",
+              "margin": "xs"
+            }
+          ]
+        },
+        // 2. หน่วยแพทย์กู้ชีพ 1669
+        {
+          "type": "box",
+          "layout": "vertical",
+          "backgroundColor": "#f0fdf4",
+          "cornerRadius": "md",
+          "paddingAll": "10px",
+          "contents": [
+            {
+              "type": "text",
+              "text": "🚑 หน่วยแพทย์กู้ชีพ - ฉุกเฉิน (1669)",
+              "weight": "bold",
+              "size": "xs",
+              "color": "#15803d"
+            },
+            {
+              "type": "text",
+              "text": "📞 โทร 1669 (ฟรี 24 ชม.)",
+              "weight": "bold",
+              "size": "sm",
+              "color": "#0f172a",
+              "margin": "xs"
+            },
+            {
+              "type": "text",
+              "text": "ผู้ป่วยติดเตียง / หญิงมีครรภ์ / ผู้บาดเจ็บเร่งด่วน",
+              "size": "xxs",
+              "color": "#64748b",
+              "margin": "xs"
+            }
+          ]
+        },
+        // 3. หน่วยงานร่วม
+        {
+          "type": "box",
+          "layout": "vertical",
+          "spacing": "xs",
+          "paddingTop": "4px",
+          "contents": [
+            {
+              "type": "box",
+              "layout": "baseline",
+              "contents": [
+                { "type": "text", "text": "🏛️ สนง.เทศบาล:", "size": "xxs", "color": "#64748b", "flex": 4 },
+                { "type": "text", "text": "073-671364", "size": "xxs", "weight": "bold", "color": "#1e293b", "flex": 6 }
+              ]
+            },
+            {
+              "type": "box",
+              "layout": "baseline",
+              "contents": [
+                { "type": "text", "text": "🏥 รพ.ระแงะ:", "size": "xxs", "color": "#64748b", "flex": 4 },
+                { "type": "text", "text": "073-671287", "size": "xxs", "weight": "bold", "color": "#1e293b", "flex": 6 }
+              ]
+            },
+            {
+              "type": "box",
+              "layout": "baseline",
+              "contents": [
+                { "type": "text", "text": "🚨 สภ.ระแงะ:", "size": "xxs", "color": "#64748b", "flex": 4 },
+                { "type": "text", "text": "073-671967 (191)", "size": "xxs", "weight": "bold", "color": "#1e293b", "flex": 6 }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "footer": {
+      "type": "box",
+      "layout": "vertical",
+      "spacing": "sm",
+      "paddingAll": "16px",
+      "paddingTop": "0px",
+      "contents": [
+        {
+          "type": "button",
+          "style": "primary",
+          "color": "#dc2626",
+          "height": "sm",
+          "action": {
+            "type": "uri",
+            "label": "📞 โทร ปภ. 073-671866",
+            "uri": "tel:073671866"
+          }
+        },
+        {
+          "type": "button",
+          "style": "secondary",
+          "height": "sm",
+          "action": {
+            "type": "uri",
+            "label": "🚑 โทร กู้ชีพ 1669",
+            "uri": "tel:1669"
+          }
+        }
+      ]
+    }
+  };
+
+  // 🟢 Bubble 2: การ์ดเข้าร่วมกลุ่ม "เฝ้าระวังอุทกภัย'69 ทต.ตันหยงมัส"
+  const groupInviteBubble = {
+    "type": "bubble",
+    "size": "mega",
+    "header": {
+      "type": "box",
+      "layout": "vertical",
+      "backgroundColor": "#059669",
+      "paddingAll": "16px",
+      "contents": [
+        {
+          "type": "box",
+          "layout": "horizontal",
+          "contents": [
+            {
+              "type": "text",
+              "text": "💬 กลุ่มไลน์เฉพาะกิจ",
+              "color": "#ffffff",
+              "size": "xs",
+              "weight": "bold"
+            },
+            {
+              "type": "text",
+              "text": "LINE GROUP",
+              "color": "#a7f3d0",
+              "size": "xxs",
+              "align": "end",
+              "weight": "bold"
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": "เฝ้าระวังอุทกภัย'69",
+          "color": "#ffffff",
+          "size": "lg",
+          "weight": "bold",
+          "margin": "xs"
+        },
+        {
+          "type": "text",
+          "text": "ทต.ตันหยงมัส อ.ระแงะ จ.นราธิวาส",
+          "color": "#d1fae5",
+          "size": "xxs",
+          "margin": "xs"
+        }
+      ]
+    },
+    "body": {
+      "type": "box",
+      "layout": "vertical",
+      "paddingAll": "16px",
+      "spacing": "md",
+      "contents": [
+        {
+          "type": "text",
+          "text": "กลุ่มไลน์ประสานงาน แจ้งเตือนภัย และช่วยเหลือพี่น้องประชาชนในพื้นที่เสี่ยงน้ำท่วม",
+          "size": "xs",
+          "color": "#334155",
+          "wrap": true,
+          "weight": "bold"
+        },
+        {
+          "type": "box",
+          "layout": "vertical",
+          "backgroundColor": "#ecfdf5",
+          "cornerRadius": "md",
+          "paddingAll": "12px",
+          "spacing": "xs",
+          "contents": [
+            {
+              "type": "box",
+              "layout": "baseline",
+              "contents": [
+                { "type": "text", "text": "📢", "size": "xxs", "flex": 1 },
+                { "type": "text", "text": "แจ้งเตือนระดับน้ำและสถานการณ์สด", "size": "xs", "color": "#065f46", "flex": 9 }
+              ]
+            },
+            {
+              "type": "box",
+              "layout": "baseline",
+              "contents": [
+                { "type": "text", "text": "🚤", "size": "xxs", "flex": 1 },
+                { "type": "text", "text": "แจ้งพิกัดขอเรือ/ขอความช่วยเหลือเร่งด่วน", "size": "xs", "color": "#065f46", "flex": 9 }
+              ]
+            },
+            {
+              "type": "box",
+              "layout": "baseline",
+              "contents": [
+                { "type": "text", "text": "🍲", "size": "xxs", "flex": 1 },
+                { "type": "text", "text": "ติดตามจุดแจกถุงยังชีพ & ศูนย์พักพิง", "size": "xs", "color": "#065f46", "flex": 9 }
+              ]
+            },
+            {
+              "type": "box",
+              "layout": "baseline",
+              "contents": [
+                { "type": "text", "text": "👥", "size": "xxs", "flex": 1 },
+                { "type": "text", "text": "ร่วมเป็นเครือข่ายเฝ้าระวังชุมชนปลอดภัย", "size": "xs", "color": "#065f46", "flex": 9 }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "footer": {
+      "type": "box",
+      "layout": "vertical",
+      "spacing": "sm",
+      "paddingAll": "16px",
+      "paddingTop": "0px",
+      "contents": [
+        {
+          "type": "button",
+          "style": "primary",
+          "color": "#06c755",
+          "height": "sm",
+          "action": {
+            "type": "uri",
+            "label": "🟢 เข้าร่วมกลุ่มไลน์",
+            "uri": groupInviteUrl
+          }
+        },
+        {
+          "type": "button",
+          "style": "secondary",
+          "height": "sm",
+          "action": {
+            "type": "uri",
+            "label": "เข้าสู่เฝ้าน้ำหยงมัส 💦",
+            "uri": publicModeUrl
+          }
+        }
+      ]
+    }
+  };
+
+  return {
+    "type": "flex",
+    "altText": "📞 สายด่วนฉุกเฉิน & เข้าร่วมกลุ่มเฝ้าระวังอุทกภัย'69 ทต.ตันหยงมัส",
+    "contents": {
+      "type": "carousel",
+      "contents": [emergencyBubble, groupInviteBubble]
+    },
+    "quickReply": {
+      "items": [
+        {
+          "type": "action",
+          "action": {
+            "type": "message",
+            "label": "📢 ภาพรวมสถานการณ์",
+            "text": "ภาพรวมสถานการณ์"
+          }
+        },
+        {
+          "type": "action",
+          "action": {
+            "type": "message",
+            "label": "💧 ระดับน้ำ",
+            "text": "ระดับน้ำ"
+          }
+        },
+        {
+          "type": "action",
+          "action": {
+            "type": "message",
+            "label": "📹 กล้อง CCTV",
+            "text": "กล้อง CCTV"
+          }
+        },
+        {
+          "type": "action",
+          "action": {
+            "type": "message",
+            "label": "🌤️ พยากรณ์อากาศ",
+            "text": "พยากรณ์อากาศ"
+          }
+        }
+      ]
+    }
+  };
 }
 
 /**

@@ -588,7 +588,7 @@ window.openUrgentSosModal = function () {
                     <div class="text-left text-xs space-y-2 p-2">
                         <p class="text-emerald-700 font-bold"><i class="fas fa-check-circle mr-1"></i> ระบบได้บันทึกคำขอความช่วยเหลือและส่งพิกัดตรงถึงศูนย์สั่งการเรียบร้อยแล้ว</p>
                         <div class="p-3 bg-rose-50 rounded-xl border border-rose-100 text-rose-800">
-                            <b>หากสถานการณ์วิกฤตเร่งด่วนมาก:</b> กรุณาโทรตรงสายด่วน ปภ. ทต.ตันหยงมัส <a href="tel:073671886" class="font-black text-rose-700 underline ml-1">073-671886</a> หรือ กู้ชีพ <a href="tel:1669" class="font-black text-rose-700 underline ml-1">1669</a> ทันที
+                            <b>หากสถานการณ์วิกฤตเร่งด่วนมาก:</b> กรุณาโทรตรงสายด่วน ปภ. ทต.ตันหยงมัส <a href="tel:073671866" class="font-black text-rose-700 underline ml-1">073-671866</a> หรือ กู้ชีพ <a href="tel:1669" class="font-black text-rose-700 underline ml-1">1669</a> ทันที
                         </div>
                     </div>
                 `,
@@ -1076,7 +1076,7 @@ window.renderPublicPortal = async function () {
                 <img src="assets/logo.png" class="w-9 h-9 sm:w-10 sm:h-10 object-contain drop-shadow-xs shrink-0" alt="ตราเทศบาล">
                 <div class="min-w-0 leading-tight">
                     <!-- Line 1: ชื่อระบบ -->
-                    <h1 class="text-xs sm:text-sm md:text-base font-black text-slate-800 tracking-tight truncate">รายงานสถานการณ์อุทกภัย</h1>
+                    <h1 class="text-xs sm:text-sm md:text-base font-black text-slate-800 tracking-tight truncate">เฝ้าน้ำหยงมัส 💦 เทศบาลตำบลตันหยงมัส</h1>
                     <!-- Line 2: สังกัดพื้นที่ + วันที่ปัจจุบัน -->
                     <p class="text-[10px] sm:text-[11px] text-slate-400 font-medium truncate mt-0.5">
                         <i class="fas fa-map-marker-alt text-rose-500 mr-1 text-[9px]"></i>ทต.ตันหยงมัส อ.ระแงะ จ.นราธิวาส • ${currentDateStr}
@@ -1252,7 +1252,7 @@ window.renderPublicPortal = async function () {
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                         <!-- 1. งานป้องกันและบรรเทาสาธารณภัย (ปภ.) ทต.ตันหยงมัส -->
-                        <a href="tel:073671886" class="p-3.5 bg-rose-50/70 hover:bg-rose-100/90 border border-rose-100 rounded-2xl flex items-center justify-between transition-all group active:scale-98">
+                        <a href="tel:073671866" class="p-3.5 bg-rose-50/70 hover:bg-rose-100/90 border border-rose-100 rounded-2xl flex items-center justify-between transition-all group active:scale-98">
                             <div class="flex items-center gap-3 min-w-0 pr-2">
                                 <div class="w-9 h-9 rounded-xl bg-rose-500 text-white flex items-center justify-center text-sm shadow-sm shrink-0">
                                     <i class="fas fa-fire-extinguisher"></i>
@@ -1263,7 +1263,7 @@ window.renderPublicPortal = async function () {
                                 </div>
                             </div>
                             <span class="text-xs font-black text-rose-600 bg-white px-3 py-1.5 rounded-xl shadow-sm border border-rose-100 group-hover:scale-105 transition-transform shrink-0 flex items-center gap-1.5">
-                                <i class="fas fa-phone-alt text-[10px]"></i> 073-671886
+                                <i class="fas fa-phone-alt text-[10px]"></i> 073-671866
                             </span>
                         </a>
 
@@ -1313,6 +1313,26 @@ window.renderPublicPortal = async function () {
                             <span class="text-xs font-black text-amber-600 bg-white px-3 py-1.5 rounded-xl shadow-sm border border-slate-200 group-hover:scale-105 transition-transform shrink-0 flex items-center gap-1.5">
                                 <i class="fas fa-phone-alt text-[10px]"></i> 1784
                             </span>
+                        </a>
+                    </div>
+
+                    <!-- 💬 บัตรเชิญเข้าร่วมกลุ่มไลน์ เฝ้าระวังอุทกภัย'69 ทต.ตันหยงมัส -->
+                    <div class="mt-4 p-4 bg-gradient-to-r from-emerald-600 via-emerald-700 to-teal-700 rounded-2xl text-white shadow-md shadow-emerald-700/20 flex flex-col sm:flex-row items-center justify-between gap-3 border border-emerald-500/40">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center text-xl shrink-0 text-white">
+                                <i class="fab fa-line"></i>
+                            </div>
+                            <div>
+                                <h4 class="text-xs sm:text-sm font-black leading-tight text-white flex items-center gap-1.5">
+                                    <span>กลุ่ม: เฝ้าระวังอุทกภัย'69 ทต.ตันหยงมัส</span>
+                                </h4>
+                                <p class="text-[10px] sm:text-[11px] text-emerald-100 font-medium mt-0.5">รับแจ้งเตือนสด ขอความช่วยเหลือ และติดตามสถานการณ์น้ำท่วม</p>
+                            </div>
+                        </div>
+                        <a href="https://line.me/R/ti/g/wrrpWNFBXz" target="_blank"
+                            class="w-full sm:w-auto px-4 py-2.5 bg-white text-emerald-700 hover:bg-emerald-50 font-black text-xs rounded-xl shadow-sm transition-all active:scale-95 flex items-center justify-center gap-2 shrink-0">
+                            <i class="fab fa-line text-base text-[#06c755]"></i>
+                            <span>เข้าร่วมกลุ่มไลน์</span>
                         </a>
                     </div>
                 </div>
@@ -1499,7 +1519,7 @@ window.renderPublicPortal = async function () {
 
         <!-- 6. Footer ประชาสัมพันธ์ -->
         <footer class="text-center py-6 text-xs text-slate-400 space-y-2">
-            <p class="font-medium">ระบบรายงานสถานการณ์อุทกภัย เทศบาลตำบลตันหยงมัส เพื่อประโยชน์สาธารณะ</p>
+            <p class="font-medium">เฝ้าน้ำหยงมัส 💦 เทศบาลตำบลตันหยงมัส เพื่อประโยชน์สาธารณะ</p>
             <p class="text-[11px] text-slate-300">
                 หากท่านเป็นเจ้าหน้าที่ สามารถ <a href="index.html" class="underline hover:text-blue-500 font-bold">เข้าสู่ระบบสำหรับเจ้าหน้าที่</a>
             </p>

@@ -53,6 +53,7 @@ let dashLayerStates = {
                 // ==========================================
                 currentUser = "ประชาชน (สแกน QR)";
                 userRole = "public";
+                document.title = "เฝ้าน้ำหยงมัส 💦 เทศบาลตำบลตันหยงมัส";
 
                 // ลบหน้า Login และหน้าเจ้าหน้าที่ออกจาก DOM เพื่อความปลอดภัยและประหยัดแรม
                 const loginPage = document.getElementById('loginPage');
