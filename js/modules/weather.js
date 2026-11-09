@@ -200,6 +200,15 @@ async function sendMessagingAPI(type) {
             iconHtml: '<div class="w-14 h-14 bg-red-50 border-2 border-red-200 text-red-500 rounded-2xl flex items-center justify-center shadow-sm mx-auto"><i class="fas fa-bullhorn text-2xl animate-pulse"></i></div>',
             color: '#ef4444',
             btnConfirmText: 'ส่งประกาศ (วิกฤต)'
+        },
+        news: {
+            title: 'รายงานสถานการณ์และข่าวสาร',
+            badge: '📢 ข่าวสารสถานการณ์',
+            badgeClass: 'bg-sky-50 text-sky-700 border-sky-200',
+            text: 'รายงานสถานการณ์น้ำท่วม ภาพถ่ายสดจุดเสี่ยง หรือประชาสัมพันธ์การให้ความช่วยเหลือประชาชน เทศบาลตำบลตันหยงมัส',
+            iconHtml: '<div class="w-14 h-14 bg-sky-50 border-2 border-sky-200 text-sky-500 rounded-2xl flex items-center justify-center shadow-sm mx-auto"><i class="fas fa-camera text-2xl"></i></div>',
+            color: '#0284c7',
+            btnConfirmText: 'ส่งประกาศข่าวสาร'
         }
     };
 
@@ -207,6 +216,9 @@ async function sendMessagingAPI(type) {
     if (!setup) return;
 
     if (typeof checkAdminReadOnlyAction === 'function' && checkAdminReadOnlyAction()) return;
+
+    let attachedImageData = "";
+    let attachedImageType = "image/jpeg";
 
     const modalHTML = `
         <div class="text-left space-y-3 mt-2">
@@ -236,9 +248,45 @@ async function sendMessagingAPI(type) {
                 <label class="block text-[11px] font-bold text-slate-600 mb-1">
                     <i class="fas fa-align-left text-slate-400 mr-1"></i>เนื้อหาข้อความประกาศ (แก้ไข/พิมพ์เพิ่มได้):
                 </label>
-                <textarea id="swal_line_message" rows="4"
+                <textarea id="swal_line_message" rows="3"
                     class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all custom-scrollbar leading-relaxed"
                     placeholder="พิมพ์รายละเอียดสถานการณ์ คำแนะนำ หรือข้อมูลเพิ่มเติมที่นี่...">${setup.text}</textarea>
+            </div>
+
+            <!-- 📸 ส่วนแนบรูปภาพสถานการณ์ (จัดเก็บบน Google Drive) -->
+            <div class="p-3 bg-slate-50/80 border border-slate-200 rounded-xl space-y-2">
+                <div class="flex items-center justify-between">
+                    <label class="block text-[11px] font-bold text-slate-700">
+                        <i class="fas fa-camera text-sky-500 mr-1"></i>แนบรูปภาพสถานการณ์ (ไม่บังคับ):
+                    </label>
+                    <span class="text-[9px] text-slate-400 flex items-center gap-1">
+                        <i class="fab fa-google-drive text-emerald-600"></i> บันทึกบน Google Drive
+                    </span>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <label for="swal_line_img_file" class="cursor-pointer px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 shrink-0">
+                        <i class="fas fa-folder-open text-sky-600"></i>
+                        <span>เลือกรูป / ถ่ายภาพ</span>
+                    </label>
+                    <input type="file" id="swal_line_img_file" accept="image/*" class="hidden">
+                    <span id="swal_line_img_filename" class="text-[11px] text-slate-400 truncate flex-1">ยังไม่ได้เลือกรูปภาพ</span>
+                </div>
+
+                <!-- กล่องพรีวิวรูปภาพก่อนส่ง -->
+                <div id="swal_line_img_preview_box" class="hidden relative rounded-xl overflow-hidden border border-slate-200 bg-white">
+                    <img id="swal_line_img_preview" src="" alt="พรีวิวรูป" class="w-full max-h-40 object-cover rounded-xl">
+                    <button type="button" id="swal_line_img_remove_btn" class="absolute top-2 right-2 w-6 h-6 rounded-full bg-rose-600 text-white flex items-center justify-center text-xs shadow-md hover:bg-rose-700 transition-all" title="ยกเลิกการแนบรูป">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+
+                <!-- ช่องวาง Image URL สำรอง -->
+                <div>
+                    <input type="url" id="swal_line_img_url"
+                        class="w-full px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-[11px] text-slate-700 outline-none focus:border-sky-400 transition-all placeholder:text-slate-300"
+                        placeholder="หรือวางลิงก์รูปภาพโดยตรง (https://...)">
+                </div>
             </div>
 
             <!-- ข้อมูลแจ้งเตือนปลายทาง -->
@@ -259,16 +307,56 @@ async function sendMessagingAPI(type) {
         cancelButtonText: 'ยกเลิก',
         reverseButtons: true,
         borderRadius: '1.5rem',
-        width: '440px',
+        width: '460px',
         customClass: {
             icon: 'border-none w-auto h-auto m-0 mt-4 bg-transparent',
             popup: 'p-5 md:p-6 rounded-[2rem]'
         },
+        didOpen: () => {
+            const fileInput = document.getElementById('swal_line_img_file');
+            const previewBox = document.getElementById('swal_line_img_preview_box');
+            const previewImg = document.getElementById('swal_line_img_preview');
+            const filenameLabel = document.getElementById('swal_line_img_filename');
+            const removeBtn = document.getElementById('swal_line_img_remove_btn');
+            const urlInput = document.getElementById('swal_line_img_url');
+
+            if (fileInput) {
+                fileInput.addEventListener('change', (e) => {
+                    const file = e.target.files && e.target.files[0];
+                    if (!file) return;
+
+                    attachedImageType = file.type || 'image/jpeg';
+                    if (filenameLabel) filenameLabel.textContent = file.name;
+
+                    const reader = new FileReader();
+                    reader.onload = (loadEvt) => {
+                        attachedImageData = loadEvt.target.result;
+                        if (previewImg) previewImg.src = attachedImageData;
+                        if (previewBox) previewBox.classList.remove('hidden');
+                        if (urlInput) urlInput.value = ''; // ล้าง URL ถ้าเลือกไฟล์
+                    };
+                    reader.readAsDataURL(file);
+                });
+            }
+
+            if (removeBtn) {
+                removeBtn.addEventListener('click', () => {
+                    attachedImageData = "";
+                    if (fileInput) fileInput.value = '';
+                    if (previewImg) previewImg.src = '';
+                    if (previewBox) previewBox.classList.add('hidden');
+                    if (filenameLabel) filenameLabel.textContent = 'ยังไม่ได้เลือกรูปภาพ';
+                });
+            }
+        },
         preConfirm: () => {
             const titleInput = document.getElementById('swal_line_title');
             const messageInput = document.getElementById('swal_line_message');
+            const urlInput = document.getElementById('swal_line_img_url');
+
             const customTitle = titleInput ? titleInput.value.trim() : '';
             const customMessage = messageInput ? messageInput.value.trim() : '';
+            const customImageUrl = urlInput ? urlInput.value.trim() : '';
 
             if (!customTitle) {
                 Swal.showValidationMessage('กรุณาระบุหัวข้อประกาศ');
@@ -278,18 +366,25 @@ async function sendMessagingAPI(type) {
                 Swal.showValidationMessage('กรุณาระบุเนื้อหาข้อความประกาศ');
                 return false;
             }
-            return { customTitle, customMessage };
+
+            return {
+                customTitle,
+                customMessage,
+                imageData: attachedImageData || null,
+                imageType: attachedImageType || 'image/jpeg',
+                imageUrl: customImageUrl || null
+            };
         }
     });
 
     if (result.isConfirmed && result.value) {
-        const { customTitle, customMessage } = result.value;
+        const { customTitle, customMessage, imageData, imageType, imageUrl } = result.value;
 
         Swal.fire({
             title: 'กำลังส่งประกาศเข้ากลุ่มไลน์...',
-            text: 'กลุ่ม: เฝ้าระวังอุทกภัย\'69 ทต.ตันหยงมัส',
+            text: imageData ? 'กำลังอัปโหลดรูปภาพลง Google Drive และส่งเข้ากลุ่มไลน์...' : 'กลุ่ม: เฝ้าระวังอุทกภัย\'69 ทต.ตันหยงมัส',
             allowOutsideClick: false,
-            width: '300px',
+            width: '320px',
             borderRadius: '1.25rem',
             didOpen: () => { Swal.showLoading(); }
         });
@@ -301,7 +396,10 @@ async function sendMessagingAPI(type) {
                     action: 'broadcastLine',
                     alertType: type,
                     customTitle: customTitle,
-                    customMessage: customMessage
+                    customMessage: customMessage,
+                    imageData: imageData || null,
+                    imageType: imageType || 'image/jpeg',
+                    imageUrl: imageUrl || null
                 })
             });
             const data = await res.json();

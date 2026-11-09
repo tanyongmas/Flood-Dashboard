@@ -21,6 +21,7 @@ function getScriptProperty(key, fallback) {
 // ดึงค่าคอนฟิกจาก Script Properties (ตั้งค่าผ่าน Project Settings > Script Properties)
 const SS_ID = getScriptProperty('SS_ID', '');
 const DRIVE_FOLDER_ID = getScriptProperty('DRIVE_FOLDER_ID', '');
+const BROADCAST_IMAGE_FOLDER_ID = getScriptProperty('BROADCAST_IMAGE_FOLDER_ID', '1CKm6kEkmyLn4jHcFs-kdOesp9AK6C6Av');
 const TMD_UID = getScriptProperty('TMD_UID', ''); // กรมอุตุนิยมวิทยา User ID
 const TMD_UKEY = getScriptProperty('TMD_UKEY', ''); // กรมอุตุนิยมวิทยา API Key
 const LINE_CHANNEL_ACCESS_TOKEN = getScriptProperty('LINE_CHANNEL_ACCESS_TOKEN', '');
@@ -400,7 +401,7 @@ function doPost(e) {
     // ฟังก์ชันสกัดข้อมูลจาก HTML (Web Scraping)
     // ==========================================
     if (params.action === 'broadcastLine' || params.action === 'pushLineGroup') {
-      return broadcastLineMessage(params.alertType, params.customTitle, params.customMessage);
+      return broadcastLineMessage(params.alertType, params.customTitle, params.customMessage, params.imageUrl, params.imageData, params.imageType);
     }
     // ==========================================
     // Messaging API logic
@@ -700,14 +701,15 @@ function getRIDWaterLevelFromHTML() {
 // ==========================================
 // Messaging API
 // ==========================================
-function broadcastLineMessage(type, customTitle, customMessage) {
+function broadcastLineMessage(type, customTitle, customMessage, imageUrl, imageData, imageType) {
   // 🔑 ดึง Token และ Group ID จาก ScriptProperties (มี Default รองรับ)
   const channelAccessToken = LINE_CHANNEL_ACCESS_TOKEN;
   const targetGroupId = getScriptProperty('LINE_TARGET_GROUP_ID', 'C7d6743c9c787948ec097b47b921bd0e3');
   
   let title = "", message = "", color = "", icon = "";
+  let finalImageUrl = (imageUrl && typeof imageUrl === 'string') ? imageUrl.trim() : "";
 
-  // 💡 กำหนดข้อความและสีตามระดับภัย (เป็นค่าเริ่มต้น)
+  // 💡 กำหนดข้อความและสีตามระดับภัย/ประเภทข่าวสาร
   if (type === 'normal') {
     title = "สถานการณ์ปกติ";
     message = "ขณะนี้ระดับน้ำคลองตันหยงมัสอยู่ในเกณฑ์ปกติ โปรดติดตามข่าวสารจากทางเทศบาล";
@@ -723,6 +725,11 @@ function broadcastLineMessage(type, customTitle, customMessage) {
     message = "ระดับน้ำล้นตลิ่งและเข้าสู่สภาวะวิกฤต โปรดเคลื่อนย้ายทรัพย์สินขึ้นที่สูงและเตรียมพร้อมอพยพทันที!";
     color = "#ef4444"; // สีแดง
     icon = "🚨";
+  } else if (type === 'news') {
+    title = "รายงานสถานการณ์และข่าวสาร";
+    message = "รายงานสถานการณ์น้ำท่วม ภาพถ่ายสดจุดเสี่ยง หรือประชาสัมพันธ์การให้ความช่วยเหลือประชาชน เทศบาลตำบลตันหยงมัส";
+    color = "#0284c7"; // สีฟ้าคราม
+    icon = "📢";
   }
 
   // 📝 หากเจ้าหน้าที่มีการแก้ไขหรือกำหนดข้อความเอง ให้ใช้ข้อความที่กำหนดเอง
@@ -733,120 +740,167 @@ function broadcastLineMessage(type, customTitle, customMessage) {
     message = customMessage.trim();
   }
 
+  // 📸 หากมีไฟล์รูปภาพ Base64 ส่งมา ให้อัปโหลดลงโฟลเดอร์ Google Drive สำหรับรูปภาพข่าวสารโดยเฉพาะ
+  if (imageData && typeof imageData === 'string' && imageData.indexOf("data:image") === 0) {
+    try {
+      const folderId = getScriptProperty('BROADCAST_IMAGE_FOLDER_ID', '1CKm6kEkmyLn4jHcFs-kdOesp9AK6C6Av');
+      let folder = null;
+      try {
+        folder = DriveApp.getFolderById(folderId);
+      } catch (fErr) {
+        console.warn("⚠️ ไม่สามารถเข้าถึงโฟลเดอร์ BROADCAST_IMAGE_FOLDER_ID ลองเข้าถึงจาก DRIVE_FOLDER_ID");
+        if (DRIVE_FOLDER_ID) {
+          try { folder = DriveApp.getFolderById(DRIVE_FOLDER_ID); } catch(e2) {}
+        }
+      }
+
+      if (folder) {
+        const timestampStr = Utilities.formatDate(new Date(), "GMT+7", "yyyyMMdd_HHmmss");
+        const fileName = "broadcast_news_" + timestampStr + ".jpg";
+        const base64Data = imageData.split(",")[1];
+        const contentType = imageType || "image/jpeg";
+        const blob = Utilities.newBlob(Utilities.base64Decode(base64Data), contentType, fileName);
+
+        const file = folder.createFile(blob);
+        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+        finalImageUrl = "https://lh3.googleusercontent.com/d/" + file.getId();
+        console.log("✅ [Drive Upload Success] ภาพข่าวสารบันทึกลง Drive ID:", file.getId(), "CDN URL:", finalImageUrl);
+      }
+    } catch (driveErr) {
+      console.error("⚠️ [Drive Upload Exception]:", driveErr.toString());
+    }
+  }
+
   // สร้างวันที่และเวลาปัจจุบัน (เวลาไทย GMT+7)
   const dateTimeString = Utilities.formatDate(new Date(), "GMT+7", "dd/MM/yyyy เวลา HH:mm น.");
 
-  // 🎨 โครงสร้าง Flex Message ที่จัดระเบียบขนาดและสัดส่วน
+  // 🎨 โครงสร้าง Flex Message Bubble
+  const bubbleContent = {
+    "type": "bubble",
+    "size": "mega",
+    "header": {
+      "type": "box",
+      "layout": "vertical",
+      "backgroundColor": color,
+      "paddingAll": "16px",
+      "contents": [
+        {
+          "type": "text",
+          "text": icon + " " + title,
+          "weight": "bold",
+          "color": "#ffffff",
+          "size": "lg",
+          "wrap": true
+        }
+      ]
+    },
+    "body": {
+      "type": "box",
+      "layout": "vertical",
+      "paddingAll": "16px",
+      "contents": [
+        // ส่วนที่ 1: ผู้ประกาศ
+        {
+          "type": "box",
+          "layout": "horizontal",
+          "contents": [
+            {
+              "type": "text",
+              "text": "ประกาศจาก :",
+              "color": "#64748b",
+              "size": "xs",
+              "flex": 3
+            },
+            {
+              "type": "text",
+              "text": "เทศบาลตำบลตันหยงมัส",
+              "weight": "bold",
+              "color": "#1e293b",
+              "size": "xs",
+              "flex": 7,
+              "wrap": true
+            }
+          ]
+        },
+        {
+          "type": "separator",
+          "margin": "md",
+          "color": "#f1f5f9"
+        },
+        // ส่วนที่ 2: เนื้อหาประกาศ
+        {
+          "type": "text",
+          "text": "รายละเอียดสถานการณ์",
+          "color": "#94a3b8",
+          "size": "xxs",
+          "margin": "md"
+        },
+        {
+          "type": "text",
+          "text": message,
+          "wrap": true,
+          "size": "sm",
+          "color": "#334155",
+          "margin": "sm",
+          "weight": "regular"
+        },
+        {
+          "type": "separator",
+          "margin": "lg",
+          "color": "#f1f5f9"
+        },
+        // ส่วนที่ 3: วันที่และเวลา
+        {
+          "type": "box",
+          "layout": "horizontal",
+          "margin": "md",
+          "contents": [
+            {
+              "type": "text",
+              "text": "อัปเดตล่าสุด :",
+              "size": "xs",
+              "color": "#94a3b8",
+              "flex": 3,
+              "gravity": "center"
+            },
+            {
+              "type": "text",
+              "text": dateTimeString,
+              "size": "xs",
+              "color": color,
+              "weight": "bold",
+              "flex": 7,
+              "wrap": true,
+              "gravity": "center"
+            }
+          ]
+        }
+      ]
+    }
+  };
+
+  // 🖼️ หากมีรูปภาพ ให้เพิ่ม Hero Image ลงในการ์ด
+  if (finalImageUrl) {
+    bubbleContent.hero = {
+      "type": "image",
+      "url": finalImageUrl,
+      "size": "full",
+      "aspectRatio": "20:13",
+      "aspectMode": "cover",
+      "action": {
+        "type": "uri",
+        "uri": finalImageUrl
+      }
+    };
+  }
+
   const payload = {
     "to": targetGroupId,
     "messages": [{
       "type": "flex",
-      "altText": icon + " แจ้งเตือนภัย: " + title,
-      "contents": {
-        "type": "bubble",
-        "header": {
-          "type": "box",
-          "layout": "vertical",
-          "contents": [
-            {
-              "type": "text",
-              "text": icon + " " + title,
-              "weight": "bold",
-              "color": "#ffffff",
-              "size": "xl",
-              "wrap": true
-            }
-          ],
-          "backgroundColor": color,
-          "paddingTop": "xl",
-          "paddingBottom": "xl",
-          "paddingStart": "xl",
-          "paddingEnd": "xl"
-        },
-        "body": {
-          "type": "box",
-          "layout": "vertical",
-          "contents": [
-            // ส่วนที่ 1: ผู้ประกาศ
-            {
-              "type": "box",
-              "layout": "horizontal",
-              "contents": [
-                {
-                  "type": "text",
-                  "text": "ประกาศจาก :",
-                  "color": "#64748b",
-                  "size": "sm",
-                  "flex": 3
-                },
-                {
-                  "type": "text",
-                  "text": "เทศบาลตำบลตันหยงมัส",
-                  "weight": "bold",
-                  "color": "#1e293b",
-                  "size": "sm",
-                  "flex": 6,
-                  "wrap": true
-                }
-              ]
-            },
-            {
-              "type": "separator",
-              "margin": "lg",
-              "color": "#f1f5f9"
-            },
-            // ส่วนที่ 2: เนื้อหาประกาศ
-            {
-              "type": "text",
-              "text": "รายละเอียดสถานการณ์",
-              "color": "#94a3b8",
-              "size": "xs",
-              "margin": "lg"
-            },
-            {
-              "type": "text",
-              "text": message,
-              "wrap": true,
-              "size": "md",
-              "color": "#334155",
-              "margin": "md",
-              "weight": "regular"
-            },
-            {
-              "type": "separator",
-              "margin": "xl",
-              "color": "#f1f5f9"
-            },
-            // ส่วนที่ 3: วันที่และเวลา
-            {
-              "type": "box",
-              "layout": "horizontal",
-              "margin": "lg",
-              "contents": [
-                {
-                  "type": "text",
-                  "text": "อัปเดตล่าสุด :",
-                  "size": "xs",
-                  "color": "#94a3b8",
-                  "flex": 3,
-                  "gravity": "center"
-                },
-                {
-                  "type": "text",
-                  "text": dateTimeString,
-                  "size": "sm",
-                  "color": color,
-                  "weight": "bold",
-                  "flex": 6,
-                  "wrap": true,
-                  "gravity": "center"
-                }
-              ]
-            }
-          ],
-          "paddingAll": "xl"
-        }
-      }
+      "altText": icon + " " + title,
+      "contents": bubbleContent
     }]
   };
 
@@ -868,7 +922,7 @@ function broadcastLineMessage(type, customTitle, customMessage) {
 
     if (resCode >= 200 && resCode < 300) {
       console.log("✅ [LINE Push Success] Status Code:", resCode);
-      return createResponse({ success: true, resCode: resCode });
+      return createResponse({ success: true, resCode: resCode, imageUrl: finalImageUrl });
     } else {
       console.error("❌ [LINE Push Failed] Status Code:", resCode, "Body:", resBody);
       return createResponse({ success: false, error: "LINE API Error (" + resCode + "): " + resBody });
@@ -4002,6 +4056,7 @@ function setupScriptProperties(customProps) {
   var defaultProps = {
     'SS_ID': '',
     'DRIVE_FOLDER_ID': '',
+    'BROADCAST_IMAGE_FOLDER_ID': '1CKm6kEkmyLn4jHcFs-kdOesp9AK6C6Av',
     'TMD_UID': '',
     'TMD_UKEY': '',
     'LINE_CHANNEL_ACCESS_TOKEN': '',
