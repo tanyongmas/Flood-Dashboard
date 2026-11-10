@@ -126,6 +126,19 @@ let dashLayerStates = {
                     localStorage.removeItem('user_session');
                 }
             } else {
+                // 📝 โหลดค่า Remember Me สำหรับชื่อผู้ใช้งานเข้าสู่ระบบ
+                try {
+                    const rememberedUser = localStorage.getItem('remember_username');
+                    if (rememberedUser) {
+                        const userEl = document.getElementById('username');
+                        const remEl = document.getElementById('rememberMe');
+                        const passEl = document.getElementById('password');
+                        if (userEl) userEl.value = rememberedUser;
+                        if (remEl) remEl.checked = true;
+                        if (passEl) setTimeout(() => passEl.focus(), 250);
+                    }
+                } catch (remErr) {}
+
                 // ถ้ายังไม่ได้เข้าสู่ระบบ ให้โหลดข้อมูลระดับน้ำและพยากรณ์อากาศแบบขนาน
                 try {
                     await Promise.allSettled([
@@ -146,14 +159,118 @@ let dashLayerStates = {
         // กำหนดว่าแต่ละสิทธิ์เข้าหน้าไหนได้บ้าง
         const PAGE_ACCESS = {
             'superadmin': ['dashboard', 'water', 'addWater', 'shelter', 'evacuation', 'regis', 'relief', 'looker', 'cctv', 'userManagement'],
-            'admin': ['dashboard', 'water', 'addWater', 'shelter', 'evacuation', 'regis', 'relief', 'looker', 'cctv', 'userManagement'],
+            'admin': ['dashboard', 'water', 'addWater', 'shelter', 'evacuation', 'regis', 'relief', 'looker', 'cctv'],
             'shelter': ['shelter', 'regis', 'looker', 'cctv'],
             'water_staff': ['water', 'addWater', 'looker', 'cctv'],
             'relief': ['relief', 'looker', 'cctv'],
             'community': ['water', 'addWater', 'evacuation', 'looker', 'cctv'],
             'flood_report': ['looker', 'cctv']
         };
-        // --- Navigation Logic ---
+        window.PAGE_ACCESS = PAGE_ACCESS;
+        // ==========================================
+        // 👤 ระบบจัดการ UI โปรไฟล์ผู้ใช้งานและเมนูตามสิทธิ์ (RBAC)
+        // ==========================================
+        function updateSidebarUserProfile(username, role) {
+            const nameEl = document.getElementById('displayUserName');
+            const roleContainer = document.getElementById('displayUserRoleContainer');
+            const avatarEl = document.getElementById('sidebarUserAvatar');
+
+            if (nameEl && username) {
+                nameEl.textContent = username;
+                nameEl.title = `ชื่อผู้ใช้งาน: ${username}`;
+            }
+
+            if (roleContainer && role) {
+                const cleanRole = String(role).toLowerCase().trim();
+                let badgeHtml = '';
+
+                if (cleanRole === 'superadmin') {
+                    badgeHtml = `
+                        <span class="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-purple-100 text-purple-700 border border-purple-200 truncate" title="ผู้ดูแลระบบสูงสุด (Superadmin)">
+                            <i class="fas fa-crown text-[8px] text-purple-500"></i>
+                            <span>Superadmin</span>
+                        </span>`;
+                } else if (cleanRole === 'admin') {
+                    badgeHtml = `
+                        <span class="inline-flex items-center gap-1 text-[9px] font-black tracking-wider px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 border border-amber-200 truncate" title="ผู้ดูแลระบบ (ดูข้อมูลได้อย่างเดียว)">
+                            <i class="fas fa-eye text-[8px] text-amber-600"></i>
+                            <span>ดูอย่างเดียว</span>
+                        </span>`;
+                } else if (cleanRole === 'shelter') {
+                    badgeHtml = `
+                        <span class="inline-flex items-center gap-1 text-[9px] font-black tracking-wider px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 border border-emerald-200 truncate" title="เจ้าหน้าที่ศูนย์พักพิง">
+                            <i class="fas fa-campground text-[8px] text-emerald-600"></i>
+                            <span>ศูนย์พักพิง</span>
+                        </span>`;
+                } else if (cleanRole === 'water_staff') {
+                    badgeHtml = `
+                        <span class="inline-flex items-center gap-1 text-[9px] font-black tracking-wider px-2 py-0.5 rounded-md bg-sky-100 text-sky-800 border border-sky-200 truncate" title="เจ้าหน้าที่ระดับน้ำ">
+                            <i class="fas fa-water text-[8px] text-sky-600"></i>
+                            <span>ตรวจวัดน้ำ</span>
+                        </span>`;
+                } else if (cleanRole === 'relief') {
+                    badgeHtml = `
+                        <span class="inline-flex items-center gap-1 text-[9px] font-black tracking-wider px-2 py-0.5 rounded-md bg-rose-100 text-rose-800 border border-rose-200 truncate" title="เจ้าหน้าที่ถุงยังชีพ">
+                            <i class="fas fa-box-open text-[8px] text-rose-600"></i>
+                            <span>ถุงยังชีพ</span>
+                        </span>`;
+                } else if (cleanRole === 'community') {
+                    badgeHtml = `
+                        <span class="inline-flex items-center gap-1 text-[9px] font-black tracking-wider px-2 py-0.5 rounded-md bg-teal-100 text-teal-800 border border-teal-200 truncate" title="ตัวแทนชุมชน">
+                            <i class="fas fa-users text-[8px] text-teal-600"></i>
+                            <span>ชุมชน</span>
+                        </span>`;
+                } else if (cleanRole === 'flood_report') {
+                    badgeHtml = `
+                        <span class="inline-flex items-center gap-1 text-[9px] font-black tracking-wider px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 border border-blue-200 truncate" title="รายงานสรุปข้อมูล">
+                            <i class="fas fa-chart-line text-[8px] text-blue-600"></i>
+                            <span>รายงานสรุป</span>
+                        </span>`;
+                } else {
+                    badgeHtml = `
+                        <span class="inline-flex items-center text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 truncate">
+                            ${role}
+                        </span>`;
+                }
+
+                roleContainer.innerHTML = badgeHtml;
+            }
+
+            if (avatarEl && username) {
+                avatarEl.title = `${username} (${role || 'Staff'})`;
+            }
+        }
+        window.updateSidebarUserProfile = updateSidebarUserProfile;
+
+        function setupUserInterface(userData) {
+            if (!userData) return;
+            updateSidebarUserProfile(userData.username, userData.role);
+
+            // แสดงปุ่มเมนูจัดการผู้ใช้งาน (เฉพาะผู้ใช้งานระดับ superadmin เท่านั้น)
+            const isSuperAdmin = String(userData.role || '').toLowerCase() === 'superadmin';
+            const adminBtn = document.getElementById('adminMenuBtn');
+            const mobileAdminBtn = document.getElementById('mobileAdminMenuBtn');
+
+            if (adminBtn) {
+                if (isSuperAdmin) {
+                    adminBtn.classList.remove('hidden');
+                    adminBtn.classList.add('flex');
+                } else {
+                    adminBtn.classList.add('hidden');
+                    adminBtn.classList.remove('flex');
+                }
+            }
+
+            if (mobileAdminBtn) {
+                if (isSuperAdmin) {
+                    mobileAdminBtn.classList.remove('hidden');
+                } else {
+                    mobileAdminBtn.classList.add('hidden');
+                }
+            }
+        }
+        window.setupUserInterface = setupUserInterface;
+
         // --- Navigation Logic ---
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
@@ -293,13 +410,56 @@ let dashLayerStates = {
             if (window.floodReportMap && typeof window.floodReportMap.invalidateSize === 'function') window.floodReportMap.invalidateSize();
         });
         // --- Auth & Data ---
+        function toggleLoginPasswordVisibility() {
+            const pwInput = document.getElementById('password');
+            const eyeIcon = document.getElementById('passwordEyeIcon');
+            if (!pwInput || !eyeIcon) return;
+            if (pwInput.type === 'password') {
+                pwInput.type = 'text';
+                eyeIcon.className = 'fas fa-eye-slash text-xs text-blue-600';
+            } else {
+                pwInput.type = 'password';
+                eyeIcon.className = 'fas fa-eye text-xs text-slate-400';
+            }
+        }
+        window.toggleLoginPasswordVisibility = toggleLoginPasswordVisibility;
+
         async function doLogin() {
-            const user = document.getElementById('username').value.trim();
-            if (!user) return Swal.fire('แจ้งเตือน', 'กรุณาระบุชื่อผู้ใช้งาน', 'warning');
+            const user = (document.getElementById('username') ? document.getElementById('username').value : '').trim();
+            const pass = (document.getElementById('password') ? document.getElementById('password').value : '').trim();
+            const rememberMe = document.getElementById('rememberMe') ? document.getElementById('rememberMe').checked : false;
+
+            if (!user) {
+                const userEl = document.getElementById('username');
+                if (userEl) userEl.focus();
+                return Swal.fire({
+                    icon: 'warning',
+                    title: 'แจ้งเตือน',
+                    text: 'กรุณาระบุชื่อผู้ใช้งาน',
+                    confirmButtonColor: '#2563eb',
+                    customClass: { popup: 'rounded-2xl' }
+                });
+            }
+
+            if (!pass) {
+                const passEl = document.getElementById('password');
+                if (passEl) passEl.focus();
+                return Swal.fire({
+                    icon: 'warning',
+                    title: 'แจ้งเตือน',
+                    text: 'กรุณาระบุรหัสผ่านเข้าใช้งาน',
+                    confirmButtonColor: '#2563eb',
+                    customClass: { popup: 'rounded-2xl' }
+                });
+            }
 
             const btn = document.getElementById('loginBtn');
-            btn.innerText = 'กำลังตรวจสอบสิทธิ์...';
-            btn.disabled = true;
+            const btnText = document.getElementById('loginBtnText');
+            const btnIcon = document.getElementById('loginBtnIcon');
+
+            if (btn) btn.disabled = true;
+            if (btnText) btnText.innerText = 'กำลังตรวจสอบสิทธิ์...';
+            if (btnIcon) btnIcon.className = 'fas fa-spinner fa-spin';
 
             try {
                 let data = null;
@@ -313,89 +473,25 @@ let dashLayerStates = {
                 }
 
                 if (typeof sbLogin === 'function') {
-                    data = await sbLogin(user);
+                    data = await sbLogin(user, pass);
                 } else {
                     throw new Error('Supabase Service ไม่พร้อมทำงาน กรุณารีเฟรชหน้าเว็บอีกครั้ง');
                 }
 
                 if (data && data.success) {
-                    const detectedRole = (data.role || '').toLowerCase().trim();
-                    const isSuperAdmin = detectedRole === 'superadmin' || user.toLowerCase() === 'superadmin';
-
-                    // 🛡️ หากเป็นสิทธิ์ superadmin ให้ถามรหัสผ่านยืนยันตัวตนเพิ่มเติม
-                    if (isSuperAdmin) {
-                        btn.innerText = 'รอการยืนยันรหัสผ่าน...';
-                        const { value: adminPassword, isConfirmed } = await Swal.fire({
-                            title: '<div class="text-blue-900 font-black text-lg flex items-center justify-center gap-2"><i class="fas fa-user-shield text-blue-600"></i> ยืนยันรหัสผ่าน Superadmin</div>',
-                            html: `
-                                <p class="text-xs text-slate-500 mb-3">บัญชี <b>${user}</b> ได้รับสิทธิ์ผู้ดูแลระบบสูงสุด (Superadmin)<br>กรุณาระบุรหัสผ่านเพื่อเข้าใช้งาน</p>
-                                <div class="relative text-left mb-2">
-                                    <input id="swal_admin_password_input" type="password" placeholder="ระบุรหัสผ่าน Superadmin" maxlength="30"
-                                        class="w-full p-3.5 pr-11 text-center font-bold text-slate-700 border border-blue-200 rounded-2xl outline-none focus:ring-2 focus:ring-blue-400 bg-blue-50 text-base">
-                                    <button type="button" onclick="const p=document.getElementById('swal_admin_password_input'); const i=this.querySelector('i'); if(p.type==='password'){p.type='text'; i.className='fas fa-eye-slash text-slate-500';}else{p.type='password'; i.className='fas fa-eye text-slate-400';}" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                </div>
-                            `,
-                            focusConfirm: false,
-                            showCancelButton: true,
-                            confirmButtonText: '<i class="fas fa-sign-in-alt mr-1"></i> ยืนยันและเข้าสู่ระบบ',
-                            cancelButtonText: 'ยกเลิก',
-                            confirmButtonColor: '#2563eb',
-                            cancelButtonColor: '#94a3b8',
-                            customClass: { popup: 'rounded-[2rem] max-w-sm' },
-                            didOpen: () => {
-                                const input = document.getElementById('swal_admin_password_input');
-                                if (input) {
-                                    input.focus();
-                                    input.addEventListener('keydown', (e) => {
-                                        if (e.key === 'Enter') Swal.clickConfirm();
-                                    });
-                                }
-                            },
-                            preConfirm: () => {
-                                const pw = document.getElementById('swal_admin_password_input').value.trim();
-                                if (!pw) {
-                                    Swal.showValidationMessage('กรุณาระบุรหัสผ่าน Superadmin');
-                                    return false;
-                                }
-                                return pw;
-                            }
-                        });
-
-                        if (!isConfirmed || !adminPassword) {
-                            btn.innerText = 'เข้าสู่ระบบ';
-                            btn.disabled = false;
-                            return;
+                    // จัดการค่า Remember Me
+                    try {
+                        if (rememberMe) {
+                            localStorage.setItem('remember_username', user);
+                        } else {
+                            localStorage.removeItem('remember_username');
                         }
-
-                        const isValid = typeof sbVerifyAdminPassword === 'function'
-                            ? await sbVerifyAdminPassword(adminPassword)
-                            : (adminPassword === '1122');
-
-                        if (!isValid) {
-                            Swal.fire({
-                                icon: 'error',
-                                title: 'รหัสผ่านไม่ถูกต้อง',
-                                text: 'รหัสผ่านสำหรับผู้ดูแลระบบสูงสุด (Superadmin) ไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง',
-                                confirmButtonColor: '#ef4444',
-                                customClass: { popup: 'rounded-2xl' }
-                            });
-                            btn.innerText = 'เข้าสู่ระบบ';
-                            btn.disabled = false;
-                            return;
-                        }
-                    }
-
-                    // ปรับ role ตามที่ตรวจจับได้
-                    let finalRole = data.role;
-                    if (isSuperAdmin) finalRole = 'superadmin';
-                    else if (user.toLowerCase() === 'admin') finalRole = 'admin';
+                    } catch (e) {}
 
                     const userData = {
                         username: user,
                         name: data.name || user,
-                        role: finalRole
+                        role: data.role
                     };
 
                     localStorage.setItem('user_session', JSON.stringify(userData));
@@ -403,8 +499,11 @@ let dashLayerStates = {
                     currentUser = userData.username;
                     userRole = userData.role;
 
-                    document.getElementById('loginPage').style.display = 'none';
-                    document.getElementById('mainApp').classList.remove('hidden');
+                    const loginPage = document.getElementById('loginPage');
+                    if (loginPage) loginPage.style.display = 'none';
+
+                    const mainApp = document.getElementById('mainApp');
+                    if (mainApp) mainApp.classList.remove('hidden');
 
                     if (typeof setupUserInterface === 'function') setupUserInterface(userData);
                     if (typeof updateMenuByRole === 'function') updateMenuByRole();
@@ -423,14 +522,43 @@ let dashLayerStates = {
 
                     await loadData();
 
+                    // แจ้งเตือนต้อนรับสั้นๆ
+                    const Toast = Swal.mixin({
+                        toast: true,
+                        position: 'top-end',
+                        showConfirmButton: false,
+                        timer: 2000,
+                        timerProgressBar: true
+                    });
+                    Toast.fire({
+                        icon: 'success',
+                        title: `ยินดีต้อนรับคุณ ${user}`
+                    });
+
                 } else {
-                    Swal.fire('ผิดพลาด', data.error || 'ชื่อผู้ใช้ไม่ถูกต้อง', 'error');
-                    btn.innerText = 'เข้าใช้งานระบบ'; btn.disabled = false;
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'เข้าสู่ระบบไม่สำเร็จ',
+                        text: (data && data.error) ? data.error : 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง',
+                        confirmButtonColor: '#ef4444',
+                        customClass: { popup: 'rounded-2xl' }
+                    });
+                    if (btn) btn.disabled = false;
+                    if (btnText) btnText.innerText = 'เข้าสู่ระบบเจ้าหน้าที่';
+                    if (btnIcon) btnIcon.className = 'fas fa-sign-in-alt';
                 }
             } catch (e) {
-                console.error(e);
-                Swal.fire('การเชื่อมต่อขัดข้อง', 'โปรดตรวจสอบการเชื่อมต่ออินเทอร์เน็ต', 'error');
-                btn.innerText = 'เข้าใช้งานระบบ'; btn.disabled = false;
+                console.error("Login Exception:", e);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'การเชื่อมต่อขัดข้อง',
+                    text: e.message || 'โปรดตรวจสอบการเชื่อมต่ออินเทอร์เน็ต',
+                    confirmButtonColor: '#ef4444',
+                    customClass: { popup: 'rounded-2xl' }
+                });
+                if (btn) btn.disabled = false;
+                if (btnText) btnText.innerText = 'เข้าสู่ระบบเจ้าหน้าที่';
+                if (btnIcon) btnIcon.className = 'fas fa-sign-in-alt';
             }
         }
 

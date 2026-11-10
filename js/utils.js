@@ -121,17 +121,18 @@ function updateMenuByRole() {
             if (saved) currentRole = JSON.parse(saved).role || '';
         } catch (e) {}
     }
+    currentRole = String(currentRole || '').toLowerCase().trim();
 
     const roleAccessMap = {
         'superadmin': ['dashboard', 'water', 'addWater', 'shelter', 'evacuation', 'regis', 'relief', 'looker', 'cctv', 'userManagement'],
-        'admin': ['dashboard', 'water', 'addWater', 'shelter', 'evacuation', 'regis', 'relief', 'looker', 'cctv', 'userManagement'],
+        'admin': ['dashboard', 'water', 'addWater', 'shelter', 'evacuation', 'regis', 'relief', 'looker', 'cctv'],
         'shelter': ['shelter', 'regis', 'looker', 'cctv'],
         'water_staff': ['water', 'addWater', 'looker', 'cctv'],
         'relief': ['relief', 'looker', 'cctv'],
         'community': ['water', 'addWater', 'evacuation', 'looker', 'cctv'],
         'flood_report': ['looker', 'cctv']
     };
-    const accessMap = (typeof PAGE_ACCESS !== 'undefined') ? PAGE_ACCESS : roleAccessMap;
+    const accessMap = (typeof PAGE_ACCESS !== 'undefined' && PAGE_ACCESS) ? PAGE_ACCESS : (window.PAGE_ACCESS || roleAccessMap);
     const allowed = accessMap[currentRole] || ['shelter'];
 
     document.querySelectorAll('.nav-btn, .mobile-nav-btn').forEach(btn => {
@@ -217,13 +218,25 @@ function updateMenuByRole() {
 
     // เมนูจัดการผู้ใช้งาน (User Management) เฉพาะ Superadmin เท่านั้น
     const adminBtn = document.getElementById('adminMenuBtn');
+    const mobileAdminBtn = document.getElementById('mobileAdminMenuBtn');
+    const isSuperAdminUser = (typeof userRole !== 'undefined' && String(userRole).toLowerCase() === 'superadmin');
+
     if (adminBtn) {
-        if (userRole === 'superadmin') {
+        if (isSuperAdminUser) {
             adminBtn.style.display = 'flex';
             adminBtn.classList.remove('hidden');
         } else {
             adminBtn.style.display = 'none';
             adminBtn.classList.add('hidden');
+        }
+    }
+    if (mobileAdminBtn) {
+        if (isSuperAdminUser) {
+            mobileAdminBtn.style.display = 'flex';
+            mobileAdminBtn.classList.remove('hidden');
+        } else {
+            mobileAdminBtn.style.display = 'none';
+            mobileAdminBtn.classList.add('hidden');
         }
     }
 
@@ -251,6 +264,7 @@ function updateMenuByRole() {
         if (badge) badge.classList.add('hidden');
     }
 }
+window.updateMenuByRole = updateMenuByRole;
 
 /**
  * ตรวจสอบและบล็อกการแก้ไข/ลบ/เพิ่มข้อมูลสำหรับสิทธิ์ Admin (View-Only)

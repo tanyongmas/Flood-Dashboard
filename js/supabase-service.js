@@ -31,12 +31,24 @@ function isSupabaseReady() {
 // ==========================================
 // 1. ระบบ Login & Authentication (100% Supabase)
 // ==========================================
-async function sbLogin(username) {
+async function sbLogin(username, password) {
     if (!isSupabaseReady()) {
         return { success: false, error: 'ระบบเชื่อมต่อ Supabase ขัดข้อง' };
     }
     try {
-        const cleanUser = String(username).trim();
+        const cleanUser = String(username || '').trim();
+        const cleanPassword = String(password || '').trim();
+
+        if (!cleanUser) {
+            return { success: false, error: 'กรุณาระบุชื่อผู้ใช้งาน' };
+        }
+        if (!cleanPassword) {
+            return { success: false, error: 'กรุณาระบุรหัสผ่านเข้าใช้งาน' };
+        }
+
+        const lowerUser = cleanUser.toLowerCase();
+
+        // 1. ดึงข้อมูลผู้ใช้งานจากตาราง users
         const { data, error } = await sbClient
             .from('users')
             .select('*')
@@ -47,23 +59,62 @@ async function sbLogin(username) {
             console.error("❌ [Supabase] Login error:", error);
             return { success: false, error: 'เกิดข้อผิดพลาดในการตรวจสอบสิทธิ์: ' + error.message };
         }
-        if (data) {
-            console.log("✅ [Supabase] Login สำเร็จ:", data);
-            return {
-                success: true,
-                role: (data.role || 'shelter').toLowerCase().trim(),
-                name: data.username
-            };
+
+        let userRecord = data;
+
+        // Fallback รองรับชื่อ superadmin และ admin หากยังไม่มีในตาราง
+        if (!userRecord) {
+            if (lowerUser === 'superadmin') {
+                userRecord = { username: 'superadmin', role: 'superadmin' };
+            } else if (lowerUser === 'admin') {
+                userRecord = { username: 'admin', role: 'admin' };
+            }
         }
-        // Fallback อัตโนมัติสำหรับ superadmin และ admin
-        const lowerUser = cleanUser.toLowerCase();
-        if (lowerUser === 'superadmin') {
-            return { success: true, role: 'superadmin', name: 'superadmin' };
+
+        if (!userRecord) {
+            return { success: false, error: 'ไม่พบชื่อผู้ใช้งานนี้ในระบบ' };
         }
-        if (lowerUser === 'admin') {
-            return { success: true, role: 'admin', name: 'admin' };
+
+        const role = (userRecord.role || 'shelter').toLowerCase().trim();
+        const isSuperAdmin = role === 'superadmin' || lowerUser === 'superadmin';
+        const isAdmin = role === 'admin' || lowerUser === 'admin';
+
+        // 2. ตรวจสอบรหัสผ่านตามระดับบทบาท (Role)
+        if (isSuperAdmin || isAdmin) {
+            // Superadmin และ Admin: ตรวจสอบกับรหัสผ่านผู้ดูแลระบบ (เริ่มต้น 1122 หรือรหัสที่เปลี่ยนไว้)
+            const isValidAdminPw = typeof sbVerifyAdminPassword === 'function'
+                ? await sbVerifyAdminPassword(cleanPassword)
+                : (cleanPassword === '1122');
+
+            if (!isValidAdminPw) {
+                return { success: false, error: 'รหัสผ่านผู้ดูแลระบบ (Admin) ไม่ถูกต้อง' };
+            }
+        } else {
+            // เจ้าหน้าที่ทั่วไป: ตรวจสอบกับ User Passwords Map ก่อน
+            const passwordsMap = typeof sbGetUserPasswordsMap === 'function' ? await sbGetUserPasswordsMap() : {};
+            const userSpecificPw = passwordsMap[lowerUser];
+
+            let isStaffValid = false;
+
+            if (userSpecificPw) {
+                // หากมีการกำหนดรหัสผ่านเฉพาะสำหรับผู้ใช้นี้ ให้ตรวจตรงกับรหัสผ่านนั้น
+                isStaffValid = (cleanPassword === userSpecificPw);
+            } else {
+                // หากยังไม่เคยตั้งรหัสผ่านเฉพาะ ให้ใช้รหัสเริ่มต้น 1234 หรือ 1122
+                isStaffValid = (cleanPassword === '1234' || cleanPassword === '1122');
+            }
+
+            if (!isStaffValid) {
+                return { success: false, error: 'รหัสผ่านไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง' };
+            }
         }
-        return { success: false, error: 'ไม่พบชื่อผู้ใช้งานนี้ในระบบ' };
+
+        console.log("✅ [Supabase] Login สำเร็จ:", userRecord.username, "Role:", role);
+        return {
+            success: true,
+            role: isSuperAdmin ? 'superadmin' : (isAdmin ? 'admin' : role),
+            name: userRecord.username
+        };
     } catch (err) {
         console.error("❌ [Supabase] Login exception:", err);
         return { success: false, error: err.message || 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ' };
@@ -901,23 +952,128 @@ async function sbGetUsers() {
     }
 }
 
-async function sbSaveUser(username, role) {
+/**
+ * ดึงแผนที่รหัสผ่านของผู้ใช้งานทั้งหมด (User Passwords Map)
+ */
+async function sbGetUserPasswordsMap() {
+    if (!isSupabaseReady()) {
+        try {
+            return JSON.parse(localStorage.getItem('sb_user_passwords_map') || '{}');
+        } catch (e) { return {}; }
+    }
+    try {
+        const { data, error } = await sbClient
+            .from('flood_polygons')
+            .select('detail')
+            .eq('risk_level', 'system_config_user_pw')
+            .maybeSingle();
+
+        if (!error && data && data.detail) {
+            let map = {};
+            try { map = JSON.parse(data.detail); } catch (e) { map = {}; }
+            localStorage.setItem('sb_user_passwords_map', JSON.stringify(map));
+            return map;
+        }
+    } catch (e) {
+        console.warn("⚠️ [Supabase] ดึงรหัสผ่านผู้ใช้ขัดข้อง ใช้ Local Cache:", e);
+    }
+    try {
+        return JSON.parse(localStorage.getItem('sb_user_passwords_map') || '{}');
+    } catch (e) { return {}; }
+}
+
+/**
+ * ปรับปรุง/เปลี่ยนรหัสผ่านสำหรับผู้ใช้งานเฉพาะราย
+ */
+async function sbUpdateUserPassword(username, newPassword) {
+    if (!username) throw new Error('กรุณาระบุชื่อผู้ใช้งาน');
+    if (!newPassword || String(newPassword).trim().length < 4) {
+        throw new Error('รหัสผ่านต้องมีความยาวอย่างน้อย 4 ตัวอักษร');
+    }
+
+    const cleanUser = String(username).trim().toLowerCase();
+    const cleanPw = String(newPassword).trim();
+
+    const currentMap = await sbGetUserPasswordsMap();
+    currentMap[cleanUser] = cleanPw;
+
+    localStorage.setItem('sb_user_passwords_map', JSON.stringify(currentMap));
+
+    if (isSupabaseReady()) {
+        try {
+            await sbClient.from('flood_polygons').delete().eq('risk_level', 'system_config_user_pw');
+            const { error } = await sbClient.from('flood_polygons').insert([{
+                title: '__USER_PASSWORDS_MAP__',
+                detail: JSON.stringify(currentMap),
+                risk_level: 'system_config_user_pw',
+                period: 'system',
+                created_at: new Date().toISOString()
+            }]);
+            if (error) throw new Error(error.message);
+            console.log(`⚡ [Supabase 100%] บันทึกรหัสผ่านใหม่สำหรับผู้ใช้ '${username}' สำเร็จ`);
+        } catch (err) {
+            console.error("❌ [Supabase] บันทึกรหัสผ่านล้มเหลว:", err);
+            throw err;
+        }
+    }
+    return { success: true };
+}
+
+async function sbSaveUser(username, role, password) {
     if (!isSupabaseReady()) throw new Error('Supabase ไม่พร้อมใช้งาน');
+    const cleanUser = username.trim();
     const { error } = await sbClient.from('users').upsert([{
-        username: username.trim(),
+        username: cleanUser,
         role: role.trim()
     }], { onConflict: 'username' });
 
     if (error) throw new Error(error.message);
-    console.log("⚡ [Supabase 100%] บันทึกผู้ใช้สำเร็จ");
+
+    // หากมีการระบุรหัสผ่าน ให้บันทึกลง Passwords Map
+    if (password && String(password).trim()) {
+        try {
+            await sbUpdateUserPassword(cleanUser, String(password).trim());
+        } catch (pwErr) {
+            console.warn("⚠️ บันทึกรหัสผ่านผู้ใช้ไม่สำเร็จ:", pwErr);
+        }
+    } else {
+        // ถ้าเป็นผู้ใช้ใหม่และยังไม่มีใน Map ให้ตั้งรหัสผ่านเริ่มต้น 1234
+        try {
+            const map = await sbGetUserPasswordsMap();
+            if (!map[cleanUser.toLowerCase()]) {
+                await sbUpdateUserPassword(cleanUser, '1234');
+            }
+        } catch (e) {}
+    }
+
+    console.log("⚡ [Supabase 100%] บันทึกผู้ใช้สำเร็จ:", cleanUser);
     return { success: true };
 }
 
 async function sbDeleteUser(username) {
     if (!isSupabaseReady()) throw new Error('Supabase ไม่พร้อมใช้งาน');
-    const { error } = await sbClient.from('users').delete().eq('username', username.trim());
+    const cleanUser = username.trim();
+    const { error } = await sbClient.from('users').delete().eq('username', cleanUser);
     if (error) throw new Error(error.message);
-    console.log("⚡ [Supabase 100%] ลบผู้ใช้สำเร็จ");
+
+    // ลบออกจาก Passwords Map ด้วย
+    try {
+        const currentMap = await sbGetUserPasswordsMap();
+        if (currentMap[cleanUser.toLowerCase()]) {
+            delete currentMap[cleanUser.toLowerCase()];
+            localStorage.setItem('sb_user_passwords_map', JSON.stringify(currentMap));
+            await sbClient.from('flood_polygons').delete().eq('risk_level', 'system_config_user_pw');
+            await sbClient.from('flood_polygons').insert([{
+                title: '__USER_PASSWORDS_MAP__',
+                detail: JSON.stringify(currentMap),
+                risk_level: 'system_config_user_pw',
+                period: 'system',
+                created_at: new Date().toISOString()
+            }]);
+        }
+    } catch (e) {}
+
+    console.log("⚡ [Supabase 100%] ลบผู้ใช้สำเร็จ:", cleanUser);
     return { success: true };
 }
 
@@ -978,19 +1134,7 @@ async function sbGetPdpaPin() {
     }
 
     try {
-        // 1. ลองดึงจากตาราง system_settings (ถ้ามี)
-        const { data: setRow, error: setErr } = await sbClient
-            .from('system_settings')
-            .select('value')
-            .eq('key', 'pdpa_access_pin')
-            .maybeSingle();
-
-        if (!setErr && setRow && setRow.value) {
-            localStorage.setItem('pdpa_access_pin', String(setRow.value).trim());
-            return String(setRow.value).trim();
-        }
-
-        // 2. Fallback: ดึงจาก flood_polygons (system_config_pin)
+        // ดึงจาก flood_polygons (system_config_pin)
         const { data: polyRow } = await sbClient
             .from('flood_polygons')
             .select('detail')
@@ -1039,17 +1183,7 @@ async function sbUpdatePdpaPin(oldPin, newPin, isAdmin = false) {
     let saved = false;
 
     if (isSupabaseReady()) {
-        // 1. ลองบันทึกลงตาราง system_settings
-        try {
-            const { error: upsertErr } = await sbClient
-                .from('system_settings')
-                .upsert([{ key: 'pdpa_access_pin', value: cleanNew }], { onConflict: 'key' });
-            if (!upsertErr) saved = true;
-        } catch (e) {
-            // ละเว้นกรณีไม่มีตาราง system_settings
-        }
-
-        // 2. บันทึกสำรองลง flood_polygons เสมอ เพื่อความแน่นอน
+        // บันทึกลง flood_polygons เสมอ เพื่อความแน่นอน
         try {
             await sbClient.from('flood_polygons').delete().eq('risk_level', 'system_config_pin');
             const { error: insertErr } = await sbClient.from('flood_polygons').insert([{
@@ -1086,19 +1220,7 @@ async function sbGetAdminPassword() {
     }
 
     try {
-        // 1. ลองดึงจากตาราง system_settings (ถ้ามี)
-        const { data: setRow, error: setErr } = await sbClient
-            .from('system_settings')
-            .select('value')
-            .eq('key', 'admin_login_password')
-            .maybeSingle();
-
-        if (!setErr && setRow && setRow.value) {
-            localStorage.setItem('admin_login_password', String(setRow.value).trim());
-            return String(setRow.value).trim();
-        }
-
-        // 2. Fallback: ดึงจาก flood_polygons (system_config_admin_pw)
+        // ดึงจาก flood_polygons (system_config_admin_pw)
         const { data: polyRow } = await sbClient
             .from('flood_polygons')
             .select('detail')
@@ -1147,17 +1269,7 @@ async function sbUpdateAdminPassword(oldPassword, newPassword, isAdmin = true) {
     let saved = false;
 
     if (isSupabaseReady()) {
-        // 1. ลองบันทึกลงตาราง system_settings
-        try {
-            const { error: upsertErr } = await sbClient
-                .from('system_settings')
-                .upsert([{ key: 'admin_login_password', value: cleanNew }], { onConflict: 'key' });
-            if (!upsertErr) saved = true;
-        } catch (e) {
-            // ละเว้นกรณีไม่มีตาราง system_settings
-        }
-
-        // 2. บันทึกสำรองลง flood_polygons เสมอ เพื่อความแน่นอน
+        // บันทึกลง flood_polygons เสมอ เพื่อความแน่นอน
         try {
             await sbClient.from('flood_polygons').delete().eq('risk_level', 'system_config_admin_pw');
             const { error: insertErr } = await sbClient.from('flood_polygons').insert([{
@@ -1499,3 +1611,5 @@ window.sbSaveCctvCamera = sbSaveCctvCamera;
 window.sbDeleteCctvCamera = sbDeleteCctvCamera;
 window.sbFetchCctvSnapshots = sbFetchCctvSnapshots;
 window.sbSaveCctvSnapshot = sbSaveCctvSnapshot;
+window.sbGetUserPasswordsMap = sbGetUserPasswordsMap;
+window.sbUpdateUserPassword = sbUpdateUserPassword;

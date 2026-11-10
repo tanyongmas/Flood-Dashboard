@@ -33,16 +33,106 @@
 
 <body class="text-slate-700">
 
-    <div id="loginPage">
-        <div class="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-sm text-center mx-4">
-            <img src="assets/logo.png" class="w-24 mx-auto mb-4">
-            <h1 class="text-2xl font-bold text-blue-900 mb-2">รายงานสถานการณ์น้ำท่วม<br>เทศบาลตำบลตันหยงมัส</h1>
-            <p class="text-sm text-slate-500 mb-8">กรุณากรอกชื่อผู้ใช้เพื่อเข้าใช้งานระบบ</p>
-            <input type="text" id="username" placeholder="ระบุชื่อผู้ใช้งาน"
-                onkeydown="if(event.key === 'Enter') doLogin()"
-                class="w-full p-4 border border-blue-100 rounded-2xl mb-4 text-center font-bold outline-none focus:ring-2 focus:ring-blue-400 bg-blue-50">
-            <button onclick="doLogin()" id="loginBtn"
-                class="w-full bg-blue-600 text-white py-4 rounded-2xl font-bold hover:bg-blue-700 transition-all active:scale-95 shadow-lg">เข้าสู่ระบบ</button>
+    <div id="loginPage" class="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 overflow-y-auto relative">
+        <!-- แสงส่องตกแต่งพื้นหลัง (Ambient Glow Background) -->
+        <div class="fixed top-1/4 left-1/4 -translate-x-1/2 -translate-y-1/2 w-80 h-80 sm:w-96 sm:h-96 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="fixed bottom-1/4 right-1/4 translate-x-1/2 translate-y-1/2 w-80 h-80 sm:w-96 sm:h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+        <!-- 🌊 คลื่นน้ำจางๆ พลิ้วไหวบริเวณพื้นหลัง (Soft Ambient Water Waves) -->
+        <svg class="login-waves" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+            viewBox="0 24 150 28" preserveAspectRatio="none" shape-rendering="auto">
+            <defs>
+                <path id="gentle-wave" d="M-160 44c30 0 58-18 88-18s 58 18 88 18 58-18 88-18 58 18 88 18 v44h-352z" />
+            </defs>
+            <g class="login-parallax">
+                <use xlink:href="#gentle-wave" x="48" y="0" />
+                <use xlink:href="#gentle-wave" x="48" y="3" />
+                <use xlink:href="#gentle-wave" x="48" y="5" />
+                <use xlink:href="#gentle-wave" x="48" y="7" />
+            </g>
+        </svg>
+
+        <div class="relative z-10 w-full max-w-sm sm:max-w-md bg-white/95 backdrop-blur-2xl p-6 sm:p-8 rounded-[2.5rem] shadow-2xl border border-white/40 text-center my-auto transition-all animate-fade-in">
+            <!-- โลโก้และหัวเรื่อง (ใช้ชื่อเดิม: รายงานสถานการณ์น้ำท่วมเทศบาลตำบลตันหยงมัส) -->
+            <div class="relative mb-6">
+                <div class="w-24 h-24 sm:w-28 sm:h-28 mx-auto rounded-3xl bg-gradient-to-b from-blue-50 to-slate-100/90 p-3 shadow-inner flex items-center justify-center border border-white/60">
+                    <img src="assets/logo.png" class="w-full h-full object-contain drop-shadow-sm" alt="ตราเทศบาลตำบลตันหยงมัส">
+                </div>
+                <h1 class="text-xl sm:text-2xl font-bold text-blue-900 tracking-tight leading-snug mt-3">
+                    รายงานสถานการณ์น้ำท่วม<br>เทศบาลตำบลตันหยงมัส
+                </h1>
+                <p class="text-xs text-slate-500 font-medium mt-1">กรุณากรอกชื่อผู้ใช้และรหัสผ่านเพื่อเข้าใช้งานระบบ</p>
+            </div>
+
+            <!-- ฟอร์มเข้าสู่ระบบเจ้าหน้าที่ -->
+            <form onsubmit="event.preventDefault(); doLogin();" class="space-y-3.5 text-left">
+                <!-- ช่อง Username -->
+                <div>
+                    <label for="username" class="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1.5">
+                        <i class="fas fa-user text-blue-500 text-[11px]"></i>
+                        <span>ชื่อผู้ใช้งาน (Username)</span>
+                    </label>
+                    <div class="relative">
+                        <input type="text" id="username" placeholder="ระบุชื่อผู้ใช้งาน" autocomplete="username"
+                            onkeydown="if(event.key === 'Enter') { const pw=document.getElementById('password'); if(pw && !pw.value) { pw.focus(); } else { doLogin(); } }"
+                            class="w-full pl-9 pr-4 py-2.5 sm:py-3 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 focus:border-blue-500 rounded-2xl text-xs sm:text-sm font-bold text-slate-800 outline-none focus:ring-4 focus:ring-blue-100 transition-all">
+                        <i class="fas fa-id-badge absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                    </div>
+                </div>
+
+                <!-- ช่อง Password -->
+                <div>
+                    <label for="password" class="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1.5">
+                        <i class="fas fa-lock text-blue-500 text-[11px]"></i>
+                        <span>รหัสผ่าน (Password)</span>
+                    </label>
+                    <div class="relative">
+                        <input type="password" id="password" placeholder="ระบุรหัสผ่านเข้าใช้งาน" autocomplete="current-password"
+                            onkeydown="if(event.key === 'Enter') doLogin()"
+                            class="w-full pl-9 pr-11 py-2.5 sm:py-3 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 focus:border-blue-500 rounded-2xl text-xs sm:text-sm font-bold text-slate-800 outline-none focus:ring-4 focus:ring-blue-100 transition-all">
+                        <i class="fas fa-key absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                        <button type="button" onclick="toggleLoginPasswordVisibility()" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors p-1" title="แสดง/ซ่อนรหัสผ่าน">
+                            <i id="passwordEyeIcon" class="fas fa-eye text-xs"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- จดจำชื่อผู้ใช้ (Remember Me) -->
+                <div class="flex items-center justify-between pt-0.5">
+                    <label class="flex items-center gap-2 cursor-pointer select-none">
+                        <input type="checkbox" id="rememberMe" class="w-4 h-4 rounded-md text-blue-600 focus:ring-blue-400 border-slate-300">
+                        <span class="text-xs text-slate-600 font-medium">จดจำชื่อผู้ใช้งาน</span>
+                    </label>
+                </div>
+
+                <!-- ปุ่มเข้าสู่ระบบ -->
+                <button type="button" onclick="doLogin()" id="loginBtn"
+                    class="w-full mt-2 bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white py-3 sm:py-3.5 px-4 rounded-2xl font-bold text-xs sm:text-sm shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transition-all active:scale-98 flex items-center justify-center gap-2">
+                    <i id="loginBtnIcon" class="fas fa-sign-in-alt"></i>
+                    <span id="loginBtnText">เข้าสู่ระบบเจ้าหน้าที่</span>
+                </button>
+            </form>
+
+            <!-- เส้นคั่นแบ่ง -->
+            <div class="relative my-5">
+                <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-slate-200/80"></div></div>
+                <div class="relative flex justify-center text-[10px] uppercase tracking-wider font-bold">
+                    <span class="bg-white px-3 text-slate-400">สำหรับประชาชนทั่วไป</span>
+                </div>
+            </div>
+
+            <!-- 💦 ปุ่มทางลัดโหมดประชาชน (Citizen Portal Shortcut) -->
+            <a href="?mode=report"
+                class="w-full py-2.5 sm:py-3 px-4 bg-sky-50 hover:bg-sky-100/90 border border-sky-200/90 text-sky-700 rounded-2xl font-bold text-xs transition-all active:scale-98 flex items-center justify-center gap-2 shadow-xs group">
+                <span class="text-base group-hover:scale-110 transition-transform">💦</span>
+                <span>เข้าสู่โหมดประชาชน (เฝ้าน้ำหยงมัส)</span>
+                <i class="fas fa-arrow-right text-[10px] text-sky-500 group-hover:translate-x-1 transition-transform"></i>
+            </a>
+
+            <!-- Footer ใต้การ์ด -->
+            <p class="text-xs text-slate-500 mt-5 leading-tight font-medium">
+                เทศบาลตำบลตันหยงมัส โทร.073-671364
+            </p>
         </div>
     </div>
 
@@ -116,33 +206,39 @@
             <div class="p-4 border-t border-blue-50">
                 <!-- ปุ่มจัดการระบบ (Admin เท่านั้น) -->
                 <button id="adminMenuBtn" onclick="showPage('userManagement')"
-                    class="hidden w-full items-center justify-center p-3 mb-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white transition-all shadow-md active:scale-95"
+                    class="superadmin-only hidden w-full items-center justify-center p-3 mb-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white transition-all shadow-md active:scale-95"
                     data-page="userManagement">
                     <i class="fas fa-users-cog"></i>
                     <span class="nav-text ml-2 text-xs font-bold uppercase tracking-wider">จัดการผู้ใช้งาน</span>
                 </button>
 
-                <div class="mt-auto border-t border-slate-100 p-4">
-                    <div class="flex items-center justify-between bg-slate-50 p-3 rounded-2xl">
-                        <div class="flex items-center space-x-3 overflow-hidden">
-                            <div
-                                class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
-                                <i class="fas fa-user"></i>
+                <!-- 👤 ส่วนแสดงข้อมูลผู้ใช้งาน & ปุ่มออกจากระบบ (Sidebar Bottom Profile Card) -->
+                <div class="mt-auto border-t border-slate-100 sidebar-profile-container">
+                    <div class="sidebar-profile-card shadow-xs">
+                        <div class="flex items-center space-x-2.5 min-w-0 flex-1 overflow-hidden">
+                            <!-- Avatar พร้อมไฟเขียวออนไลน์ -->
+                            <div class="relative shrink-0 mx-auto" id="sidebarUserAvatar" title="โปรไฟล์ผู้ใช้งาน">
+                                <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white text-xs font-bold shadow-xs">
+                                    <i class="fas fa-user"></i>
+                                </div>
+                                <span class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full"></span>
                             </div>
-                            <div class="overflow-hidden">
-                                <p id="displayUserName" class="text-[11px] font-black text-slate-700 truncate">Guest</p>
-                                <div class="flex items-center gap-1.5 mt-0.5">
-                                    <p id="displayUserRole" class="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Staff</p>
-                                    <span id="viewOnlyBadge" class="hidden bg-amber-100 text-amber-800 text-[8px] font-black px-1.5 py-0.5 rounded-full border border-amber-200 shrink-0">
-                                        <i class="fas fa-eye mr-0.5"></i>ดูอย่างเดียว
+                            <!-- ข้อมูลชื่อและบทบาท (จัดระเบียบไม่ให้ดันกล่อง และซ่อนอัตโนมัติเมื่อย่อ Sidebar ด้วย sidebar-profile-info) -->
+                            <div class="min-w-0 flex-1 sidebar-profile-info leading-tight overflow-hidden">
+                                <p id="displayUserName" class="text-xs font-black text-slate-800 truncate" title="ชื่อผู้ใช้งาน">Guest</p>
+                                <div id="displayUserRoleContainer" class="mt-1 flex items-center gap-1 overflow-hidden">
+                                    <span id="displayUserRoleBadge" class="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-white border border-slate-200/90 text-blue-700 truncate max-w-full">
+                                        Staff
                                     </span>
                                 </div>
                             </div>
                         </div>
 
+                        <!-- 🚪 ปุ่มออกจากระบบ -->
                         <button onclick="handleLogout()"
-                            class="text-slate-300 hover:text-rose-500 transition-colors p-1" title="ออกจากระบบ">
-                            <i class="fas fa-sign-out-alt"></i>
+                            class="sidebar-logout-btn w-8 h-8 rounded-xl bg-white hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-200/80 hover:border-rose-200 transition-all flex items-center justify-center shrink-0 shadow-xs active:scale-95 group"
+                            title="ออกจากระบบ">
+                            <i class="fas fa-sign-out-alt text-xs group-hover:translate-x-0.5 transition-transform"></i>
                         </button>
                     </div>
                 </div>
@@ -232,8 +328,9 @@
                     <span class="font-bold text-sm">กล้อง CCTV</span>
                 </button>
 
-<button onclick="showPage('userManagement'); toggleMoreMenu();"
-                    class="admin-only hidden w-full flex items-center space-x-4 p-3 hover:bg-slate-100 rounded-2xl text-slate-700 transition-colors">
+                <button id="mobileAdminMenuBtn" onclick="showPage('userManagement'); toggleMoreMenu();"
+                    data-page="userManagement"
+                    class="superadmin-only hidden w-full flex items-center space-x-4 p-3 hover:bg-slate-100 rounded-2xl text-slate-700 transition-colors">
                     <div class="w-8 h-8 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center"><i
                             class="fas fa-users-cog"></i></div>
                     <span class="font-bold text-sm">จัดการผู้ใช้งานระบบ</span>
@@ -2817,6 +2914,20 @@
                                         <input type="text" id="manage_username"
                                             class="w-full p-3 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:border-blue-400 text-sm font-bold text-slate-700"
                                             required placeholder="ระบุชื่อผู้ใช้...">
+                                    </div>
+                                    <div>
+                                        <label class="text-[10px] font-bold text-slate-400 uppercase ml-1 flex items-center justify-between">
+                                            <span>รหัสผ่าน (Password)</span>
+                                            <span class="text-[9px] text-slate-400 font-normal">เว้นว่างไว้จะใช้ค่าเริ่มต้น: 1234</span>
+                                        </label>
+                                        <div class="relative">
+                                            <input type="password" id="manage_password"
+                                                class="w-full p-3 pr-10 bg-slate-50 border border-slate-100 rounded-xl outline-none focus:border-blue-400 text-sm font-bold text-slate-700"
+                                                placeholder="กำหนดรหัสผ่าน (เว้นว่างไว้จะใช้: 1234)">
+                                            <button type="button" onclick="const p=document.getElementById('manage_password'); const i=this.querySelector('i'); if(p.type==='password'){p.type='text'; i.className='fas fa-eye-slash text-slate-500';}else{p.type='password'; i.className='fas fa-eye text-slate-400';}" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1" title="แสดง/ซ่อนรหัสผ่าน">
+                                                <i class="fas fa-eye text-xs"></i>
+                                            </button>
+                                        </div>
                                     </div>
                                     <div>
                                         <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">สิทธิ์การเข้าถึง
