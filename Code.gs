@@ -2497,6 +2497,36 @@ function getDirectCctvSnapshotUrl(cam) {
 function getCctvCarouselFlexMessage() {
   const cameras = getCctvCamerasFromSupabase();
 
+  // ดึงข้อมูลระดับน้ำปัจจุบันแบบเรียลไทม์จาก API คลังน้ำแห่งชาติ (พร้อม High-Speed In-Memory Cache)
+  let ridData = null;
+  try {
+    const waterRes = getRIDWaterLevelFromAPI();
+    if (waterRes && waterRes.success && waterRes.data) {
+      ridData = waterRes.data;
+    }
+  } catch (e) {
+    console.warn("⚠️ getCctvCarouselFlexMessage: getRIDWaterLevelFromAPI failed: " + e.toString());
+  }
+
+  // 1. ระดับน้ำสถานี X.73 (คลองตันหยงมัส)
+  const levelX73 = (ridData && ridData.level) ? parseFloat(ridData.level) : 11.02;
+  const timeX73 = (ridData && ridData.time) ? ridData.time.replace(" (API เรียลไทม์)", "").trim() : "";
+  const warnX73 = 13.50;
+  const critX73 = (ridData && ridData.bankLevel) ? parseFloat(ridData.bankLevel) : 14.90;
+
+  // 2. ระดับน้ำสถานี X.73A (บ้านบองอ)
+  let levelX73A = 22.34;
+  let timeX73A = timeX73;
+  let critX73A = 26.80;
+  const warnX73A = 25.80;
+  if (ridData && ridData.dataX73A) {
+    levelX73A = parseFloat(ridData.dataX73A.level || levelX73A);
+    timeX73A = ridData.dataX73A.time ? ridData.dataX73A.time.replace(" (API เรียลไทม์)", "").trim() : timeX73;
+    critX73A = parseFloat(ridData.dataX73A.bankLevel || critX73A);
+  } else if (ridData && ridData.levelX73A) {
+    levelX73A = parseFloat(ridData.levelX73A);
+  }
+
   const bubbles = cameras.slice(0, 10).map(function(cam, idx) {
     const camId = cam.id || ("CAM-" + String(idx + 1).padStart(2, '0'));
     const camName = cam.name || ("กล้อง CCTV จุดที่ " + (idx + 1));
@@ -2514,19 +2544,51 @@ function getCctvCarouselFlexMessage() {
     // ลิงก์เข้าสู่โหมดประชาชนพร้อมพารามิเตอร์เปิดกล้องทันที
     const targetUrl = "https://tanyongmas.github.io/Flood-Dashboard/?mode=report&cctv_id=" + encodeURIComponent(camId);
 
-    // ข้อมูลระดับน้ำ
+    // วิเคราะห์และจับคู่ข้อมูลระดับน้ำปัจจุบันตามจุดติดตั้งกล้อง
+    const nameLower = (cam.name || '').toLowerCase();
+    const wpLower = (cam.water_point || cam.location || '').toLowerCase();
+
+    let curLevel = null;
+    let warnVal = warnX73;
+    let critVal = critX73;
+    let refStation = "สถานี X.73 คลองตันหยงมัส";
+    let updateTimeStr = timeX73;
+
+    if (nameLower.includes('บองอ') || wpLower.includes('บองอ') || wpLower.includes('x.73a') || wpLower.includes('x73a')) {
+      curLevel = levelX73A;
+      warnVal = warnX73A;
+      critVal = critX73A;
+      refStation = "สถานี X.73A บ้านบองอ";
+      updateTimeStr = timeX73A;
+    } else if (ridData) {
+      curLevel = levelX73;
+      warnVal = warnX73;
+      critVal = critX73;
+      refStation = "สถานี X.73 คลองตันหยงมัส";
+      updateTimeStr = timeX73;
+    } else if (cam.level !== undefined && cam.level !== null && cam.level !== '') {
+      curLevel = parseFloat(cam.level);
+      if (cam.warning_threshold) warnVal = parseFloat(cam.warning_threshold);
+      if (cam.critical_threshold) critVal = parseFloat(cam.critical_threshold);
+    }
+
+    // ประเมินสถานะและสีระดับน้ำปัจจุบัน
     let waterLevelText = "-";
     let waterLevelColor = "#475569";
-    if (cam.level !== undefined && cam.level !== null && cam.level !== '') {
-      const lVal = parseFloat(cam.level);
-      waterLevelText = lVal.toFixed(2) + " ม.รทก.";
-      if (cam.critical_threshold && lVal >= cam.critical_threshold) {
-        waterLevelColor = "#e11d48"; // วิกฤต
-      } else if (cam.warning_threshold && lVal >= cam.warning_threshold) {
-        waterLevelColor = "#d97706"; // เฝ้าระวัง
+    let statusWaterBadge = "";
+
+    if (curLevel !== null && !isNaN(curLevel)) {
+      if (curLevel >= critVal) {
+        statusWaterBadge = "วิกฤต/ล้นตลิ่ง 🔴";
+        waterLevelColor = "#e11d48";
+      } else if (curLevel >= warnVal) {
+        statusWaterBadge = "เฝ้าระวัง 🟡";
+        waterLevelColor = "#d97706";
       } else {
-        waterLevelColor = "#059669"; // ปกติ
+        statusWaterBadge = "ปกติ 🟢";
+        waterLevelColor = "#059669";
       }
+      waterLevelText = curLevel.toFixed(2) + " ม.รทก. (" + statusWaterBadge + ")";
     }
 
     return {
@@ -2602,7 +2664,7 @@ function getCctvCarouselFlexMessage() {
             "type": "box",
             "layout": "vertical",
             "backgroundColor": "#f8fafc",
-            "cornerRadius": "10px",
+            "cornerRadius": "12px",
             "paddingAll": "10px",
             "spacing": "xs",
             "margin": "sm",
@@ -2624,7 +2686,16 @@ function getCctvCarouselFlexMessage() {
                 "spacing": "xs",
                 "contents": [
                   { "type": "text", "text": "🌊", "size": "xxs", "flex": 1 },
-                  { "type": "text", "text": "ระดับน้ำ: " + waterLevelText, "size": "xs", "color": waterLevelColor, "weight": "bold", "flex": 10 }
+                  { "type": "text", "text": "ระดับน้ำสด: " + waterLevelText, "size": "xs", "color": waterLevelColor, "weight": "bold", "wrap": true, "flex": 10 }
+                ]
+              },
+              {
+                "type": "box",
+                "layout": "baseline",
+                "spacing": "xs",
+                "contents": [
+                  { "type": "text", "text": "⏱️", "size": "xxs", "flex": 1 },
+                  { "type": "text", "text": "อ้างอิง: " + refStation + (updateTimeStr ? (" • " + updateTimeStr) : ""), "size": "xxs", "color": "#94a3b8", "wrap": true, "flex": 10 }
                 ]
               }
             ]
@@ -2638,19 +2709,45 @@ function getCctvCarouselFlexMessage() {
         "spacing": "xs",
         "contents": [
           {
-            "type": "button",
-            "style": "primary",
-            "color": "#0284c7",
-            "height": "sm",
+            "type": "box",
+            "layout": "horizontal",
+            "backgroundColor": "#0284c7",
+            "cornerRadius": "24px",
+            "paddingTop": "10px",
+            "paddingBottom": "10px",
+            "paddingStart": "16px",
+            "paddingEnd": "16px",
+            "justifyContent": "center",
+            "alignItems": "center",
+            "spacing": "xs",
+            "borderWidth": "1px",
+            "borderColor": "#38bdf8",
             "action": {
               "type": "uri",
-              "label": "▶️ เปิดดูภาพสดขยายใหญ่",
+              "label": "เปิดดูภาพสดขนาดใหญ่",
               "uri": targetUrl
-            }
+            },
+            "contents": [
+              {
+                "type": "text",
+                "text": "▶️",
+                "size": "xs",
+                "flex": 0
+              },
+              {
+                "type": "text",
+                "text": "เปิดดูภาพสดขนาดใหญ่",
+                "color": "#ffffff",
+                "size": "sm",
+                "weight": "bold",
+                "align": "center",
+                "flex": 0
+              }
+            ]
           },
           {
             "type": "text",
-            "text": "แตะเพื่อดูภาพสดและเสาวัดระดับน้ำ",
+            "text": "แตะเพื่อดูภาพสดและระดับน้ำ 1080p",
             "size": "xxs",
             "color": "#94a3b8",
             "align": "center",

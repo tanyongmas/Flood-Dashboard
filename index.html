@@ -612,82 +612,81 @@
                                     <!-- โครงสร้างแท่งวัดแนวตั้ง 2 มิติ คมชัดสูง (Responsive 2D Column) -->
                                     <div class="relative flex items-center justify-center w-full py-1">
                                         
-                                        <!-- สเกลตัวเลขบอกระยะทางซ้ายของแท่ง -->
-                                        <div class="relative flex flex-col justify-between h-[230px] sm:h-[260px] text-[9px] sm:text-[10px] font-black text-right pr-2 sm:pr-2.5 select-none shrink-0 drop-shadow">
-                                            <!-- 16.00 สเกลสูงสุด -->
-                                            <div class="flex items-center justify-end gap-1 text-slate-300">
+                                        <!-- สเกลตัวเลขบอกระยะทางซ้ายของแท่ง (อิงสเกล 10.00 - 16.00 ม.) -->
+                                        <div class="relative h-[240px] sm:h-[260px] w-24 sm:w-28 text-[9px] sm:text-[10px] font-black pr-2 select-none shrink-0 drop-shadow">
+                                            <!-- 16.00 สเกลสูงสุด (100%) -->
+                                            <div class="absolute right-0 top-0 -translate-y-1/2 flex items-center gap-1 text-slate-300 whitespace-nowrap">
                                                 <span>16.00</span>
-                                                <span class="w-2.5 h-[2px] bg-slate-400"></span>
+                                                <span class="w-2 h-[1px] bg-slate-400"></span>
                                             </div>
-                                            <!-- 14.90 ระดับตลิ่ง / เกณฑ์วิกฤตล้นตลิ่ง -->
-                                            <div class="flex items-center justify-end gap-1 text-rose-400 font-black">
-                                                <span class="text-[7.5px] sm:text-[8px] bg-rose-600 text-white px-1 py-0.5 rounded font-black shadow-xs">ตลิ่ง</span>
+                                            <!-- 14.90 ระดับตลิ่ง / เกณฑ์วิกฤตล้นตลิ่ง (81.67%) -->
+                                            <div class="absolute right-0 bottom-[81.67%] translate-y-1/2 flex items-center gap-1 text-rose-400 font-black whitespace-nowrap">
+                                                <span class="text-[7px] sm:text-[8px] bg-rose-600 text-white px-1 sm:px-1.5 py-0.5 rounded font-black shadow-xs whitespace-nowrap">ตลิ่ง</span>
                                                 <span>14.90</span>
-                                                <span class="w-3.5 sm:w-4 h-[2px] bg-rose-500"></span>
+                                                <span class="w-2.5 h-[1.5px] bg-rose-500 shadow-sm"></span>
                                             </div>
-                                            <!-- 13.50 เกณฑ์เฝ้าระวัง -->
-                                            <div class="flex items-center justify-end gap-1 text-amber-300 font-black">
-                                                <span class="text-[7.5px] sm:text-[8px] bg-amber-500 text-slate-950 px-1 py-0.5 rounded font-black shadow-xs">เฝ้าระวัง</span>
+                                            <!-- 13.50 เกณฑ์เฝ้าระวัง (58.33%) -->
+                                            <div class="absolute right-0 bottom-[58.33%] translate-y-1/2 flex items-center gap-1 text-amber-300 font-black whitespace-nowrap">
+                                                <span class="text-[7px] sm:text-[8px] bg-amber-500 text-slate-950 px-1 sm:px-1.5 py-0.5 rounded font-black shadow-xs whitespace-nowrap">เฝ้าระวัง</span>
                                                 <span>13.50</span>
-                                                <span class="w-3 sm:w-3.5 h-[2px] bg-amber-400"></span>
+                                                <span class="w-2.5 h-[1.5px] bg-amber-400 shadow-sm"></span>
                                             </div>
-                                            <!-- 11.00 -->
-                                            <div class="flex items-center justify-end gap-1 text-sky-300">
-                                                <span>11.00</span>
-                                                <span class="w-2.5 h-[2px] bg-sky-400"></span>
+                                            <!-- 12.00 สเกลกึ่งกลาง (33.33%) -->
+                                            <div class="absolute right-0 bottom-[33.33%] translate-y-1/2 flex items-center gap-1 text-slate-400 font-bold whitespace-nowrap">
+                                                <span>12.00</span>
+                                                <span class="w-2 h-[1px] bg-slate-500"></span>
                                             </div>
-                                            <!-- 9.00 สเกลต่ำสุด -->
-                                            <div class="flex items-center justify-end gap-1 text-slate-400">
-                                                <span>9.00</span>
-                                                <span class="w-2.5 h-[2px] bg-slate-400"></span>
+                                            <!-- 10.00 สเกลต่ำสุด (0%) -->
+                                            <div class="absolute right-0 bottom-0 translate-y-1/2 flex items-center gap-1 text-slate-400 font-bold whitespace-nowrap">
+                                                <span>10.00</span>
+                                                <span class="w-2 h-[1px] bg-slate-500"></span>
                                             </div>
                                         </div>
 
                                         <!-- ตัวกระบอกเกจแท่ง 2 มิติ (2D Solid Column) -->
-                                        <!-- สเกล: 9.00 ถึง 16.00 ม. (ช่วง 7.00 ม.) -->
-                                        <!-- 14.90 ถึง 16.00 = 1.10 ม. = 15.7% (ล้นตลิ่ง) -->
-                                        <!-- 13.50 ถึง 14.90 = 1.40 ม. = 20.0% (เฝ้าระวัง) -->
-                                        <!-- 9.00 ถึง 13.50 = 4.50 ม. = 64.3% (ปกติ) -->
-                                        <div class="relative w-14 sm:w-16 md:w-20 h-[230px] sm:h-[260px] bg-slate-950 rounded-xl border-2 border-slate-500 overflow-hidden shadow-2xl flex flex-col justify-end">
+                                        <!-- สเกลจริง: 10.00 ถึง 16.00 ม. (ช่วง 6.00 ม.) -->
+                                        <!-- 🔴 โซนล้นตลิ่ง (> 14.90): 14.90 ถึง 16.00 = 1.10 ม. = 18.33% -->
+                                        <!-- 🟡 โซนเฝ้าระวัง (13.50 - 14.90): 1.40 ม. = 23.34% -->
+                                        <!-- 🟢 โซนปกติ (10.00 - 13.50): 3.50 ม. = 58.33% -->
+                                        <div class="relative w-14 sm:w-16 md:w-20 h-[240px] sm:h-[260px] bg-slate-950 rounded-xl border-2 border-slate-400 overflow-hidden shadow-2xl flex flex-col justify-end shrink-0">
                                             
-                                            <!-- โซนสี 2 มิติ คมชัด: -->
-                                            <!-- 🔴 โซนล้นตลิ่ง (> 14.90): สีแดงชัดเจน -->
-                                            <div class="absolute inset-x-0 top-0 h-[15.7%] bg-red-950/70 border-b-2 border-red-500 pointer-events-none z-0"></div>
-                                            <!-- 🟡 โซนเฝ้าระวัง (13.50 - 14.90): สีส้มอำพันชัดเจน -->
-                                            <div class="absolute inset-x-0 top-[15.7%] h-[20%] bg-amber-950/70 border-b-2 border-amber-400 pointer-events-none z-0"></div>
-                                            <!-- 🟢 โซนปกติ (< 13.50): สีเขียวชัดเจน -->
-                                            <div class="absolute inset-x-0 bottom-0 h-[64.3%] bg-emerald-950/70 pointer-events-none z-0"></div>
+                                            <!-- โซนสี 2 มิติ คมชัดตามสัดส่วนจริง แบ่งระดับชัดเจน: -->
+                                            <!-- 🔴 โซนล้นตลิ่ง (> 14.90 ม.) -->
+                                            <div class="absolute inset-x-0 top-0 h-[18.33%] bg-red-950/70 border-b-2 border-red-500 pointer-events-none z-0"></div>
+                                            
+                                            <!-- 🟡 โซนเฝ้าระวัง (13.50 - 14.90 ม.) -->
+                                            <div class="absolute inset-x-0 top-[18.33%] h-[23.34%] bg-amber-950/70 border-b-2 border-amber-400 pointer-events-none z-0"></div>
 
-                                            <!-- ขีดสเกลมาร์กเกอร์ 2 มิติ (Sharp Tick Marks) -->
-                                            <div class="absolute inset-y-0 left-1 w-2 flex flex-col justify-between py-2 pointer-events-none z-20 opacity-80">
-                                                <span class="w-full h-[1.5px] bg-white"></span>
-                                                <span class="w-2/3 h-[1px] bg-white/70"></span>
-                                                <span class="w-full h-[1.5px] bg-rose-400"></span>
-                                                <span class="w-2/3 h-[1px] bg-white/70"></span>
-                                                <span class="w-full h-[1.5px] bg-amber-400"></span>
-                                                <span class="w-2/3 h-[1px] bg-white/70"></span>
-                                                <span class="w-full h-[1.5px] bg-white"></span>
-                                                <span class="w-2/3 h-[1px] bg-white/70"></span>
-                                                <span class="w-full h-[1.5px] bg-white"></span>
-                                            </div>
+                                            <!-- 🟢 โซนปกติ (10.00 - 13.50 ม.) -->
+                                            <div class="absolute inset-x-0 bottom-0 h-[58.33%] bg-emerald-950/70 pointer-events-none z-0"></div>
 
                                             <!-- ของเหลวน้ำในแท่งแบบ 2 มิติ สีสดชัดเจน (2D Solid Vibrant Liquid Bar) -->
                                             <div id="x73_gauge_bar_fill"
                                                 class="w-full relative transition-all duration-700 ease-out z-10 border-t-2 border-white shadow-md"
-                                                style="height: 35%; background-color: #10b981;">
+                                                style="height: 17%; background-color: #10b981;">
                                             </div>
                                         </div>
 
                                         <!-- ป้ายชี้ระดับสถานะจริงทางขวาของแท่ง 2 มิติ คมชัด (2D Solid Status Badges) -->
-                                        <div class="relative h-[230px] sm:h-[260px] pl-2 sm:pl-2.5 flex flex-col justify-between select-none py-0.5">
-                                            <div class="text-[8px] sm:text-[9px] font-black text-white bg-red-600 px-1.5 sm:px-2 py-0.5 rounded shadow whitespace-nowrap">
-                                                ล้นตลิ่ง (&gt; 14.90)
+                                        <!-- วางตำแหน่งตรงกึ่งกลางของแต่ละโซนสีจริงอย่างสมดุล สะอาดตา ไม่ซ้อนทับ -->
+                                        <div class="relative h-[240px] sm:h-[260px] w-28 sm:w-36 select-none pl-2 sm:pl-2.5 shrink-0">
+                                            <!-- โซนล้นตลิ่ง (> 14.90): กึ่งกลางช่วง 18.33% บน = top: 9.16% -->
+                                            <div class="absolute left-2 sm:left-2.5 top-[9.16%] -translate-y-1/2">
+                                                <span class="text-[7.5px] sm:text-[8.5px] font-black text-white bg-red-600 px-2 py-1 rounded-md shadow whitespace-nowrap block">
+                                                    ล้นตลิ่ง (&gt; 14.90)
+                                                </span>
                                             </div>
-                                            <div class="text-[8px] sm:text-[9px] font-black text-slate-950 bg-amber-400 px-1.5 sm:px-2 py-0.5 rounded shadow whitespace-nowrap">
-                                                เฝ้าระวัง (13.50-14.90)
+                                            <!-- โซนเฝ้าระวัง (13.50 - 14.90): กึ่งกลางช่วง 18.33% ถึง 41.67% = top: 30% -->
+                                            <div class="absolute left-2 sm:left-2.5 top-[30%] -translate-y-1/2">
+                                                <span class="text-[7.5px] sm:text-[8.5px] font-black text-slate-950 bg-amber-400 px-2 py-1 rounded-md shadow whitespace-nowrap block">
+                                                    เฝ้าระวัง (13.50-14.90)
+                                                </span>
                                             </div>
-                                            <div class="text-[8px] sm:text-[9px] font-black text-white bg-emerald-600 px-1.5 sm:px-2 py-0.5 rounded shadow whitespace-nowrap">
-                                                ปกติ (&lt; 13.50)
+                                            <!-- โซนปกติ (< 13.50): กึ่งกลางช่วงปกติ 0% ถึง 58.33% = bottom: 29.16% -->
+                                            <div class="absolute left-2 sm:left-2.5 bottom-[29.16%] translate-y-1/2">
+                                                <span class="text-[7.5px] sm:text-[8.5px] font-black text-white bg-emerald-600 px-2 py-1 rounded-md shadow whitespace-nowrap block">
+                                                    ปกติ (&lt; 13.50)
+                                                </span>
                                             </div>
                                         </div>
 
