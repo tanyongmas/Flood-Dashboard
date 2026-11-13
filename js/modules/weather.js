@@ -6,7 +6,6 @@
 async function loadWeatherForecast(forceRefresh = false) {
     const listEl = document.getElementById('weather-forecast-list');
     const loadingEl = document.getElementById('weather-loading');
-    if (!listEl) return;
 
     let result = null;
 
@@ -53,9 +52,9 @@ async function loadWeatherForecast(forceRefresh = false) {
 
     if (result && result.success && result.forecast) {
         if (loadingEl) loadingEl.classList.add('hidden');
-        listEl.classList.remove('hidden');
-
-        listEl.innerHTML = result.forecast.map((f, index) => {
+        if (listEl) {
+            listEl.classList.remove('hidden');
+            listEl.innerHTML = result.forecast.map((f, index) => {
             const isToday = index === 0;
 
             // ========================================================
@@ -125,7 +124,8 @@ async function loadWeatherForecast(forceRefresh = false) {
                     </div>
                 </div>
             `;
-        }).join('');
+            }).join('');
+        }
 
         // 🌧️ ตรวจสอบสภาพอากาศเพื่อเปิด/ปิดเอฟเฟกต์ฝนตกลงผิวน้ำบนการ์ดระดับน้ำ X.73
         if (typeof window.checkAndApplyHeroRainEffect === 'function' && Array.isArray(result.forecast) && result.forecast[0]) {
