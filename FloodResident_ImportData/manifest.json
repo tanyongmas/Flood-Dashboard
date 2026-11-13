@@ -1,0 +1,54 @@
+{
+  "manifest_version": 3,
+  "name": "FloodResident AutoFill - ระบบช่วยกรอกข้อมูลผู้พักพิง ทต.ตันหยงมัส",
+  "version": "1.1.0",
+  "description": "เครื่องมือช่วยกรอกข้อมูลผู้เข้าพักพิงจากไฟล์ CSV ลงในระบบ shelter.disaster.go.th อัตโนมัติ",
+  "permissions": [
+    "sidePanel",
+    "storage",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://shelter.disaster.go.th/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "icons": {
+    "16": "assets/logo.png",
+    "32": "assets/logo.png",
+    "48": "assets/logo.png",
+    "128": "assets/logo.png"
+  },
+  "action": {
+    "default_title": "เปิด FloodResident AutoFill",
+    "default_icon": {
+      "16": "assets/logo.png",
+      "32": "assets/logo.png",
+      "48": "assets/logo.png",
+      "128": "assets/logo.png"
+    }
+  },
+  "commands": {
+    "trigger-autofill": {
+      "suggested_key": {
+        "default": "Alt+F"
+      },
+      "description": "กรอกข้อมูลผู้พักพิงรายปัจจุบันลงฟอร์ม (AutoFill)"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://shelter.disaster.go.th/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

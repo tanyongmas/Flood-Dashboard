@@ -1965,9 +1965,13 @@
                             class="bg-slate-800 hover:bg-black text-white text-xs font-bold px-4 py-2 rounded-xl transition-all flex items-center shadow-lg">
                             <i class="fas fa-print mr-2"></i> พิมพ์รายงาน / PDF
                         </button>
-                        <button onclick="exportShelterEvacueesToCsv()"
+                        <button onclick="exportShelterEvacueesToCsv('municipal')"
                             class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all flex items-center shadow-lg hover:shadow-emerald-600/30 active:scale-95">
                             <i class="fas fa-file-csv mr-2 text-sm"></i> ดาวน์โหลด CSV
+                        </button>
+                        <button onclick="exportShelterEvacueesToCsv('provincial')"
+                            class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all flex items-center shadow-lg hover:shadow-indigo-600/30 active:scale-95">
+                            <i class="fas fa-file-export mr-2 text-sm"></i> Export CSV มาตรฐานจังหวัด
                         </button>
                     </div>
 
@@ -2184,9 +2188,13 @@
                                 </button>
 
                                 <!-- 5. ปุ่มดาวน์โหลด CSV -->
-                                <button onclick="exportShelterEvacueesToCsv()"
-                                    class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-[11px] font-bold transition-all active:scale-95 flex items-center justify-center shadow-md hover:shadow-emerald-600/30">
-                                    <i class="fas fa-file-csv mr-2 text-sm"></i> ดาวน์โหลด CSV
+                                <button onclick="exportShelterEvacueesToCsv('municipal')"
+                                    class="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl text-[11px] font-bold transition-all active:scale-95 flex items-center justify-center shadow-md hover:shadow-emerald-600/30">
+                                    <i class="fas fa-file-csv mr-1.5 text-sm"></i> ดาวน์โหลด CSV
+                                </button>
+                                <button onclick="exportShelterEvacueesToCsv('provincial')"
+                                    class="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-xl text-[11px] font-bold transition-all active:scale-95 flex items-center justify-center shadow-md hover:shadow-indigo-600/30">
+                                    <i class="fas fa-file-export mr-1.5 text-sm"></i> CSV มาตรฐานจังหวัด
                                 </button>
                             </div>
                         </div>
@@ -2763,123 +2771,290 @@
                 </section>
 
                 <section id="regisPage" class="content-page hidden">
-                    <div class="bg-white p-6 md:p-10 rounded-3xl shadow-lg border border-blue-50 max-w-xl mx-auto">
-                        <div class="flex items-center gap-3 mb-6">
-                            <div
-                                class="w-10 h-10 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center">
-                                <i class="fas fa-user-plus"></i>
+                    <div class="bg-white p-5 md:p-8 rounded-3xl shadow-lg border border-blue-50 max-w-2xl mx-auto">
+                        <div class="flex items-center justify-between gap-3 mb-6 pb-4 border-b border-slate-100">
+                            <div class="flex items-center gap-3">
+                                <div class="w-11 h-11 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center shrink-0">
+                                    <i class="fas fa-user-plus text-lg"></i>
+                                </div>
+                                <div>
+                                    <h3 class="text-lg font-black text-blue-900 tracking-tight">ลงทะเบียนผู้ประสบภัยอพยพ</h3>
+                                    <p class="text-[11px] text-slate-400 font-bold">รองรับการส่งออกข้อมูลมาตรฐานศูนย์พักพิงระดับจังหวัด</p>
+                                </div>
                             </div>
-                            <h3 class="text-lg font-bold text-blue-900 tracking-tight">ลงทะเบียนผู้ประสบภัยอพยพ</h3>
                         </div>
 
-                        <form id="regisForm" onsubmit="saveEvacuee(event)" class="space-y-4">
-                            <div>
-                                <label class="text-xs font-bold text-slate-500 ml-1">เข้าพักที่ศูนย์พักพิง</label>
+                        <form id="regisForm" onsubmit="saveEvacuee(event)" class="space-y-5">
+                            <!-- ศูนย์พักพิง -->
+                            <div class="bg-blue-50/70 p-4 rounded-2xl border border-blue-100">
+                                <label class="text-xs font-black text-blue-900 ml-1 block mb-1.5">
+                                    <i class="fas fa-house-chimney-user mr-1 text-blue-600"></i> เข้าพักที่ศูนย์พักพิง <span class="text-rose-500">*</span>
+                                </label>
                                 <div class="relative">
                                     <select id="regis_shelter"
-                                        class="w-full p-3.5 border border-blue-100 bg-blue-50 rounded-2xl outline-none appearance-none focus:ring-2 focus:ring-blue-400 transition-all font-bold text-blue-900"
+                                        class="w-full p-3.5 border border-blue-200 bg-white rounded-xl outline-none appearance-none focus:ring-2 focus:ring-blue-400 transition-all font-bold text-blue-900 text-sm"
                                         required>
                                         <option value="" disabled selected>กรุณาเลือกศูนย์พักพิง</option>
-                                        <option value="ศูนย์เทศบาลตำบลตันหยงมัส/บาลูกา">ศูนย์เทศบาลตำบลตันหยงมัส
-                                        </option>
+                                        <option value="ศูนย์เทศบาลตำบลตันหยงมัส/บาลูกา">ศูนย์เทศบาลตำบลตันหยงมัส</option>
                                         <option value="ศูนย์มัสยิดตันหยงมัส">ศูนย์มัสยิดตันหยงมัส</option>
                                         <option value="ศูนย์โรงเรียนบ้านเขาพระ">ศูนย์โรงเรียนบ้านเขาพระ</option>
                                     </select>
-                                    <div
-                                        class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-blue-400">
+                                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-blue-500">
                                         <i class="fas fa-chevron-down text-xs"></i>
                                     </div>
                                 </div>
                             </div>
 
-                            <div>
-                                <label class="text-xs font-bold text-slate-500 ml-1">ชื่อ-นามสกุล</label>
-                                <input type="text" id="regis_name"
-                                    class="w-full p-3.5 border border-blue-100 bg-blue-50 rounded-2xl outline-none focus:ring-2 focus:ring-blue-400 transition-all"
-                                    placeholder="ระบุชื่อ และนามสกุล" required>
+                            <!-- 1. ข้อมูลระบุตัวบุคคล -->
+                            <div class="bg-slate-50/80 p-4 md:p-5 rounded-2xl border border-slate-200/80 space-y-4">
+                                <div class="flex items-center gap-2 border-b border-slate-200 pb-2">
+                                    <span class="w-6 h-6 rounded-lg bg-blue-600 text-white text-xs font-black flex items-center justify-center">1</span>
+                                    <h4 class="text-xs font-black text-slate-800 uppercase tracking-wide">ข้อมูลระบุตัวบุคคล</h4>
+                                </div>
+
+                                <!-- คำนำหน้า + ชื่อ + นามสกุล -->
+                                <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                                    <div class="sm:col-span-3">
+                                        <label class="text-[11px] font-bold text-slate-600 ml-1 block mb-1">คำนำหน้า <span class="text-rose-500">*</span></label>
+                                        <select id="regis_prefix" onchange="onRegisPrefixChange(this.value)"
+                                            class="w-full p-3 border border-slate-200 bg-white rounded-xl outline-none focus:ring-2 focus:ring-blue-400 text-sm font-bold text-slate-800"
+                                            required>
+                                            <option value="นาย">นาย</option>
+                                            <option value="นาง">นาง</option>
+                                            <option value="นางสาว">นางสาว</option>
+                                            <option value="เด็กชาย">เด็กชาย</option>
+                                            <option value="เด็กหญิง">เด็กหญิง</option>
+                                            <option value="อื่นๆ">อื่นๆ</option>
+                                        </select>
+                                    </div>
+                                    <div class="sm:col-span-4">
+                                        <label class="text-[11px] font-bold text-slate-600 ml-1 block mb-1">ชื่อ <span class="text-rose-500">*</span></label>
+                                        <input type="text" id="regis_first_name"
+                                            class="w-full p-3 border border-slate-200 bg-white rounded-xl outline-none focus:ring-2 focus:ring-blue-400 text-sm font-semibold"
+                                            placeholder="ระบุชื่อจริง" required>
+                                    </div>
+                                    <div class="sm:col-span-5">
+                                        <label class="text-[11px] font-bold text-slate-600 ml-1 block mb-1">นามสกุล <span class="text-rose-500">*</span></label>
+                                        <input type="text" id="regis_last_name"
+                                            class="w-full p-3 border border-slate-200 bg-white rounded-xl outline-none focus:ring-2 focus:ring-blue-400 text-sm font-semibold"
+                                            placeholder="ระบุนามสกุล" required>
+                                    </div>
+                                </div>
+
+                                <!-- วันเกิด + อายุ + ปุ่มประมาณวันเกิด + เพศ -->
+                                <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                                    <div class="sm:col-span-5">
+                                        <label class="text-[11px] font-bold text-slate-600 ml-1 block mb-1">วันเกิด (ค.ศ./พ.ศ.)</label>
+                                        <input type="date" id="regis_birthdate" onchange="calculateAgeFromBirthDate()"
+                                            class="w-full p-3 border border-slate-200 bg-white rounded-xl outline-none focus:ring-2 focus:ring-blue-400 text-sm font-semibold text-slate-700">
+                                    </div>
+                                    <div class="sm:col-span-4">
+                                        <div class="flex items-center justify-between mb-1">
+                                            <label class="text-[11px] font-bold text-slate-600 ml-1">อายุ (ปี) <span class="text-rose-500">*</span></label>
+                                            <button type="button" onclick="estimateBirthDateFromAge()"
+                                                class="text-[10px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded-lg border border-blue-200 transition-colors"
+                                                title="กรอกอายุแล้วกดเพื่อประมาณวันเกิดเป็น 01/01">
+                                                <i class="fas fa-wand-magic-sparkles mr-0.5"></i> ประมาณวันเกิดจากอายุ
+                                            </button>
+                                        </div>
+                                        <input type="number" id="regis_age" min="0" max="130"
+                                            class="w-full p-3 border border-slate-200 bg-white rounded-xl outline-none focus:ring-2 focus:ring-blue-400 text-sm font-bold"
+                                            placeholder="ตัวเลข" required>
+                                    </div>
+                                    <div class="sm:col-span-3">
+                                        <label class="text-[11px] font-bold text-slate-600 ml-1 block mb-1">เพศ <span class="text-rose-500">*</span></label>
+                                        <select id="regis_gender"
+                                            class="w-full p-3 border border-slate-200 bg-white rounded-xl outline-none focus:ring-2 focus:ring-blue-400 text-sm font-bold text-slate-800"
+                                            required>
+                                            <option value="ชาย">ชาย</option>
+                                            <option value="หญิง">หญิง</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <!-- ประเภทเอกสาร & เลขบัตรประจำตัว -->
+                                <div class="pt-1 space-y-2">
+                                    <label class="text-[11px] font-bold text-slate-600 ml-1 block">เอกสารยืนยันตัวตน / เลขบัตรประชาชน</label>
+                                    <div class="flex flex-wrap gap-2">
+                                        <label class="flex items-center gap-1.5 bg-white px-3 py-2 rounded-xl border border-slate-200 cursor-pointer hover:border-blue-400 text-xs font-bold text-slate-700">
+                                            <input type="radio" name="regis_id_type" value="thai_id" checked onchange="toggleRegisIdType(this.value)" class="text-blue-600 focus:ring-blue-500">
+                                            <span>มีเลขบัตร 13 หลัก</span>
+                                        </label>
+                                        <label class="flex items-center gap-1.5 bg-white px-3 py-2 rounded-xl border border-slate-200 cursor-pointer hover:border-blue-400 text-xs font-bold text-slate-700">
+                                            <input type="radio" name="regis_id_type" value="passport" onchange="toggleRegisIdType(this.value)" class="text-blue-600 focus:ring-blue-500">
+                                            <span>พาสปอร์ต</span>
+                                        </label>
+                                        <label class="flex items-center gap-1.5 bg-white px-3 py-2 rounded-xl border border-slate-200 cursor-pointer hover:border-blue-400 text-xs font-bold text-slate-700">
+                                            <input type="radio" name="regis_id_type" value="none" onchange="toggleRegisIdType(this.value)" class="text-blue-600 focus:ring-blue-500">
+                                            <span>ไม่มีเลขบัตร / จำไม่ได้</span>
+                                        </label>
+                                    </div>
+                                    <div id="regis_idcard_wrapper">
+                                        <input type="text" id="regis_idcard" inputmode="numeric"
+                                            class="w-full p-3 border border-slate-200 bg-white rounded-xl outline-none focus:ring-2 focus:ring-blue-400 text-sm font-mono font-bold tracking-wider"
+                                            placeholder="ระบุเลขบัตรประชาชน 13 หลัก (ไม่ต้องมีขีด)" maxlength="13">
+                                        <p id="regis_idcard_hint" class="text-[10px] text-slate-400 mt-1 ml-1">ตรวจสอบความยาวครบ 13 หลักอัตโนมัติ</p>
+                                    </div>
+                                </div>
                             </div>
 
-                            <div class="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label class="text-xs font-bold text-slate-500 ml-1">อายุ (ปี)</label>
-                                    <input type="number" id="regis_age"
-                                        class="w-full p-3.5 border border-blue-100 bg-blue-50 rounded-2xl outline-none focus:ring-2 focus:ring-blue-400"
-                                        placeholder="ตัวเลข" required>
+                            <!-- 2. ข้อมูลการติดต่อ -->
+                            <div class="bg-slate-50/80 p-4 md:p-5 rounded-2xl border border-slate-200/80 space-y-3">
+                                <div class="flex items-center justify-between border-b border-slate-200 pb-2">
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-6 h-6 rounded-lg bg-emerald-600 text-white text-xs font-black flex items-center justify-center">2</span>
+                                        <h4 class="text-xs font-black text-slate-800 uppercase tracking-wide">ข้อมูลการติดต่อ</h4>
+                                    </div>
+                                    <button type="button" onclick="useEmergencyPhoneForPersonal()"
+                                        class="text-[10px] font-bold text-emerald-700 hover:text-emerald-900 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-lg border border-emerald-200 transition-colors">
+                                        <i class="fas fa-phone-volume mr-1"></i> ไม่มีเบอร์ส่วนตัว (ใช้เบอร์ผู้ติดต่อฉุกเฉิน/เบอร์ศูนย์)
+                                    </button>
                                 </div>
+
+                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                    <div>
+                                        <label class="text-[11px] font-bold text-slate-600 ml-1 block mb-1">เบอร์โทรศัพท์ <span class="text-rose-500">*</span></label>
+                                        <input type="tel" id="regis_phone"
+                                            class="w-full p-3 border border-slate-200 bg-white rounded-xl outline-none focus:ring-2 focus:ring-emerald-400 text-sm font-semibold"
+                                            placeholder="08XXXXXXXX" required>
+                                    </div>
+                                    <div>
+                                        <label class="text-[11px] font-bold text-slate-600 ml-1 block mb-1">ชื่อผู้ติดต่อฉุกเฉิน <span class="text-rose-500">*</span></label>
+                                        <input type="text" id="regis_emergency_name"
+                                            class="w-full p-3 border border-slate-200 bg-white rounded-xl outline-none focus:ring-2 focus:ring-emerald-400 text-sm font-semibold"
+                                            placeholder="ชื่อญาติ / ผู้ติดต่อ" required>
+                                    </div>
+                                    <div>
+                                        <label class="text-[11px] font-bold text-slate-600 ml-1 block mb-1">เบอร์โทรผู้ติดต่อฉุกเฉิน <span class="text-rose-500">*</span></label>
+                                        <input type="tel" id="regis_emergency_phone"
+                                            class="w-full p-3 border border-slate-200 bg-white rounded-xl outline-none focus:ring-2 focus:ring-emerald-400 text-sm font-semibold"
+                                            placeholder="08XXXXXXXX" required>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 3. ข้อมูลที่อยู่ -->
+                            <div class="bg-slate-50/80 p-4 md:p-5 rounded-2xl border border-slate-200/80 space-y-3">
+                                <div class="flex items-center gap-2 border-b border-slate-200 pb-2">
+                                    <span class="w-6 h-6 rounded-lg bg-indigo-600 text-white text-xs font-black flex items-center justify-center">3</span>
+                                    <h4 class="text-xs font-black text-slate-800 uppercase tracking-wide">ข้อมูลที่อยู่ตามภูมิลำเนา</h4>
+                                </div>
+
                                 <div>
-                                    <label class="text-xs font-bold text-slate-500 ml-1">เพศ</label>
-                                    <select id="regis_gender"
-                                        class="w-full p-3.5 border border-blue-100 bg-blue-50 rounded-2xl outline-none focus:ring-2 focus:ring-blue-400"
-                                        required>
-                                        <option value="ชาย">ชาย</option>
-                                        <option value="หญิง">หญิง</option>
+                                    <label class="text-[11px] font-bold text-slate-500 ml-1 block mb-1">ตัวช่วยเลือกชุมชน/บ้านในระบบ (เลือกเพื่อเติมอัตโนมัติ)</label>
+                                    <select id="regis_address_select" onchange="onSelectQuickAddress(this.value)"
+                                        class="w-full p-3 border border-slate-200 bg-white rounded-xl outline-none focus:ring-2 focus:ring-indigo-400 text-sm font-semibold text-slate-700">
                                     </select>
                                 </div>
-                            </div>
 
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <div>
-                                    <label class="text-xs font-bold text-slate-500 ml-1">เลขบัตรประจำตัวประชาชน</label>
-                                    <input type="text" id="regis_idcard"
-                                        class="w-full p-3.5 border border-blue-100 bg-blue-50 rounded-2xl outline-none"
-                                        placeholder="13 หลัก" maxlength="13">
+                                    <label class="text-[11px] font-bold text-slate-600 ml-1 block mb-1">บ้านเลขที่ / หมู่ / ซอย / ถนน <span class="text-rose-500">*</span></label>
+                                    <input type="text" id="regis_address_detail"
+                                        class="w-full p-3 border border-slate-200 bg-white rounded-xl outline-none focus:ring-2 focus:ring-indigo-400 text-sm font-semibold"
+                                        placeholder="เช่น 1 ถนนระแงะมรรคา ตันหยงมัส หรือ 123/4 หมู่ 1" required>
+                                    <p class="text-[10px] text-slate-400 mt-1 ml-1">* หากเลือกจากชุมชนด้านบน ระบบจะคงรูปแบบที่อยู่เทศบาลไว้ปักหมุดพิกัดแผนที่ และตัดตำบลซ้ำออกให้อัตโนมัติตอน Export จังหวัด</p>
                                 </div>
+
+                                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                    <div>
+                                        <label class="text-[11px] font-bold text-slate-600 ml-1 block mb-1">จังหวัด <span class="text-rose-500">*</span></label>
+                                        <input type="text" id="regis_province" value="นราธิวาส"
+                                            class="w-full p-3 border border-slate-200 bg-white rounded-xl outline-none focus:ring-2 focus:ring-indigo-400 text-sm font-bold text-slate-800" required>
+                                    </div>
+                                    <div>
+                                        <label class="text-[11px] font-bold text-slate-600 ml-1 block mb-1">อำเภอ <span class="text-rose-500">*</span></label>
+                                        <input type="text" id="regis_district" value="ระแงะ"
+                                            class="w-full p-3 border border-slate-200 bg-white rounded-xl outline-none focus:ring-2 focus:ring-indigo-400 text-sm font-bold text-slate-800" required>
+                                    </div>
+                                    <div>
+                                        <label class="text-[11px] font-bold text-slate-600 ml-1 block mb-1">ตำบล <span class="text-rose-500">*</span></label>
+                                        <input type="text" id="regis_subdistrict" value="ตันหยงมัส"
+                                            class="w-full p-3 border border-slate-200 bg-white rounded-xl outline-none focus:ring-2 focus:ring-indigo-400 text-sm font-bold text-slate-800" required>
+                                    </div>
+                                    <div>
+                                        <label class="text-[11px] font-bold text-slate-600 ml-1 block mb-1">รหัสไปรษณีย์</label>
+                                        <input type="text" id="regis_zipcode" value="96130" maxlength="5"
+                                            class="w-full p-3 border border-slate-200 bg-white rounded-xl outline-none focus:ring-2 focus:ring-indigo-400 text-sm font-bold text-slate-800">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 4. ข้อมูลสุขภาพและกลุ่มเปราะบาง -->
+                            <div class="bg-amber-50/80 p-4 md:p-5 rounded-2xl border border-amber-200/80 space-y-4">
+                                <div class="flex items-center gap-2 border-b border-amber-200/80 pb-2">
+                                    <span class="w-6 h-6 rounded-lg bg-amber-500 text-white text-xs font-black flex items-center justify-center">4</span>
+                                    <h4 class="text-xs font-black text-amber-900 uppercase tracking-wide">ข้อมูลสุขภาพและกลุ่มเปราะบาง</h4>
+                                </div>
+
+                                <!-- กลุ่มเปราะบาง -->
                                 <div>
-                                    <label class="text-xs font-bold text-slate-500 ml-1">เบอร์โทรศัพท์</label>
-                                    <input type="tel" id="regis_phone"
-                                        class="w-full p-3.5 border border-blue-100 bg-blue-50 rounded-2xl outline-none"
-                                        placeholder="08XXXXXXXX">
-                                </div>
-                            </div>
-
-                            <div>
-                                <label class="text-xs font-bold text-slate-500 ml-1">ที่อยู่เดิม/ชุมชน</label>
-                                <select id="regis_address_select" onchange="toggleOtherAddress(this.value)"
-                                    class="w-full p-3.5 border border-blue-100 bg-blue-50 rounded-2xl outline-none focus:ring-2 focus:ring-blue-400 transition-all"
-                                    required>
-                                </select>
-                            </div>
-
-                            <div id="other_address_container" class="hidden animate-fade-in">
-                                <label class="text-xs font-bold text-blue-600 ml-1 italic">ระบุที่อยู่เพิ่มเติม
-                                    (บ้านเลขที่/ซอย/หมู่ที่)</label>
-                                <textarea id="regis_address_custom"
-                                    class="w-full p-3.5 border-2 border-blue-100 bg-white rounded-2xl outline-none focus:border-blue-400 h-20 shadow-inner"
-                                    placeholder="ระบุที่อยู่ที่ต้องการลงทะเบียน..."></textarea>
-                            </div>
-
-                            <div class="bg-amber-50 p-4 rounded-[2rem] border border-amber-100 space-y-3 shadow-sm">
-                                <label
-                                    class="text-xs font-bold text-amber-700 ml-1 italic uppercase">สถานะสุขภาพ/กลุ่มเปราะบาง</label>
-                                <div class="grid grid-cols-1 gap-2">
-                                    <select id="regis_health_type" onchange="toggleHealthNote(this.value)"
-                                        class="w-full p-3 border border-amber-200 bg-white rounded-xl text-sm outline-none focus:ring-2 focus:ring-amber-400">
-                                        <option value="ปกติ">สุขภาพปกติ</option>
-                                        <option value="ผู้ป่วย">ผู้ป่วย</option>
-                                        <option value="ผู้พิการ">ผู้พิการ</option>
-                                        <option value="กลุ่มเปราะบาง">กลุ่มเปราะบาง (คนชรา/เด็กทารก)</option>
-                                    </select>
+                                    <label class="text-[11px] font-black text-amber-800 ml-1 block mb-2">กลุ่มเปราะบาง (เลือกได้มากกว่า 1 ข้อ)</label>
+                                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                        <label class="flex items-center gap-2 bg-white p-2.5 rounded-xl border border-amber-200/80 cursor-pointer hover:bg-amber-50 text-xs font-bold text-slate-700">
+                                            <input type="checkbox" name="regis_vulnerable" value="ผู้พิการหรือผู้ทุพพลภาพ" class="rounded text-amber-600 focus:ring-amber-500">
+                                            <span>ผู้พิการหรือผู้ทุพพลภาพ</span>
+                                        </label>
+                                        <label class="flex items-center gap-2 bg-white p-2.5 rounded-xl border border-amber-200/80 cursor-pointer hover:bg-amber-50 text-xs font-bold text-slate-700">
+                                            <input type="checkbox" name="regis_vulnerable" value="ผู้ป่วยติดเตียง" class="rounded text-amber-600 focus:ring-amber-500">
+                                            <span>ผู้ป่วยติดเตียง</span>
+                                        </label>
+                                        <label class="flex items-center gap-2 bg-white p-2.5 rounded-xl border border-amber-200/80 cursor-pointer hover:bg-amber-50 text-xs font-bold text-slate-700">
+                                            <input type="checkbox" name="regis_vulnerable" value="หญิงตั้งครรภ์" class="rounded text-amber-600 focus:ring-amber-500">
+                                            <span>หญิงตั้งครรภ์</span>
+                                        </label>
+                                    </div>
                                 </div>
 
-                                <div id="health_note_container" class="hidden animate-fade-in">
-                                    <label
-                                        class="text-[10px] font-bold text-amber-600 ml-1">รายละเอียดอาการ/โรคประจำตัว</label>
+                                <!-- โรคประจำตัว -->
+                                <div>
+                                    <label class="text-[11px] font-black text-amber-800 ml-1 block mb-2">โรคประจำตัว (เลือกได้มากกว่า 1 ข้อ)</label>
+                                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                        <label class="flex items-center gap-2 bg-white p-2.5 rounded-xl border border-amber-200/80 cursor-pointer hover:bg-amber-50 text-xs font-bold text-slate-700">
+                                            <input type="checkbox" name="regis_chronic" value="โรคหัวใจและหลอดเลือด" class="rounded text-rose-600 focus:ring-rose-500">
+                                            <span>โรคหัวใจและหลอดเลือด</span>
+                                        </label>
+                                        <label class="flex items-center gap-2 bg-white p-2.5 rounded-xl border border-amber-200/80 cursor-pointer hover:bg-amber-50 text-xs font-bold text-slate-700">
+                                            <input type="checkbox" name="regis_chronic" value="โรคมะเร็ง" class="rounded text-rose-600 focus:ring-rose-500">
+                                            <span>โรคมะเร็ง</span>
+                                        </label>
+                                        <label class="flex items-center gap-2 bg-white p-2.5 rounded-xl border border-amber-200/80 cursor-pointer hover:bg-amber-50 text-xs font-bold text-slate-700">
+                                            <input type="checkbox" name="regis_chronic" value="โรคเบาหวาน" class="rounded text-rose-600 focus:ring-rose-500">
+                                            <span>โรคเบาหวาน</span>
+                                        </label>
+                                        <label class="flex items-center gap-2 bg-white p-2.5 rounded-xl border border-amber-200/80 cursor-pointer hover:bg-amber-50 text-xs font-bold text-slate-700">
+                                            <input type="checkbox" name="regis_chronic" value="โรคปอดอุดกั้นเรื้อรัง" class="rounded text-rose-600 focus:ring-rose-500">
+                                            <span>โรคปอดอุดกั้นเรื้อรัง</span>
+                                        </label>
+                                        <label class="flex items-center gap-2 bg-white p-2.5 rounded-xl border border-amber-200/80 cursor-pointer hover:bg-amber-50 text-xs font-bold text-slate-700">
+                                            <input type="checkbox" name="regis_chronic" value="โรคความดันโลหิตสูง" class="rounded text-rose-600 focus:ring-rose-500">
+                                            <span>โรคความดันโลหิตสูง</span>
+                                        </label>
+                                        <label class="flex items-center gap-2 bg-white p-2.5 rounded-xl border border-amber-200/80 cursor-pointer hover:bg-amber-50 text-xs font-bold text-slate-700">
+                                            <input type="checkbox" name="regis_chronic" value="อื่นๆ" class="rounded text-rose-600 focus:ring-rose-500">
+                                            <span>อื่นๆ</span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <!-- หมายเหตุเพิ่มเติม -->
+                                <div>
+                                    <label class="text-[11px] font-bold text-amber-700 ml-1 block mb-1">หมายเหตุเพิ่มเติม (อาการ / ยาประจำตัว / ความต้องการพิเศษ)</label>
                                     <textarea id="regis_health_note"
-                                        class="w-full p-3 border border-amber-200 bg-white rounded-xl h-20 text-sm outline-none shadow-inner"
-                                        placeholder="ระบุรายละเอียดเพิ่มเติม..."></textarea>
+                                        class="w-full p-3 border border-amber-200 bg-white rounded-xl h-20 text-sm outline-none shadow-inner focus:ring-2 focus:ring-amber-400"
+                                        placeholder="ระบุรายละเอียดเพิ่มเติม (ถ้ามี)..."></textarea>
                                 </div>
                             </div>
 
-                            <div class="pt-4">
+                            <div class="pt-2">
                                 <button type="submit" id="saveRegisBtn"
-                                    class="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-[1.5rem] font-black text-lg shadow-xl shadow-blue-200 transition-all active:scale-95 flex items-center justify-center gap-2">
+                                    class="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-2xl font-black text-base shadow-xl shadow-blue-200 transition-all active:scale-95 flex items-center justify-center gap-2">
                                     <i class="fas fa-check-circle"></i>
                                     ยืนยันการลงทะเบียน
                                 </button>
-                                <p class="text-center text-[10px] text-slate-400 mt-3 italic">*
-                                    ตรวจสอบความถูกต้องของข้อมูลก่อนกดยืนยัน</p>
+                                <p class="text-center text-[10px] text-slate-400 mt-3 italic">* ตรวจสอบความถูกต้องของข้อมูลก่อนกดยืนยัน</p>
                             </div>
                         </form>
+                    </div>
                 </section>
                 <section id="userManagementPage" class="content-page hidden animate-fade-in">
                     <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">

@@ -3956,34 +3956,253 @@ let dashLayerStates = {
 
             modal.classList.remove('hidden');
         }
+        // ==========================================
+        // 📋 ระบบช่วยกรอก & บันทึกข้อมูลลงทะเบียนผู้ประสบภัย (มาตรฐานจังหวัด)
+        // ==========================================
+        window.onRegisPrefixChange = function (prefix) {
+            const genderEl = document.getElementById('regis_gender');
+            if (!genderEl) return;
+            if (prefix === 'นาย' || prefix === 'เด็กชาย') {
+                genderEl.value = 'ชาย';
+            } else if (prefix === 'นาง' || prefix === 'นางสาว' || prefix === 'เด็กหญิง') {
+                genderEl.value = 'หญิง';
+            }
+        };
+
+        window.calculateAgeFromBirthDate = function () {
+            const birthInput = document.getElementById('regis_birthdate');
+            const ageInput = document.getElementById('regis_age');
+            if (!birthInput || !ageInput || !birthInput.value) return;
+
+            const birth = new Date(birthInput.value);
+            if (isNaN(birth.getTime())) return;
+
+            const today = new Date();
+            let age = today.getFullYear() - birth.getFullYear();
+            const m = today.getMonth() - birth.getMonth();
+            if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+                age--;
+            }
+            if (age >= 0 && age <= 130) {
+                ageInput.value = age;
+            }
+        };
+
+        window.estimateBirthDateFromAge = function () {
+            const ageInput = document.getElementById('regis_age');
+            const birthInput = document.getElementById('regis_birthdate');
+            if (!ageInput || !birthInput) return;
+
+            const age = parseInt(ageInput.value, 10);
+            if (isNaN(age) || age < 0 || age > 130) {
+                Swal.fire({
+                    icon: 'info',
+                    title: 'กรุณาระบุอายุก่อน',
+                    text: 'กรุณากรอกอายุ (0-130 ปี) ในช่องอายุ แล้วกดปุ่มประมาณวันเกิดอีกครั้ง',
+                    confirmButtonText: 'ตกลง'
+                });
+                ageInput.focus();
+                return;
+            }
+
+            const now = new Date();
+            const birthYearAD = now.getFullYear() - age;
+            const birthYearBE = birthYearAD + 543;
+            birthInput.value = `${birthYearAD}-01-01`;
+
+            Swal.fire({
+                toast: true,
+                position: 'top-end',
+                icon: 'success',
+                title: `ประมาณวันเกิดเป็น 01/01/${birthYearBE} (พ.ศ.)`,
+                showConfirmButton: false,
+                timer: 2200
+            });
+        };
+
+        window.toggleRegisIdType = function (type) {
+            const wrapper = document.getElementById('regis_idcard_wrapper');
+            const input = document.getElementById('regis_idcard');
+            const hint = document.getElementById('regis_idcard_hint');
+            if (!wrapper || !input) return;
+
+            if (type === 'none') {
+                wrapper.classList.add('hidden');
+                input.value = '';
+                input.required = false;
+            } else if (type === 'passport') {
+                wrapper.classList.remove('hidden');
+                input.maxLength = 20;
+                input.inputMode = 'text';
+                input.placeholder = 'ระบุหมายเลขพาสปอร์ต (Passport No.)';
+                if (hint) hint.innerText = 'รองรับตัวอักษรภาษาอังกฤษและตัวเลข';
+            } else {
+                wrapper.classList.remove('hidden');
+                input.maxLength = 13;
+                input.inputMode = 'numeric';
+                input.placeholder = 'ระบุเลขบัตรประชาชน 13 หลัก (ไม่ต้องมีขีด)';
+                if (hint) hint.innerText = 'ตรวจสอบความยาวครบ 13 หลักอัตโนมัติ';
+            }
+        };
+
+        window.useEmergencyPhoneForPersonal = function () {
+            const phoneEl = document.getElementById('regis_phone');
+            const emerPhoneEl = document.getElementById('regis_emergency_phone');
+            const emerNameEl = document.getElementById('regis_emergency_name');
+            if (!phoneEl) return;
+
+            const emerVal = emerPhoneEl ? emerPhoneEl.value.trim() : '';
+            if (emerVal) {
+                phoneEl.value = emerVal;
+            } else {
+                // เบอร์ติดต่อศูนย์อำนวยการเทศบาลตำบลตันหยงมัส (ค่าเริ่มต้นกรณีไม่มีเบอร์ส่วนตัว/ญาติ)
+                const defaultCenterPhone = '073671234';
+                phoneEl.value = defaultCenterPhone;
+                if (emerPhoneEl && !emerPhoneEl.value.trim()) {
+                    emerPhoneEl.value = defaultCenterPhone;
+                }
+                if (emerNameEl && !emerNameEl.value.trim()) {
+                    emerNameEl.value = 'ศูนย์พักพิงเทศบาลตำบลตันหยงมัส';
+                }
+            }
+
+            Swal.fire({
+                toast: true,
+                position: 'top-end',
+                icon: 'success',
+                title: 'เติมเบอร์โทรติดต่อเรียบร้อยแล้ว',
+                showConfirmButton: false,
+                timer: 1800
+            });
+        };
+
+        window.onSelectQuickAddress = function (val) {
+            const detailEl = document.getElementById('regis_address_detail');
+            if (!detailEl) return;
+            if (val === 'other') {
+                detailEl.value = '';
+                detailEl.focus();
+            } else if (val) {
+                detailEl.value = val;
+            }
+        };
+        window.toggleOtherAddress = window.onSelectQuickAddress;
+
+        function resetRegisFormDefaults() {
+            const form = document.getElementById('regisForm');
+            if (form) form.reset();
+            const prov = document.getElementById('regis_province');
+            const dist = document.getElementById('regis_district');
+            const sub = document.getElementById('regis_subdistrict');
+            const zip = document.getElementById('regis_zipcode');
+            if (prov) prov.value = 'นราธิวาส';
+            if (dist) dist.value = 'ระแงะ';
+            if (sub) sub.value = 'ตันหยงมัส';
+            if (zip) zip.value = '96130';
+            if (typeof window.toggleRegisIdType === 'function') window.toggleRegisIdType('thai_id');
+        }
+
         async function saveEvacuee(e) {
             if (e && e.preventDefault) e.preventDefault();
             if (typeof checkAdminReadOnlyAction === 'function' && checkAdminReadOnlyAction()) return;
             const btn = document.getElementById('saveRegisBtn');
 
-            // จัดการเรื่องเบอร์โทรศัพท์ (ใส่ ' นำหน้าเพื่อให้ Google Sheets มองเป็นข้อความและคงเลข 0 ไว้)
-            let phoneVal = document.getElementById('regis_phone').value.trim();
+            // 1. ข้อมูลระบุตัวบุคคล
+            const prefix = (document.getElementById('regis_prefix')?.value || '').trim();
+            const firstName = (document.getElementById('regis_first_name')?.value || '').trim();
+            const lastName = (document.getElementById('regis_last_name')?.value || '').trim();
+            const fullName = [prefix === 'อื่นๆ' ? '' : prefix, firstName, lastName].filter(Boolean).join(' ').trim();
+
+            const birthDate = (document.getElementById('regis_birthdate')?.value || '').trim();
+            const age = (document.getElementById('regis_age')?.value || '').trim();
+            const gender = (document.getElementById('regis_gender')?.value || 'ชาย').trim();
+
+            const idTypeEl = document.querySelector('input[name="regis_id_type"]:checked');
+            const idType = idTypeEl ? idTypeEl.value : 'thai_id';
+            let idCard = (document.getElementById('regis_idcard')?.value || '').replace(/\s|-/g, '').trim();
+
+            if (idType === 'thai_id') {
+                if (!/^\d{13}$/.test(idCard)) {
+                    Swal.fire('ข้อมูลไม่ถูกต้อง', 'กรุณาระบุเลขบัตรประชาชนให้ครบ 13 หลัก (ตัวเลขเท่านั้น) หรือเลือก "ไม่มีเลขบัตร / จำไม่ได้"', 'warning');
+                    document.getElementById('regis_idcard')?.focus();
+                    return;
+                }
+            } else if (idType === 'passport') {
+                if (idCard.length < 5) {
+                    Swal.fire('ข้อมูลไม่ถูกต้อง', 'กรุณาระบุหมายเลขพาสปอร์ตให้ถูกต้อง', 'warning');
+                    document.getElementById('regis_idcard')?.focus();
+                    return;
+                }
+            } else {
+                idCard = '';
+            }
+
+            // 2. ข้อมูลการติดต่อ (ใส่ ' นำหน้าเมื่อจำเป็นหรือเก็บแบบสะอาด)
+            let phoneVal = (document.getElementById('regis_phone')?.value || '').trim();
             if (phoneVal && !phoneVal.startsWith("'")) {
                 phoneVal = "'" + phoneVal;
             }
+            const emergencyContactName = (document.getElementById('regis_emergency_name')?.value || '').trim();
+            const emergencyContactPhone = (document.getElementById('regis_emergency_phone')?.value || '').trim();
 
-            const healthType = document.getElementById('regis_health_type').value;
-            const healthNote = document.getElementById('regis_health_note').value.trim();
+            // 3. ข้อมูลที่อยู่
+            const addressDetail = (document.getElementById('regis_address_detail')?.value || '').trim();
+            const province = (document.getElementById('regis_province')?.value || 'นราธิวาส').trim();
+            const district = (document.getElementById('regis_district')?.value || 'ระแงะ').trim();
+            const subdistrict = (document.getElementById('regis_subdistrict')?.value || 'ตันหยงมัส').trim();
+            const zipcode = (document.getElementById('regis_zipcode')?.value || '96130').trim();
+            const fullAddress = `${addressDetail} ต.${subdistrict} อ.${district} จ.${province} ${zipcode}`.trim();
+
+            // 4. ข้อมูลสุขภาพและกลุ่มเปราะบาง
+            const vulnerableChecked = Array.from(document.querySelectorAll('input[name="regis_vulnerable"]:checked')).map(el => el.value);
+            const chronicChecked = Array.from(document.querySelectorAll('input[name="regis_chronic"]:checked')).map(el => el.value);
+            const extraNote = (document.getElementById('regis_health_note')?.value || '').trim();
+
+            // สรุปค่าสำหรับฟิลด์เดิมเพื่อให้สถิติ Dashboard / กราฟ / แผนที่ทำงานได้ 100%
+            let healthType = 'ปกติ';
+            if (vulnerableChecked.includes('ผู้พิการหรือผู้ทุพพลภาพ')) {
+                healthType = 'ผู้พิการ';
+            } else if (vulnerableChecked.length > 0) {
+                healthType = 'กลุ่มเปราะบาง';
+            } else if (chronicChecked.length > 0) {
+                healthType = 'ผู้ป่วย';
+            }
+
+            const noteParts = [];
+            if (vulnerableChecked.length > 0) noteParts.push(`กลุ่มเปราะบาง: ${vulnerableChecked.join(', ')}`);
+            if (chronicChecked.length > 0) noteParts.push(`โรคประจำตัว: ${chronicChecked.join(', ')}`);
+            if (extraNote) noteParts.push(extraNote);
+            const healthNote = noteParts.join(' | ');
 
             try {
                 btn.disabled = true;
                 const payload = {
                     action: 'saveEvacuee',
                     shelter: document.getElementById('regis_shelter').value,
-                    address: (document.getElementById('regis_address_select').value === 'other') ? document.getElementById('regis_address_custom').value : document.getElementById('regis_address_select').value,
-                    idCard: document.getElementById('regis_idcard').value.trim(),
-                    name: document.getElementById('regis_name').value.trim(),
-                    age: document.getElementById('regis_age').value,
-                    gender: document.getElementById('regis_gender').value,
+                    address: addressDetail || fullAddress,
+                    idCard: idCard,
+                    name: fullName,
+                    age: age,
+                    gender: gender,
                     phone: phoneVal,
-                    healthType: healthType, // ส่งค่าประเภทสุขภาพ (ผู้ป่วย/พิการ/ปกติ)
+                    healthType: healthType,
                     healthNote: healthNote,
-                    period: currentPeriod
+                    period: currentPeriod,
+                    // ฟิลด์มาตรฐานจังหวัด
+                    prefix: prefix,
+                    firstName: firstName,
+                    lastName: lastName,
+                    birthDate: birthDate,
+                    idType: idType,
+                    emergencyContactName: emergencyContactName,
+                    emergencyContactPhone: emergencyContactPhone,
+                    addressDetail: addressDetail,
+                    subdistrict: subdistrict,
+                    district: district,
+                    province: province,
+                    zipcode: zipcode,
+                    vulnerableGroups: vulnerableChecked.join(', '),
+                    chronicDiseases: chronicChecked.join(', ')
                 };
 
                 if (typeof sbSaveEvacuee === 'function') {
@@ -3992,7 +4211,7 @@ let dashLayerStates = {
                     throw new Error('Supabase Service ไม่พร้อมทำงาน');
                 }
                 Swal.fire('สำเร็จ', 'ลงทะเบียนเรียบร้อย', 'success').then(() => {
-                    document.getElementById('regisForm').reset();
+                    resetRegisFormDefaults();
                     loadData();
                     showPage('shelter');
                 });
@@ -4318,7 +4537,7 @@ let dashLayerStates = {
         // ==========================================
         // ฟังก์ชันดาวน์โหลดตารางข้อมูลศูนย์พักพิงแบบ CSV (UTF-8 BOM สำหรับ Excel ภาษาไทย)
         // ==========================================
-        window.exportShelterEvacueesToCsv = async function () {
+        window.exportShelterEvacueesToCsv = async function (defaultFormat = 'municipal') {
             // ดึงข้อมูลผู้ประสบภัยจากทุกแหล่งที่เป็นไปได้
             const getDataSource = () => {
                 if (typeof store !== 'undefined' && store && Array.isArray(store.evacuees) && store.evacuees.length > 0) {
@@ -4374,18 +4593,42 @@ let dashLayerStates = {
             const activeInFiltered = filteredData.filter(r => (r[10] || '').toString().trim() !== 'กลับบ้านแล้ว');
             const returnedInFiltered = filteredData.filter(r => (r[10] || '').toString().trim() === 'กลับบ้านแล้ว');
 
-            // แสดง Modal ให้เลือกขอบเขตข้อมูลที่ต้องการส่งออก
-            const { value: exportScope } = await Swal.fire({
+            const isProvDefault = defaultFormat === 'provincial';
+
+            // แสดง Modal ให้เลือกรูปแบบไฟล์ + ขอบเขตข้อมูลที่ต้องการส่งออก
+            const { value: exportConfig } = await Swal.fire({
                 title: '<div class="text-base font-bold text-slate-800 flex items-center justify-center gap-2"><i class="fas fa-file-csv text-emerald-600 text-xl"></i> ดาวน์โหลดข้อมูลศูนย์พักพิง (CSV)</div>',
                 html: `
-                    <div class="text-left text-xs text-slate-600 space-y-2 pt-2">
+                    <div class="text-left text-xs text-slate-600 space-y-2.5 pt-2">
                         <p class="font-bold text-slate-700 pb-1.5 border-b border-slate-100 flex items-center justify-between">
                             <span>ศูนย์ที่เลือก:</span>
                             <span class="text-blue-600 font-black text-right">${currentShelterName}</span>
                         </p>
-                        <p class="text-[11px] text-slate-500 mb-1.5 font-medium">กรุณาเลือกข้อมูลที่ต้องการนำออกเป็นไฟล์ CSV:</p>
+
+                        <!-- เลือกรูปแบบไฟล์ CSV -->
+                        <div class="bg-indigo-50/70 p-2.5 rounded-xl border border-indigo-100 space-y-1.5">
+                            <p class="text-[11px] font-black text-indigo-900">รูปแบบโครงสร้างไฟล์ CSV:</p>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                                <label class="flex items-start gap-2 p-2 bg-white rounded-lg border border-indigo-200 cursor-pointer hover:border-indigo-400">
+                                    <input type="radio" name="csv_export_format" value="provincial" ${isProvDefault ? 'checked' : ''} class="mt-0.5 text-indigo-600 focus:ring-indigo-500">
+                                    <div>
+                                        <span class="font-black text-indigo-900 block">มาตรฐานจังหวัด</span>
+                                        <span class="text-[10px] text-slate-500">DD/MM/YYYY + แยกคอลัมน์ครบ</span>
+                                    </div>
+                                </label>
+                                <label class="flex items-start gap-2 p-2 bg-white rounded-lg border border-slate-200 cursor-pointer hover:border-emerald-400">
+                                    <input type="radio" name="csv_export_format" value="municipal" ${!isProvDefault ? 'checked' : ''} class="mt-0.5 text-emerald-600 focus:ring-emerald-500">
+                                    <div>
+                                        <span class="font-black text-slate-800 block">มาตรฐานเทศบาล</span>
+                                        <span class="text-[10px] text-slate-500">รูปแบบรายงาน 13 คอลัมน์เดิม</span>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <p class="text-[11px] text-slate-500 pt-1 font-medium">กรุณาเลือกข้อมูลที่ต้องการนำออก:</p>
                         
-                        <label class="flex items-center gap-2.5 p-2.5 bg-slate-50 hover:bg-emerald-50/50 rounded-xl border border-slate-200 cursor-pointer transition">
+                        <label class="flex items-center gap-2.5 p-2 bg-slate-50 hover:bg-emerald-50/50 rounded-xl border border-slate-200 cursor-pointer transition">
                             <input type="radio" name="csv_export_scope" value="filtered" checked class="text-emerald-600 focus:ring-emerald-500">
                             <div>
                                 <span class="font-bold text-slate-800">1. ข้อมูลตามตัวกรองตารางปัจจุบัน</span>
@@ -4393,7 +4636,7 @@ let dashLayerStates = {
                             </div>
                         </label>
 
-                        <label class="flex items-center gap-2.5 p-2.5 bg-slate-50 hover:bg-emerald-50/50 rounded-xl border border-slate-200 cursor-pointer transition">
+                        <label class="flex items-center gap-2.5 p-2 bg-slate-50 hover:bg-emerald-50/50 rounded-xl border border-slate-200 cursor-pointer transition">
                             <input type="radio" name="csv_export_scope" value="active" class="text-emerald-600 focus:ring-emerald-500">
                             <div>
                                 <span class="font-bold text-slate-800">2. เฉพาะผู้ที่ยังพักพิงอยู่</span>
@@ -4401,7 +4644,7 @@ let dashLayerStates = {
                             </div>
                         </label>
 
-                        <label class="flex items-center gap-2.5 p-2.5 bg-slate-50 hover:bg-emerald-50/50 rounded-xl border border-slate-200 cursor-pointer transition">
+                        <label class="flex items-center gap-2.5 p-2 bg-slate-50 hover:bg-emerald-50/50 rounded-xl border border-slate-200 cursor-pointer transition">
                             <input type="radio" name="csv_export_scope" value="returned" class="text-emerald-600 focus:ring-emerald-500">
                             <div>
                                 <span class="font-bold text-slate-800">3. เฉพาะผู้ที่เดินทางกลับบ้านแล้ว</span>
@@ -4409,7 +4652,7 @@ let dashLayerStates = {
                             </div>
                         </label>
 
-                        <label class="flex items-center gap-2.5 p-2.5 bg-slate-50 hover:bg-emerald-50/50 rounded-xl border border-slate-200 cursor-pointer transition">
+                        <label class="flex items-center gap-2.5 p-2 bg-slate-50 hover:bg-emerald-50/50 rounded-xl border border-slate-200 cursor-pointer transition">
                             <input type="radio" name="csv_export_scope" value="all_center" class="text-emerald-600 focus:ring-emerald-500">
                             <div>
                                 <span class="font-bold text-slate-800">4. ข้อมูลทั้งหมดของศูนย์นี้</span>
@@ -4417,7 +4660,7 @@ let dashLayerStates = {
                             </div>
                         </label>
 
-                        <label class="flex items-center gap-2.5 p-2.5 bg-slate-50 hover:bg-emerald-50/50 rounded-xl border border-slate-200 cursor-pointer transition">
+                        <label class="flex items-center gap-2.5 p-2 bg-slate-50 hover:bg-emerald-50/50 rounded-xl border border-slate-200 cursor-pointer transition">
                             <input type="radio" name="csv_export_scope" value="system_all" class="text-emerald-600 focus:ring-emerald-500">
                             <div>
                                 <span class="font-bold text-slate-800">5. ข้อมูลทั้งหมดทุกศูนย์ในระบบ</span>
@@ -4429,15 +4672,21 @@ let dashLayerStates = {
                 showCancelButton: true,
                 confirmButtonText: '<i class="fas fa-download mr-1.5"></i> เริ่มดาวน์โหลด',
                 cancelButtonText: 'ยกเลิก',
-                confirmButtonColor: '#059669',
+                confirmButtonColor: isProvDefault ? '#4f46e5' : '#059669',
                 cancelButtonColor: '#94a3b8',
                 preConfirm: () => {
-                    const selected = document.querySelector('input[name="csv_export_scope"]:checked');
-                    return selected ? selected.value : 'filtered';
+                    const selectedScope = document.querySelector('input[name="csv_export_scope"]:checked');
+                    const selectedFormat = document.querySelector('input[name="csv_export_format"]:checked');
+                    return {
+                        scope: selectedScope ? selectedScope.value : 'filtered',
+                        format: selectedFormat ? selectedFormat.value : defaultFormat
+                    };
                 }
             });
 
-            if (!exportScope) return;
+            if (!exportConfig) return;
+            const exportScope = exportConfig.scope;
+            const exportFormat = exportConfig.format;
 
             let targetData = [];
             let scopeName = '';
@@ -4464,23 +4713,6 @@ let dashLayerStates = {
                 return;
             }
 
-            // แปลงข้อมูลเป็น CSV Format
-            const headers = [
-                'ลำดับ',
-                'วันที่ลงทะเบียน',
-                'ศูนย์พักพิง',
-                'ชื่อ-นามสกุล',
-                'เลขประจำตัวประชาชน',
-                'เพศ',
-                'อายุ',
-                'เบอร์โทรศัพท์',
-                'สถานะสุขภาพ',
-                'รายละเอียดสุขภาพ',
-                'สถานะการพักพิง',
-                'วันที่เดินทางกลับบ้าน',
-                'ที่อยู่/ชุมชน'
-            ];
-
             const escapeCsv = (val) => {
                 if (val === null || val === undefined) return '""';
                 let str = String(val).trim();
@@ -4495,33 +4727,256 @@ let dashLayerStates = {
             const formatExcelText = (val) => {
                 if (!val) return '""';
                 let str = String(val).trim().replace(/'/g, '');
+                if (!str) return '""';
                 return `="${str}"`;
             };
 
-            const rows = targetData.map((r, idx) => {
-                const idCard = r[3] ? formatExcelText(r[3]) : '""';
-                const phone = r[7] ? formatExcelText(r[7]) : '""';
-                const status = (r[10] || '').toString().trim() || 'พักพิงอยู่';
-                const returnDate = r[11] || '-';
-                const healthStatus = r[8] || 'ปกติ';
-                const healthNote = r[9] || '-';
+            const formatDateDDMMYYYY_BE = (val) => {
+                if (!val) return '';
+                const s = String(val).trim();
+                const toBE = (y) => (y > 2400 ? y : y + 543);
+                // รองรับ YYYY-MM-DD หรือ ISO Timestamp
+                const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+                if (isoMatch) {
+                    const yyyyBE = toBE(parseInt(isoMatch[1], 10));
+                    return `${isoMatch[3]}/${isoMatch[2]}/${yyyyBE}`;
+                }
+                // รองรับ DD/MM/YYYY ที่มีอยู่แล้ว
+                const dmyMatch = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})/);
+                if (dmyMatch) {
+                    const dd = dmyMatch[1].padStart(2, '0');
+                    const mm = dmyMatch[2].padStart(2, '0');
+                    const yyyyBE = toBE(parseInt(dmyMatch[3], 10));
+                    return `${dd}/${mm}/${yyyyBE}`;
+                }
+                const d = new Date(s);
+                if (!isNaN(d.getTime())) {
+                    const dd = String(d.getDate()).padStart(2, '0');
+                    const mm = String(d.getMonth() + 1).padStart(2, '0');
+                    const yyyyBE = toBE(d.getFullYear());
+                    return `${dd}/${mm}/${yyyyBE}`;
+                }
+                return s;
+            };
 
-                return [
-                    idx + 1,
-                    escapeCsv(r[0] || '-'),
-                    escapeCsv(r[1] || '-'),
-                    escapeCsv(r[4] || '-'),
-                    idCard,
-                    escapeCsv(r[6] || '-'),
-                    (r[5] !== undefined && r[5] !== '') ? r[5] : '-',
-                    phone,
-                    escapeCsv(healthStatus),
-                    escapeCsv(healthNote),
-                    escapeCsv(status),
-                    escapeCsv(returnDate),
-                    escapeCsv(r[2] || '-')
-                ].join(',');
-            });
+            const splitLegacyName = (fullName) => {
+                const str = String(fullName || '').trim();
+                if (!str) return { prefix: '', firstName: '', lastName: '' };
+                const prefixes = ['นางสาว', 'เด็กหญิง', 'เด็กชาย', 'นาย', 'นาง'];
+                let prefix = '';
+                let rest = str;
+                for (const p of prefixes) {
+                    if (rest.startsWith(p)) {
+                        prefix = p;
+                        rest = rest.slice(p.length).trim();
+                        break;
+                    }
+                }
+                const parts = rest.split(/\s+/).filter(Boolean);
+                const firstName = parts[0] || '';
+                const lastName = parts.slice(1).join(' ') || '';
+                return { prefix, firstName, lastName };
+            };
+
+            let headers = [];
+            let rows = [];
+            let filePrefix = 'รายชื่อผู้ประสบภัย';
+
+            if (exportFormat === 'provincial') {
+                // โครงสร้างคอลัมน์ตรงตาม template_residents.csv ของ FloodResident AutoFill Extension 100%
+                filePrefix = 'FloodResident_Import';
+                headers = [
+                    'ศูนย์พักพิงที่เข้าพัก',
+                    'วันที่เข้าพัก',
+                    'วันที่ออกจากศูนย์พักพิง',
+                    'เหตุผลการเข้าพัก',
+                    'ประเภทเลขประจำตัว',
+                    'เลขบัตรประชาชน',
+                    'คำนำหน้า',
+                    'ชื่อ',
+                    'นามสกุล',
+                    'สัญชาติ',
+                    'เพศ',
+                    'วันเกิด',
+                    'ผู้พิการ',
+                    'ผู้ป่วยติดเตียง',
+                    'หญิงตั้งครรภ์',
+                    'โรคหัวใจและหลอดเลือด',
+                    'โรคมะเร็ง',
+                    'โรคเบาหวาน',
+                    'โรคปอดอุดกั้นเรื้อรัง',
+                    'โรคความดันโลหิตสูง',
+                    'โรคอื่นๆ',
+                    'หมายเหตุเพิ่มเติม',
+                    'เบอร์โทรศัพท์',
+                    'เบอร์โทรศัพท์ผู้ติดต่อฉุกเฉิน',
+                    'ผู้ติดต่อฉุกเฉิน',
+                    'ทะเบียนรถ',
+                    'ที่อยู่',
+                    'จังหวัด',
+                    'อำเภอ',
+                    'ตำบล',
+                    'รหัสไปรษณีย์'
+                ];
+
+                rows = targetData.map((r) => {
+                    const meta = r[13] || {};
+                    const parsedName = splitLegacyName(r[4]);
+                    const prefix = (meta.prefix && meta.prefix !== 'อื่นๆ') ? meta.prefix : (parsedName.prefix || '');
+                    const firstName = meta.firstName || parsedName.firstName || '';
+                    const lastName = meta.lastName || parsedName.lastName || '';
+
+                    // แปลงชื่อศูนย์พักพิงให้ตรงกับระบบจังหวัดเฉพาะตอน Export CSV (ไม่กระทบค่าในระบบเดิมของเทศบาล)
+                    const PROVINCIAL_SHELTER_MAP = {
+                        'ศูนย์เทศบาลตำบลตันหยงมัส/บาลูกา': 'อาคารศูนย์ศิลปาชีพฯ เทศบาลตำบลตันหยงมัส',
+                        'ศูนย์เทศบาลตำบลตันหยงมัส': 'อาคารศูนย์ศิลปาชีพฯ เทศบาลตำบลตันหยงมัส',
+                        'ศูนย์มัสยิดตันหยงมัส': 'ศูนย์มัสยิดตันหยงมัส',
+                        'ศูนย์โรงเรียนบ้านเขาพระ': 'โรงเรียนบ้านเขาพระ'
+                    };
+                    const rawShelter = String(r[1] || '').trim();
+                    const shelterName = PROVINCIAL_SHELTER_MAP[rawShelter] || rawShelter;
+
+                    const checkInDate = formatDateDDMMYYYY_BE(r[0]);
+                    const isReturned = (r[10] || '').toString().trim() === 'กลับบ้านแล้ว';
+                    const checkOutDate = (isReturned && r[11]) ? formatDateDDMMYYYY_BE(r[11]) : '';
+                    const reason = 'เข้าพักชั่วคราวเนื่องจากน้ำท่วม';
+
+                    const rawId = String(r[3] || '').replace(/['\-\s]/g, '').trim();
+                    let idTypeCode = 'NONE';
+                    if (meta.idType === 'passport') {
+                        idTypeCode = 'PASSPORT';
+                    } else if (meta.idType === 'thai_id' || rawId.length === 13) {
+                        idTypeCode = rawId ? 'ID_CARD' : 'NONE';
+                    } else if (meta.idType === 'none') {
+                        idTypeCode = 'NONE';
+                    } else if (rawId) {
+                        idTypeCode = 'ID_CARD';
+                    }
+
+                    const birthDateStr = formatDateDDMMYYYY_BE(meta.birthDate);
+                    const vulnStr = String(meta.vulnerableGroups || '');
+                    const chronicStr = String(meta.chronicDiseases || '');
+                    const legacyHealthType = String(r[8] || '');
+                    const legacyHealthNote = String(r[9] || '');
+
+                    const hasFlag = (str, keyword) => (str.includes(keyword) ? '1' : '0');
+                    const isDisabled = (hasFlag(vulnStr, 'ผู้พิการ') === '1' || legacyHealthType === 'ผู้พิการ') ? '1' : '0';
+                    const isBedridden = hasFlag(vulnStr, 'ผู้ป่วยติดเตียง');
+                    const isPregnant = hasFlag(vulnStr, 'หญิงตั้งครรภ์');
+
+                    const hasHeart = hasFlag(chronicStr, 'โรคหัวใจ');
+                    const hasCancer = hasFlag(chronicStr, 'โรคมะเร็ง');
+                    const hasDiabetes = hasFlag(chronicStr, 'โรคเบาหวาน');
+                    const hasCopd = hasFlag(chronicStr, 'โรคปอดอุดกั้นเรื้อรัง');
+                    const hasHypertension = hasFlag(chronicStr, 'โรคความดันโลหิตสูง');
+                    const hasOtherDisease = hasFlag(chronicStr, 'อื่นๆ');
+
+                    const cleanPhone = String(r[7] || '').replace(/['\-\s]/g, '').trim();
+                    const cleanEmerPhone = String(meta.emergencyContactPhone || '').replace(/['\-\s]/g, '').trim();
+
+                    const provName = meta.province || 'นราธิวาส';
+                    const distName = meta.district || 'ระแงะ';
+                    const subName = meta.subdistrict || 'ตันหยงมัส';
+                    const zipCode = meta.zipcode || '96130';
+
+                    // ตัดคำ ตำบล/อำเภอ/จังหวัด/รหัสไปรษณีย์ ที่ซ้ำท้ายประโยคออกเฉพาะตอน Export จังหวัด
+                    // โดยยังคงค่าในฐานข้อมูลเทศบาล (เช่น "1 ถนนระแงะมรรคา ตันหยงมัส") ไว้สำหรับปักหมุดพิกัดเหมือนเดิม
+                    const stripRedundantSuffix = (rawAddr) => {
+                        let res = String(rawAddr || '').trim();
+                        if (!res) return '';
+                        const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                        const patterns = [
+                            zipCode ? new RegExp(`\\s*${esc(zipCode)}\\s*$`) : null,
+                            provName ? new RegExp(`\\s*(?:จ\\.|จังหวัด)?\\s*${esc(provName)}\\s*$`) : null,
+                            distName ? new RegExp(`\\s*(?:อ\\.|อำเภอ)?\\s*${esc(distName)}\\s*$`) : null,
+                            subName ? new RegExp(`\\s*(?:ต\\.|ตำบล)?\\s*${esc(subName)}\\s*$`) : null
+                        ].filter(Boolean);
+
+                        for (const rx of patterns) {
+                            const next = res.replace(rx, '').trim();
+                            if (next) res = next;
+                        }
+                        return res;
+                    };
+
+                    const cleanProvAddress = stripRedundantSuffix(meta.addressDetail || r[2] || '');
+
+                    return [
+                        escapeCsv(shelterName),
+                        escapeCsv(checkInDate),
+                        escapeCsv(checkOutDate),
+                        escapeCsv(reason),
+                        escapeCsv(idTypeCode),
+                        escapeCsv(rawId),
+                        escapeCsv(prefix),
+                        escapeCsv(firstName),
+                        escapeCsv(lastName),
+                        escapeCsv('ไทย'),
+                        escapeCsv(r[6] || ''),
+                        escapeCsv(birthDateStr),
+                        isDisabled,
+                        isBedridden,
+                        isPregnant,
+                        hasHeart,
+                        hasCancer,
+                        hasDiabetes,
+                        hasCopd,
+                        hasHypertension,
+                        hasOtherDisease,
+                        escapeCsv(legacyHealthNote),
+                        escapeCsv(cleanPhone),
+                        escapeCsv(cleanEmerPhone),
+                        escapeCsv(meta.emergencyContactName || ''),
+                        escapeCsv(''),
+                        escapeCsv(cleanProvAddress),
+                        escapeCsv(provName),
+                        escapeCsv(distName),
+                        escapeCsv(subName),
+                        escapeCsv(zipCode)
+                    ].join(',');
+                });
+            } else {
+                headers = [
+                    'ลำดับ',
+                    'วันที่ลงทะเบียน',
+                    'ศูนย์พักพิง',
+                    'ชื่อ-นามสกุล',
+                    'เลขประจำตัวประชาชน',
+                    'เพศ',
+                    'อายุ',
+                    'เบอร์โทรศัพท์',
+                    'สถานะสุขภาพ',
+                    'รายละเอียดสุขภาพ',
+                    'สถานะการพักพิง',
+                    'วันที่เดินทางกลับบ้าน',
+                    'ที่อยู่/ชุมชน'
+                ];
+
+                rows = targetData.map((r, idx) => {
+                    const idCard = r[3] ? formatExcelText(r[3]) : '""';
+                    const phone = r[7] ? formatExcelText(r[7]) : '""';
+                    const status = (r[10] || '').toString().trim() || 'พักพิงอยู่';
+                    const returnDate = r[11] || '-';
+                    const healthStatus = r[8] || 'ปกติ';
+                    const healthNote = r[9] || '-';
+
+                    return [
+                        idx + 1,
+                        escapeCsv(r[0] || '-'),
+                        escapeCsv(r[1] || '-'),
+                        escapeCsv(r[4] || '-'),
+                        idCard,
+                        escapeCsv(r[6] || '-'),
+                        (r[5] !== undefined && r[5] !== '') ? r[5] : '-',
+                        phone,
+                        escapeCsv(healthStatus),
+                        escapeCsv(healthNote),
+                        escapeCsv(status),
+                        escapeCsv(returnDate),
+                        escapeCsv(r[2] || '-')
+                    ].join(',');
+                });
+            }
 
             // ใส่ UTF-8 BOM (\uFEFF) เสมอ เพื่อให้เปิดใน Microsoft Excel ภาษาไทยไม่เป็นภาษาต่างดาว
             const csvContent = '\uFEFF' + headers.map(escapeCsv).join(',') + '\r\n' + rows.join('\r\n');
@@ -4530,7 +4985,7 @@ let dashLayerStates = {
             const dateStr = now.toISOString().slice(0, 10);
             const timeStr = `${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}`;
             const cleanScopeName = scopeName.replace(/[\/\\:*?"<>|]/g, '_');
-            const fileName = `รายชื่อผู้ประสบภัย_${cleanScopeName}_${dateStr}_${timeStr}.csv`;
+            const fileName = `${filePrefix}_${cleanScopeName}_${dateStr}_${timeStr}.csv`;
 
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement('a');
@@ -4549,6 +5004,10 @@ let dashLayerStates = {
                 timer: 2500,
                 showConfirmButton: false
             });
+        };
+
+        window.exportProvincialShelterCsv = function () {
+            window.exportShelterEvacueesToCsv('provincial');
         };
 
         window.exportShelterOverviewCsv = function () {

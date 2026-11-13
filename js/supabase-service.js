@@ -291,7 +291,23 @@ async function sbFetchInitialData(targetPeriod = '2569') {
                 r.health_note,       // 9
                 r.status,            // 10
                 r.return_home_at,    // 11
-                r.id                 // 12 (Primary Key)
+                r.id,                // 12 (Primary Key)
+                {                    // 13 (Provincial Standard Metadata)
+                    prefix: r.prefix || '',
+                    firstName: r.first_name || '',
+                    lastName: r.last_name || '',
+                    birthDate: r.birth_date || '',
+                    idType: r.id_type || (r.id_card ? 'thai_id' : 'none'),
+                    emergencyContactName: r.emergency_contact_name || '',
+                    emergencyContactPhone: r.emergency_contact_phone || '',
+                    addressDetail: r.address_detail || '',
+                    subdistrict: r.subdistrict || 'ตันหยงมัส',
+                    district: r.district || 'ระแงะ',
+                    province: r.province || 'นราธิวาส',
+                    zipcode: r.zipcode || '96130',
+                    vulnerableGroups: r.vulnerable_groups || '',
+                    chronicDiseases: r.chronic_diseases || ''
+                }
             ]),
             addresses: addresses,
             addressEvac: addressEvac,
@@ -409,8 +425,8 @@ async function sbSaveWater(payload) {
 
 async function sbSaveEvacuee(payload) {
     if (!isSupabaseReady()) throw new Error('Supabase ไม่พร้อมใช้งาน');
-    
-    const { error } = await sbClient.from('evacuees').insert([{
+
+    const baseRow = {
         registered_at: new Date().toISOString(),
         shelter: payload.shelter,
         address: payload.address,
@@ -423,7 +439,33 @@ async function sbSaveEvacuee(payload) {
         health_note: payload.healthNote,
         status: 'พักพิงอยู่',
         period: payload.period || '2569'
-    }]);
+    };
+
+    const fullRow = Object.assign({}, baseRow, {
+        prefix: payload.prefix || '',
+        first_name: payload.firstName || '',
+        last_name: payload.lastName || '',
+        birth_date: payload.birthDate || null,
+        id_type: payload.idType || 'thai_id',
+        emergency_contact_name: payload.emergencyContactName || '',
+        emergency_contact_phone: String(payload.emergencyContactPhone || '').replace(/'/g, '').trim(),
+        address_detail: payload.addressDetail || '',
+        subdistrict: payload.subdistrict || 'ตันหยงมัส',
+        district: payload.district || 'ระแงะ',
+        province: payload.province || 'นราธิวาส',
+        zipcode: payload.zipcode || '96130',
+        vulnerable_groups: payload.vulnerableGroups || '',
+        chronic_diseases: payload.chronicDiseases || ''
+    });
+
+    let { error } = await sbClient.from('evacuees').insert([fullRow]);
+
+    // Fallback กรณียังไม่ได้รัน SQL เพิ่มคอลัมน์มาตรฐานจังหวัดใน Supabase
+    if (error && /column|schema cache/i.test(error.message || '')) {
+        console.warn("⚠️ [Supabase] ยังไม่พบคอลัมน์มาตรฐานจังหวัด กำลังบันทึกแบบคอลัมน์พื้นฐาน:", error.message);
+        const retryRes = await sbClient.from('evacuees').insert([baseRow]);
+        error = retryRes.error;
+    }
 
     if (error) {
         console.error("❌ [Supabase] saveEvacuee error:", error);

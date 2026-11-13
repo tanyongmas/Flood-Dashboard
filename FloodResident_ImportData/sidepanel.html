@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FloodResident AutoFill - ทต.ตันหยงมัส</title>
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-dark: #1e40af;
+      --primary-soft: #eff6ff;
+      --success: #16a34a;
+      --success-dark: #15803d;
+      --warn: #d97706;
+      --danger: #dc2626;
+      --bg: #f1f5f9;
+      --card: #ffffff;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --muted: #64748b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Sarabun', 'Segoe UI', Tahoma, sans-serif;
+      font-size: 13px;
+      color: var(--text);
+      background: var(--bg);
+    }
+    .app-header {
+      background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
+      color: #fff;
+      padding: 14px 14px 12px;
+      box-shadow: 0 2px 8px rgba(30, 58, 138, 0.2);
+    }
+    .header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .header-logo {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.95);
+      padding: 2px;
+      object-fit: contain;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+      flex-shrink: 0;
+    }
+    .app-header h1 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.2px;
+    }
+    .version-pill {
+      font-size: 10px;
+      background: rgba(255, 255, 255, 0.2);
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-weight: 600;
+    }
+    .subtitle {
+      font-size: 11.5px;
+      opacity: 0.9;
+      margin-top: 3px;
+    }
+    .container {
+      padding: 10px 12px 18px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 10px;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+    }
+    .row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .file-upload-label {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 10px 12px;
+      border: 1.5px dashed #93c5fd;
+      border-radius: 8px;
+      background: #f8fafc;
+      color: var(--primary-dark);
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      margin-bottom: 8px;
+    }
+    .file-upload-label:hover {
+      background: var(--primary-soft);
+      border-color: var(--primary);
+    }
+    .file-upload-label input[type="file"] {
+      display: none;
+    }
+    .toolbar {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: none;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+      font-family: inherit;
+    }
+    .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+    .btn-primary {
+      background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+      color: #fff;
+      width: 100%;
+      padding: 10px 14px;
+      font-size: 14px;
+      box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25);
+    }
+    .btn-primary:hover:not(:disabled) { filter: brightness(1.06); }
+    .btn-success {
+      background: var(--success);
+      color: #fff;
+      flex: 1;
+    }
+    .btn-success:hover:not(:disabled) { background: var(--success-dark); }
+    .btn-secondary {
+      background: #f1f5f9;
+      color: #334155;
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover:not(:disabled) { background: #e2e8f0; }
+    .btn-sm {
+      font-size: 11.5px;
+      padding: 5px 9px;
+      border-radius: 6px;
+    }
+    .btn-outline {
+      background: #fff;
+      color: var(--text);
+      border: 1px solid var(--border);
+      font-size: 11.5px;
+      padding: 6px 9px;
+      flex: 1;
+    }
+    .btn-outline:hover:not(:disabled) { background: #f8fafc; border-color: #cbd5e1; }
+    .btn-danger-outline {
+      background: #fff;
+      color: var(--danger);
+      border: 1px solid #fecaca;
+      font-size: 11.5px;
+      padding: 6px 9px;
+    }
+    .btn-danger-outline:hover:not(:disabled) { background: #fef2f2; }
+
+    /* Accordion Settings */
+    details summary {
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 12.5px;
+      color: #334155;
+      list-style: none;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    details summary::-webkit-details-marker { display: none; }
+    .settings-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      margin-top: 10px;
+    }
+    .settings-grid .full { grid-column: span 2; }
+    .field-label {
+      display: block;
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 2px;
+    }
+    input[type="text"], input[type="number"] {
+      width: 100%;
+      padding: 6px 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 12px;
+      font-family: inherit;
+      outline: none;
+    }
+    input[type="text"]:focus, input[type="number"]:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+    }
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px solid #f1f5f9;
+      font-size: 12px;
+    }
+
+    /* Progress & Stats */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .stat-box {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 6px;
+      text-align: center;
+    }
+    .stat-num { font-size: 15px; font-weight: 700; color: var(--text); }
+    .stat-lbl { font-size: 10.5px; color: var(--muted); }
+    .progress-wrap {
+      background: #e2e8f0;
+      border-radius: 999px;
+      height: 8px;
+      overflow: hidden;
+      margin: 6px 0;
+    }
+    .progress-bar {
+      background: linear-gradient(90deg, #16a34a, #22c55e);
+      height: 100%;
+      width: 0%;
+      transition: width 0.25s ease;
+    }
+    .range-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 8px;
+      font-size: 11.5px;
+      color: var(--muted);
+    }
+    .range-row input { width: 58px; text-align: center; padding: 4px; }
+
+    /* Active Person Card */
+    .active-card {
+      border-top: 3px solid var(--primary);
+    }
+    .nav-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .person-title { font-size: 16px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px 8px;
+      background: #f8fafc;
+      border-radius: 8px;
+      padding: 8px;
+      font-size: 11.5px;
+      color: #334155;
+      margin-bottom: 10px;
+    }
+    .meta-grid .full { grid-column: span 2; }
+    .meta-k { color: var(--muted); }
+    .preflight-warn {
+      background: #fffbeb;
+      border: 1px solid #fde68a;
+      color: #92400e;
+      font-size: 11.5px;
+      padding: 6px 8px;
+      border-radius: 6px;
+      margin-bottom: 8px;
+      display: none;
+    }
+    .actions-stack { display: flex; flex-direction: column; gap: 6px; }
+    .status-box {
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      margin-top: 8px;
+      display: none;
+      white-space: pre-line;
+      line-height: 1.4;
+    }
+    .status-ok { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+    .status-warn { background: #fef9c3; color: #854d0e; border: 1px solid #fde047; }
+    .status-err { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+
+    /* Filter & List */
+    .tabs { display: flex; gap: 4px; margin: 8px 0; }
+    .tab {
+      flex: 1;
+      padding: 5px 4px;
+      font-size: 11.5px;
+      text-align: center;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: #fff;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .tab.active {
+      background: var(--primary-soft);
+      border-color: var(--primary);
+      color: var(--primary-dark);
+      font-weight: 700;
+    }
+    .list {
+      max-height: 250px;
+      overflow-y: auto;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #fff;
+    }
+    .list-item {
+      padding: 8px 10px;
+      border-bottom: 1px solid #f1f5f9;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 6px;
+    }
+    .list-item:last-child { border-bottom: none; }
+    .list-item:hover { background: #f8fafc; }
+    .list-item.active {
+      background: var(--primary-soft);
+      border-left: 3px solid var(--primary);
+    }
+    .badge {
+      font-size: 10.5px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      white-space: nowrap;
+      font-weight: 600;
+    }
+    .badge-done { background: #dcfce7; color: #166534; }
+    .badge-pending { background: #f1f5f9; color: #475569; }
+    .badge-missing { background: #fef3c7; color: #92400e; margin-right: 4px; }
+  </style>
+</head>
+<body>
+  <div class="app-header">
+    <div class="header-top">
+      <div class="header-brand">
+        <img src="assets/logo.png" alt="โลโก้ ทต.ตันหยงมัส" class="header-logo" />
+        <div>
+          <h1>FloodResident AutoFill</h1>
+          <div class="subtitle">ระบบช่วยกรอกข้อมูลผู้พักพิง ทต.ตันหยงมัส</div>
+        </div>
+      </div>
+      <span class="version-pill">v1.1</span>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="card">
+      <label class="file-upload-label">
+        <span>📂 เลือกไฟล์ข้อมูล (.csv)</span>
+        <input type="file" id="csvFile" accept=".csv" />
+      </label>
+      <div class="toolbar">
+        <button class="btn btn-outline" id="btnDownloadTemplate">📥 ไฟล์ตัวอย่าง</button>
+        <button class="btn btn-outline" id="btnExportReport" style="display:none;">📤 Export สถานะ</button>
+        <button class="btn btn-danger-outline" id="btnReset" style="display:none;">ล้างข้อมูล</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <details id="settingsDetails">
+        <summary>
+          <span>⚙️ ตั้งค่าเริ่มต้น & โหมดทำงาน</span>
+          <span style="font-size:11px;color:#64748b;">คลิกเพื่อเปิด/ปิด</span>
+        </summary>
+        <div class="settings-grid">
+          <div class="full">
+            <label class="field-label">ศูนย์พักพิงเริ่มต้น (ใช้เมื่อ CSV ว่าง)</label>
+            <input type="text" id="defShelter" placeholder="เช่น ศูนย์มัสยิดตันหยงมัส" />
+          </div>
+          <div>
+            <label class="field-label">จังหวัดเริ่มต้น</label>
+            <input type="text" id="defProvince" placeholder="เช่น นราธิวาส" />
+          </div>
+          <div>
+            <label class="field-label">อำเภอ/เขต เริ่มต้น</label>
+            <input type="text" id="defDistrict" placeholder="เช่น ระแงะ" />
+          </div>
+          <div>
+            <label class="field-label">ตำบล/แขวง เริ่มต้น</label>
+            <input type="text" id="defSubdistrict" placeholder="เช่น ตันหยงมัส" />
+          </div>
+          <div>
+            <label class="field-label">รหัสไปรษณีย์เริ่มต้น</label>
+            <input type="text" id="defPostal" placeholder="เช่น 96130" />
+          </div>
+        </div>
+        <label class="toggle-row">
+          <input type="checkbox" id="optAutoNext" checked />
+          <span>เลื่อนไปคนถัดไปอัตโนมัติ เมื่อกด "บันทึก" บนหน้าเว็บ</span>
+        </label>
+      </details>
+    </div>
+
+    <div id="workspace" style="display:none;">
+      <div class="card">
+        <div class="stats-grid">
+          <div class="stat-box">
+            <div class="stat-num" id="statTotal">0</div>
+            <div class="stat-lbl">ทั้งหมด</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-num" id="statDone" style="color:#16a34a;">0</div>
+            <div class="stat-lbl">เสร็จแล้ว</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-num" id="statMissing" style="color:#d97706;">0</div>
+            <div class="stat-lbl">ข้อมูลไม่ครบ</div>
+          </div>
+        </div>
+        <div class="progress-wrap">
+          <div class="progress-bar" id="progressBar"></div>
+        </div>
+        <div class="range-row">
+          <span>แบ่งช่วงงาน ลำดับที่:</span>
+          <input type="number" id="rangeStart" min="1" placeholder="1" />
+          <span>ถึง</span>
+          <input type="number" id="rangeEnd" min="1" placeholder="ทั้งหมด" />
+        </div>
+      </div>
+
+      <div class="card active-card" id="currentCard">
+        <div class="nav-bar">
+          <button class="btn btn-secondary btn-sm" id="btnPrev">◀ ก่อนหน้า</button>
+          <span id="curIndexLabel" style="font-weight:700;color:#2563eb;font-size:12.5px;">#1</span>
+          <button class="btn btn-secondary btn-sm" id="btnNext">ถัดไป ▶</button>
+        </div>
+        <div class="person-title" id="curName">-</div>
+        <div class="meta-grid" id="curMeta"></div>
+        <div class="preflight-warn" id="preflightWarn"></div>
+        <div class="actions-stack">
+          <button class="btn btn-primary" id="btnFill">⚡ กรอกข้อมูลลงฟอร์ม (Alt+F)</button>
+          <div class="row">
+            <button class="btn btn-success" id="btnMarkDone">✓ บันทึกแล้ว</button>
+            <button class="btn btn-secondary" id="btnSkip">ข้าม ⏭</button>
+          </div>
+        </div>
+        <div id="statusBox" class="status-box"></div>
+      </div>
+
+      <div class="card">
+        <input type="text" id="searchInput" placeholder="🔍 ค้นหาชื่อ, นามสกุล หรือเลขบัตร..." />
+        <div class="tabs">
+          <button class="tab active" data-filter="all">ทั้งหมด</button>
+          <button class="tab" data-filter="pending">รอกรอก</button>
+          <button class="tab" data-filter="done">เสร็จแล้ว</button>
+          <button class="tab" data-filter="missing">ไม่ครบ</button>
+        </div>
+        <div class="list" id="residentList"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="sidepanel.js"></script>
+</body>
+</html>
