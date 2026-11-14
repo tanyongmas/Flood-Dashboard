@@ -1610,7 +1610,7 @@
                         </div> <!-- End #dashboardActualContent -->
 
                 </section>
-                <section id="waterPage" class="content-page">
+                <section id="waterPage" class="content-page hidden">
                     <!-- ปุ่มรายงานระดับน้ำ (Quick Action Card สำหรับมือถือ) -->
                     <div class="lg:hidden mb-6 px-1 animate-fade-in">
                         <button onclick="showPage('addWater')"
@@ -2339,9 +2339,13 @@
                             <div id="modalContent" class="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
                             </div>
 
-                            <div class="p-4 bg-slate-50">
+                            <div class="p-4 bg-slate-50 flex gap-2">
+                                <button type="button" id="btnEditEvacueeFromModal" onclick="openEditEvacueeModal()"
+                                    class="admin-write-only flex-1 bg-amber-500 hover:bg-amber-600 text-white py-3.5 rounded-2xl font-bold transition-all shadow-sm flex items-center justify-center gap-1.5">
+                                    <i class="fas fa-pen text-xs"></i> แก้ไขข้อมูล
+                                </button>
                                 <button onclick="closeDataModal()"
-                                    class="w-full bg-slate-200 hover:bg-slate-300 text-slate-600 py-3.5 rounded-2xl font-bold transition-all">
+                                    class="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-600 py-3.5 rounded-2xl font-bold transition-all">
                                     ปิดหน้าต่างข้อมูล
                                 </button>
                             </div>

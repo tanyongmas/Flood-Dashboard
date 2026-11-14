@@ -475,6 +475,48 @@ async function sbSaveEvacuee(payload) {
     return { success: true };
 }
 
+async function sbUpdateEvacuee(rowId, payload) {
+    if (!isSupabaseReady()) throw new Error('Supabase ไม่พร้อมใช้งาน');
+
+    const updateFields = {
+        shelter: payload.shelter,
+        address: payload.address,
+        id_card: String(payload.idCard || '').replace(/'/g, '').trim(),
+        name: payload.name,
+        age: parseInt(payload.age, 10) || null,
+        gender: payload.gender,
+        phone: String(payload.phone || '').replace(/'/g, '').trim(),
+        health_type: payload.healthType || 'ปกติ',
+        health_note: payload.healthNote || ''
+    };
+
+    let query = sbClient.from('evacuees').update(updateFields);
+    const cleanRowId = String(rowId || '').trim();
+    const cleanOrigCard = String(payload.origIdCard || '').replace(/'/g, '').trim();
+    const cleanOrigName = String(payload.origName || '').trim();
+
+    if (cleanRowId && cleanRowId !== 'undefined' && cleanRowId !== 'null') {
+        query = query.eq('id', cleanRowId);
+    } else if (cleanOrigCard && cleanOrigCard !== '-' && cleanOrigCard !== 'ไม่ระบุ') {
+        query = query.eq('id_card', cleanOrigCard);
+        if (cleanOrigName) query = query.eq('name', cleanOrigName);
+        if (payload.period) query = query.eq('period', payload.period);
+    } else if (cleanOrigName) {
+        query = query.eq('name', cleanOrigName);
+        if (payload.period) query = query.eq('period', payload.period);
+    } else {
+        throw new Error('ไม่สามารถระบุตัวตนผู้ประสบภัยที่ต้องการแก้ไขได้');
+    }
+
+    const { error } = await query;
+    if (error) {
+        console.error("❌ [Supabase] updateEvacuee error:", error);
+        throw new Error(error.message);
+    }
+    console.log("⚡ [Supabase 100%] แก้ไขข้อมูลผู้ประสบภัยสำเร็จ");
+    return { success: true };
+}
+
 async function sbMarkEvacueeReturnHome(rowId, idCard, name, period) {
     if (!isSupabaseReady()) throw new Error('Supabase ไม่พร้อมใช้งาน');
     

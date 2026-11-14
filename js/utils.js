@@ -420,14 +420,14 @@ async function promptPdpaSecurityPin(targetDesc, onSuccess) {
 }
 
 // ฟังก์ชันตรวจสอบสิทธิ์และยืนยันการเข้าถึงข้อมูลส่วนบุคคลตามชื่อ/เลขบัตร
-async function checkPasswordBeforeDetailByData(idCard, name) {
+async function checkPasswordBeforeDetailByData(idCard, name, rowId = '') {
     const staffName = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : 'เจ้าหน้าที่';
     const currentRole = (typeof userRole !== 'undefined' ? userRole : '').toLowerCase();
 
     promptPdpaSecurityPin(`คุณ ${name || 'ผู้ประสบภัย'}`, () => {
-        console.log(`🔒 [PDPA Audit] ${new Date().toISOString()} - User: ${staffName} (${currentRole}) accessed details of: ${name}`);
+        console.log(`🔒 [PDPA Audit] ${new Date().toISOString()} - User: ${staffName} (${currentRole}) accessed details of: ${name} (ID: ${rowId || '-'})`);
         if (typeof showDetailsByData === 'function') {
-            showDetailsByData(idCard, name);
+            showDetailsByData(idCard, name, rowId);
         }
     });
 }

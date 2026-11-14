@@ -105,13 +105,6 @@ let dashLayerStates = {
                     if (typeof setupUserInterface === 'function') setupUserInterface(userData);
                     if (typeof updateMenuByRole === 'function') updateMenuByRole();
 
-                    // 🚀 โหลดข้อมูลหลัก, ระดับน้ำ RID และพยากรณ์อากาศพร้อมกันแบบขนาน (Parallel Fetching)
-                    await Promise.allSettled([
-                        loadData(),
-                        typeof loadRIDWaterLevel === 'function' ? loadRIDWaterLevel() : Promise.resolve(),
-                        typeof loadWeatherForecast === 'function' ? loadWeatherForecast() : Promise.resolve()
-                    ]);
-
                     let targetPage = 'water';
                     if (userRole === 'superadmin' || userRole === 'admin') targetPage = 'dashboard';
                     else if (userRole === 'shelter') targetPage = 'shelter';
@@ -120,7 +113,15 @@ let dashLayerStates = {
                     else if (userRole === 'community') targetPage = 'water';
                     else if (userRole === 'flood_report') targetPage = 'looker';
 
+                    // แสดงหน้าแรกตามสิทธิ์ทันทีก่อนรอโหลดข้อมูล เพื่อไม่ให้กระพริบหน้า waterPage
                     if (typeof showPage === 'function') showPage(targetPage);
+
+                    // 🚀 โหลดข้อมูลหลัก, ระดับน้ำ RID และพยากรณ์อากาศพร้อมกันแบบขนาน (Parallel Fetching)
+                    await Promise.allSettled([
+                        loadData(),
+                        typeof loadRIDWaterLevel === 'function' ? loadRIDWaterLevel() : Promise.resolve(),
+                        typeof loadWeatherForecast === 'function' ? loadWeatherForecast() : Promise.resolve()
+                    ]);
                 } catch (e) {
                     console.error("Session Error:", e);
                     localStorage.removeItem('user_session');
@@ -3611,8 +3612,12 @@ let dashLayerStates = {
                     const healthStatus = r[8] || 'ปกติ';
                     const isNotNormal = healthStatus !== 'ปกติ';
                     const gender = r[6] || '-';
-                    const idCard = String(r[3] || '').replace(/'/g, '');
-                    const name = String(r[4] || '');
+                    const idCard = String(r[3] || '').replace(/'/g, '').trim();
+                    const name = String(r[4] || '').trim();
+                    const rowId = String(r[12] || '').trim();
+                    const safeRowId = rowId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                    const safeIdCard = idCard.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                    const safeName = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 
                     return `
                         <tr class="border-b border-slate-50 hover:bg-blue-50/50 transition-colors">
@@ -3640,12 +3645,12 @@ let dashLayerStates = {
                             </td>
                             <td class="p-3 text-center">
                                 <div class="flex items-center justify-center gap-1.5">
-                                    <button type="button" onclick="confirmReturnHome('${r[12] || ''}', '${idCard}', '${name.replace(/'/g, "\\'")}')" 
+                                    <button type="button" onclick="confirmReturnHome('${safeRowId}', '${safeIdCard}', '${safeName}')" 
                                             title="แจ้งเดินทางกลับบ้านแล้ว"
                                             class="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-200 text-[10px] font-bold rounded-xl transition-all shadow-sm active:scale-95 flex items-center gap-1 whitespace-nowrap">
                                         <i class="fas fa-house-chimney-user text-emerald-500"></i> กลับบ้านแล้ว
                                     </button>
-                                    <button onclick="checkPasswordBeforeDetailByData('${idCard}', '${name.replace(/'/g, "\\'")}')" 
+                                    <button onclick="checkPasswordBeforeDetailByData('${safeIdCard}', '${safeName}', '${safeRowId}')" 
                                             class="bg-white border border-blue-200 text-blue-600 w-8 h-8 rounded-full shadow-sm hover:bg-blue-600 hover:text-white transition-all active:scale-90 flex items-center justify-center shrink-0"
                                             title="ดูรายละเอียดส่วนตัว">
                                         <i class="fas fa-search-plus text-xs"></i>
@@ -3664,8 +3669,12 @@ let dashLayerStates = {
                 } else {
                     returnedBody.innerHTML = returnedData.map((r, index) => {
                         const gender = r[6] || '-';
-                        const idCard = String(r[3] || '').replace(/'/g, '');
-                        const name = String(r[4] || '');
+                        const idCard = String(r[3] || '').replace(/'/g, '').trim();
+                        const name = String(r[4] || '').trim();
+                        const rowId = String(r[12] || '').trim();
+                        const safeRowId = rowId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                        const safeIdCard = idCard.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                        const safeName = name.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 
                         return `
                             <tr class="border-b border-slate-50 hover:bg-emerald-50/50 transition-colors bg-emerald-50/20">
@@ -3688,12 +3697,12 @@ let dashLayerStates = {
                                 </td>
                                 <td class="p-3 text-center">
                                     <div class="flex items-center justify-center gap-1.5">
-                                        <button type="button" onclick="confirmRevertToActive('${r[12] || ''}', '${idCard}', '${name.replace(/'/g, "\\'")}')" 
+                                        <button type="button" onclick="confirmRevertToActive('${safeRowId}', '${safeIdCard}', '${safeName}')" 
                                                 title="ย้ายกลับมาเข้าพักพิง"
                                                 class="px-2.5 py-1 bg-amber-50 hover:bg-amber-600 text-amber-700 hover:text-white border border-amber-200 text-[10px] font-bold rounded-xl transition-all shadow-sm active:scale-95 flex items-center gap-1 whitespace-nowrap">
                                             <i class="fas fa-undo"></i> ย้ายกลับมาพักพิง
                                         </button>
-                                        <button onclick="checkPasswordBeforeDetailByData('${idCard}', '${name.replace(/'/g, "\\'")}')" 
+                                        <button onclick="checkPasswordBeforeDetailByData('${safeIdCard}', '${safeName}', '${safeRowId}')" 
                                                 class="bg-white border border-emerald-200 text-emerald-600 w-8 h-8 rounded-full shadow-sm hover:bg-emerald-600 hover:text-white transition-all active:scale-90"
                                                 title="ดูรายละเอียดส่วนตัว">
                                             <i class="fas fa-search-plus text-xs"></i>
@@ -3840,27 +3849,53 @@ let dashLayerStates = {
         };
 
         // ฟังก์ชันตรวจสอบสิทธิ์และยืนยันการเข้าถึงข้อมูลส่วนบุคคล (PDPA Security PIN)
-        async function checkPasswordBeforeDetailByData(idCard, name) {
+        async function checkPasswordBeforeDetailByData(idCard, name, rowId = '') {
             const staffName = (typeof currentUser !== 'undefined' && currentUser) ? currentUser : 'เจ้าหน้าที่';
             const currentRole = (typeof userRole !== 'undefined' ? userRole : '').toLowerCase();
 
             if (typeof promptPdpaSecurityPin === 'function') {
                 promptPdpaSecurityPin(`คุณ ${name || 'ผู้ประสบภัย'}`, () => {
-                    console.log(`🔒 [PDPA Audit] ${new Date().toISOString()} - User: ${staffName} (${currentRole}) accessed details of: ${name}`);
-                    showDetailsByData(idCard, name);
+                    console.log(`🔒 [PDPA Audit] ${new Date().toISOString()} - User: ${staffName} (${currentRole}) accessed details of: ${name} (ID: ${rowId || '-'})`);
+                    showDetailsByData(idCard, name, rowId);
                 });
             } else {
-                showDetailsByData(idCard, name);
+                showDetailsByData(idCard, name, rowId);
             }
         }
 
-        function showDetailsByData(idCard, name) {
-            const evacuees = store.evacuees || [];
-            const person = evacuees.find(r => {
-                const rCard = String(r[3] || '').replace(/'/g, '').trim();
-                const rName = String(r[4] || '').trim();
-                return (idCard && rCard === idCard) || (name && rName === name);
-            });
+        function showDetailsByData(idCard, name, rowId = '') {
+            const pool = [
+                ...(Array.isArray(window.lastEvacueeData) ? window.lastEvacueeData : []),
+                ...(Array.isArray(store.evacuees) ? store.evacuees : [])
+            ];
+            const cleanRowId = String(rowId || '').trim();
+            const cleanCard = String(idCard || '').replace(/'/g, '').trim();
+            const cleanName = String(name || '').trim();
+            const invalidCardPlaceholders = new Set(['', '-', 'ไม่ระบุ', '0', '0000000000000', 'null', 'undefined']);
+            const hasValidCard = !invalidCardPlaceholders.has(cleanCard.toLowerCase()) && !cleanCard.includes('•');
+
+            let person = null;
+            // 1. ค้นหาจาก rowId (Primary Key จากฐานข้อมูล) เป็นลำดับแรกเพื่อความแม่นยำ 100%
+            if (cleanRowId) {
+                person = pool.find(r => String(r[12] || '').trim() === cleanRowId);
+            }
+            // 2. หากไม่มี rowId ให้ค้นหาที่ตรงทั้งเลขบัตร (ที่ไม่ใช่ค่าว่าง/ขีด) และชื่อ-สกุล
+            if (!person && hasValidCard && cleanName) {
+                person = pool.find(r => {
+                    const rCard = String(r[3] || '').replace(/'/g, '').trim();
+                    const rName = String(r[4] || '').trim();
+                    return rCard === cleanCard && rName === cleanName;
+                });
+            }
+            // 3. ค้นหาจากชื่อ-สกุลที่ตรงกัน (ป้องกันกรณีเลขบัตรเป็น '-' หรือซ้ำกัน)
+            if (!person && cleanName) {
+                person = pool.find(r => String(r[4] || '').trim() === cleanName);
+            }
+            // 4. กรณีสุดท้ายค้นหาจากเลขบัตรที่ถูกต้อง
+            if (!person && hasValidCard) {
+                person = pool.find(r => String(r[3] || '').replace(/'/g, '').trim() === cleanCard);
+            }
+
             if (person) {
                 showDetails(person);
             }
@@ -3900,6 +3935,7 @@ let dashLayerStates = {
                 person = target;
             }
             if (!person) return;
+            window._currentModalPerson = person;
 
             // แสดงชื่อและศูนย์ในส่วน Header ให้โดดเด่น
             document.getElementById('modalName').innerText = person[4]; // ชื่อ (Index 4)
@@ -4000,6 +4036,165 @@ let dashLayerStates = {
 
             modal.classList.remove('hidden');
         }
+
+        async function openEditEvacueeModal() {
+            if (typeof checkAdminReadOnlyAction === 'function' && checkAdminReadOnlyAction()) return;
+
+            const person = window._currentModalPerson;
+            if (!person) return;
+
+            const esc = (v) => String(v || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const origRowId = String(person[12] || '').trim();
+            const origShelter = String(person[1] || '').trim();
+            const origAddress = String(person[2] || '').trim();
+            const origIdCard = String(person[3] || '').replace(/'/g, '').trim();
+            const origName = String(person[4] || '').trim();
+            const origAge = person[5] !== undefined && person[5] !== null ? String(person[5]) : '';
+            const origGender = String(person[6] || 'ชาย').trim();
+            const origPhone = String(person[7] || '').replace(/'/g, '').trim();
+            const origHealth = String(person[8] || 'ปกติ').trim();
+            const origHealthNote = String(person[9] || '').trim();
+
+            const shelterOptionsSet = new Set();
+            if (origShelter) shelterOptionsSet.add(origShelter);
+            const regisShelterEl = document.getElementById('regis_shelter');
+            if (regisShelterEl) {
+                Array.from(regisShelterEl.options).forEach(opt => {
+                    if (opt.value) shelterOptionsSet.add(opt.value);
+                });
+            }
+            const shelterOptsHtml = Array.from(shelterOptionsSet).map(s =>
+                `<option value="${esc(s)}" ${s === origShelter ? 'selected' : ''}>${esc(s)}</option>`
+            ).join('');
+
+            const healthChoices = ['ปกติ', 'ผู้ป่วยเรื้อรัง', 'ผู้สูงอายุ', 'ผู้พิการ', 'หญิงตั้งครรภ์', 'เด็กเล็ก', 'ผู้ป่วยติดเตียง'];
+            if (origHealth && !healthChoices.includes(origHealth)) healthChoices.unshift(origHealth);
+            const healthOptsHtml = healthChoices.map(h =>
+                `<option value="${esc(h)}" ${h === origHealth ? 'selected' : ''}>${esc(h)}</option>`
+            ).join('');
+
+            const { value: formValues } = await Swal.fire({
+                title: '<span class="text-lg font-extrabold text-slate-800">แก้ไขข้อมูลผู้เข้าพักพิง</span>',
+                html: `
+                    <div class="text-left space-y-3 text-xs mt-2">
+                        <div>
+                            <label class="font-bold text-slate-600 block mb-1">ชื่อ-นามสกุล *</label>
+                            <input id="edit_evac_name" type="text" value="${esc(origName)}" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="font-bold text-slate-600 block mb-1">ศูนย์พักพิง</label>
+                            <select id="edit_evac_shelter" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-blue-500">
+                                ${shelterOptsHtml}
+                            </select>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2.5">
+                            <div>
+                                <label class="font-bold text-slate-600 block mb-1">อายุ (ปี)</label>
+                                <input id="edit_evac_age" type="number" min="0" max="130" value="${esc(origAge)}" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-blue-500">
+                            </div>
+                            <div>
+                                <label class="font-bold text-slate-600 block mb-1">เพศ</label>
+                                <select id="edit_evac_gender" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-blue-500">
+                                    <option value="ชาย" ${origGender === 'ชาย' ? 'selected' : ''}>ชาย</option>
+                                    <option value="หญิง" ${origGender === 'หญิง' ? 'selected' : ''}>หญิง</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2.5">
+                            <div>
+                                <label class="font-bold text-slate-600 block mb-1">เลขบัตรประชาชน</label>
+                                <input id="edit_evac_idcard" type="text" value="${esc(origIdCard)}" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold text-slate-800 outline-none focus:border-blue-500">
+                            </div>
+                            <div>
+                                <label class="font-bold text-slate-600 block mb-1">เบอร์โทรศัพท์</label>
+                                <input id="edit_evac_phone" type="text" value="${esc(origPhone)}" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono font-bold text-slate-800 outline-none focus:border-blue-500">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="font-bold text-slate-600 block mb-1">ที่อยู่</label>
+                            <input id="edit_evac_address" type="text" value="${esc(origAddress)}" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 outline-none focus:border-blue-500">
+                        </div>
+                        <div class="grid grid-cols-2 gap-2.5">
+                            <div>
+                                <label class="font-bold text-slate-600 block mb-1">สถานะสุขภาพ</label>
+                                <select id="edit_evac_health" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:border-blue-500">
+                                    ${healthOptsHtml}
+                                </select>
+                            </div>
+                            <div>
+                                <label class="font-bold text-slate-600 block mb-1">รายละเอียดสุขภาพ/โรค</label>
+                                <input id="edit_evac_health_note" type="text" value="${esc(origHealthNote)}" placeholder="ระบุเพิ่มเติม (ถ้ามี)" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 outline-none focus:border-blue-500">
+                            </div>
+                        </div>
+                    </div>
+                `,
+                focusConfirm: false,
+                showCancelButton: true,
+                confirmButtonText: '<i class="fas fa-save mr-1"></i> บันทึกการแก้ไข',
+                cancelButtonText: 'ยกเลิก',
+                confirmButtonColor: '#f59e0b',
+                customClass: { popup: 'rounded-[2rem]' },
+                preConfirm: () => {
+                    const nameVal = (document.getElementById('edit_evac_name')?.value || '').trim();
+                    if (!nameVal) {
+                        Swal.showValidationMessage('กรุณาระบุชื่อ-นามสกุล');
+                        return false;
+                    }
+                    return {
+                        name: nameVal,
+                        shelter: document.getElementById('edit_evac_shelter')?.value || origShelter,
+                        age: document.getElementById('edit_evac_age')?.value || '',
+                        gender: document.getElementById('edit_evac_gender')?.value || origGender,
+                        idCard: (document.getElementById('edit_evac_idcard')?.value || '').trim(),
+                        phone: (document.getElementById('edit_evac_phone')?.value || '').trim(),
+                        address: (document.getElementById('edit_evac_address')?.value || '').trim(),
+                        healthType: document.getElementById('edit_evac_health')?.value || 'ปกติ',
+                        healthNote: (document.getElementById('edit_evac_health_note')?.value || '').trim(),
+                        origIdCard,
+                        origName,
+                        period: typeof currentPeriod !== 'undefined' ? currentPeriod : '2569'
+                    };
+                }
+            });
+
+            if (!formValues) return;
+
+            Swal.fire({ title: 'กำลังบันทึกข้อมูล...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+            try {
+                if (typeof sbUpdateEvacuee !== 'function') {
+                    throw new Error('Supabase Service ไม่พร้อมทำงาน');
+                }
+                await sbUpdateEvacuee(origRowId, formValues);
+
+                person[1] = formValues.shelter;
+                person[2] = formValues.address;
+                person[3] = formValues.idCard;
+                person[4] = formValues.name;
+                person[5] = formValues.age;
+                person[6] = formValues.gender;
+                person[7] = formValues.phone;
+                person[8] = formValues.healthType;
+                person[9] = formValues.healthNote;
+
+                showDetails(person);
+                if (typeof renderEvacueeCards === 'function') {
+                    renderEvacueeCards(window.lastEvacueeData || store.evacuees || []);
+                }
+
+                Swal.fire({
+                    icon: 'success',
+                    title: 'บันทึกการแก้ไขสำเร็จ',
+                    text: `อัปเดตข้อมูลคุณ ${formValues.name} เรียบร้อยแล้ว`,
+                    timer: 1500,
+                    showConfirmButton: false,
+                    customClass: { popup: 'rounded-[2rem]' }
+                });
+            } catch (err) {
+                Swal.fire('เกิดข้อผิดพลาด', err.message || 'ไม่สามารถบันทึกข้อมูลได้', 'error');
+            }
+        }
+        window.openEditEvacueeModal = openEditEvacueeModal;
         // ==========================================
         // 📋 ระบบช่วยกรอก & บันทึกข้อมูลลงทะเบียนผู้ประสบภัย (มาตรฐานจังหวัด)
         // ==========================================
