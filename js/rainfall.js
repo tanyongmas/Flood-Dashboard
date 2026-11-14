@@ -5,21 +5,60 @@
 
 let globalResponseData = null;
 let filterChartInstance = null;
+const chartInstances = {};
 let currentFilterMode = 'daily';
-let globalMinDate = "2025-01-01";
-let globalMaxDate = "2026-06-30";
+let globalMinDate = "2022-01-01";
+let globalMaxDate = "2026-12-31";
+
+function parseLocalDate(dateStr) {
+  if (!dateStr || typeof dateStr !== 'string') return new Date(NaN);
+  const datePart = dateStr.split(/[T ]/)[0];
+  const parts = datePart.split('-').map(Number);
+  if (parts.length === 3 && !parts.some(isNaN)) {
+    return new Date(parts[0], parts[1] - 1, parts[2]);
+  }
+  return new Date(dateStr.replace(' ', 'T'));
+}
+
+function formatThaiYear(adYear) {
+  const y = parseInt(adYear, 10);
+  if (isNaN(y)) return String(adYear || '');
+  return y < 2400 ? String(y + 543) : String(y);
+}
+
+function destroyChart(key) {
+  if (chartInstances[key]) {
+    chartInstances[key].destroy();
+    delete chartInstances[key];
+  }
+}
 
 window.onload = function() {
   setApiStatus('loading');
   fetchData();
 };
 
+function refreshRainfallData() {
+  document.getElementById('error-message').classList.add('hidden');
+  document.getElementById('data-container').classList.add('hidden');
+  document.getElementById('loading').classList.remove('hidden');
+  setApiStatus('loading');
+  fetchData();
+}
+
 function setApiStatus(status) {
   const dot = document.getElementById('api-status-dot');
   const text = document.getElementById('api-status-text');
-  if (status === 'loading') { text.innerText = 'กำลังเชื่อมต่อ...'; } 
-  else if (status === 'success') { dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]'; text.innerText = 'ออนไลน์'; } 
-  else { dot.className = 'w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]'; text.innerText = 'ออฟไลน์'; }
+  if (status === 'loading') {
+    dot.className = 'w-2.5 h-2.5 rounded-full bg-yellow-400 animate-pulse shadow-[0_0_8px_rgba(250,204,21,0.4)]';
+    text.innerText = 'กำลังเชื่อมต่อ...';
+  } else if (status === 'success') {
+    dot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]';
+    text.innerText = 'ออนไลน์';
+  } else {
+    dot.className = 'w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]';
+    text.innerText = 'ออฟไลน์';
+  }
 }
 
 async function fetchData() {
@@ -39,29 +78,37 @@ async function fetchData() {
 // ฟังก์ชันคำนวณและแกะข้อมูลรายวัน (ใช้ซ้ำได้ทั้ง 2 เดือน)
 function processDailyData(dataArr) {
   let sum = 0, maxRain = 0, maxDate = "-", daysCount = 0;
-  let categories = [], series = [];
+  let categories = [], series = [], dateLabels = [];
   let monthName = "";
+  let firstDateObj = null;
+  let hasAnyValue = false;
 
   if (dataArr && dataArr.length > 0) {
-    let firstDate = new Date(dataArr[0].rainfall_datetime);
-    monthName = firstDate.toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });
+    firstDateObj = parseLocalDate(dataArr[0].rainfall_datetime);
+    monthName = firstDateObj.toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });
 
     dataArr.forEach(item => {
-       let val = item.rainfall_value !== null ? parseFloat(item.rainfall_value) : 0;
-       let dateStr = item.rainfall_datetime;
-       
-       sum += val;
-       if(val > 0) daysCount++;
-       if(val > maxRain) {
+       const hasVal = item.rainfall_value !== null && item.rainfall_value !== undefined && item.rainfall_value !== '';
+       const val = hasVal ? parseFloat(item.rainfall_value) : null;
+       const dObj = parseLocalDate(item.rainfall_datetime);
+
+       if (val !== null && !isNaN(val)) {
+         hasAnyValue = true;
+         sum += val;
+         if (val > 0) daysCount++;
+         if (val > maxRain) {
            maxRain = val;
-           let dObj = new Date(dateStr);
            maxDate = dObj.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
+         }
+         series.push(parseFloat(val.toFixed(1)));
+       } else {
+         series.push(null);
        }
-       categories.push(new Date(dateStr).getDate());
-       series.push(val);
+       categories.push(dObj.getDate());
+       dateLabels.push(dObj.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' }));
     });
   }
-  return { sum, maxRain, maxDate, daysCount, categories, series, monthName };
+  return { sum, maxRain, maxDate, daysCount, categories, series, dateLabels, monthName, firstDateObj, hasAnyValue };
 }
 
 function processData(response) {
@@ -78,14 +125,22 @@ function processData(response) {
   setApiStatus('success');
   document.getElementById('data-container').classList.remove('hidden');
 
-  // Setup date limits for filtering starting from B.E. 2568 (2025-01-01)
+  // Setup date limits: allow monthly filter back to earliest history year, and daily up to latest actual data
+  const historyYearKeys = response.history ? Object.keys(response.history).sort() : [];
+  const minYear = historyYearKeys.length > 0 ? historyYearKeys[0] : "2025";
+  const minDate = `${minYear}-01-01`;
+
   const prevDaily = response.dailyDataPrev ? response.dailyDataPrev.data : [];
   const currDaily = response.dailyDataCurrent ? response.dailyDataCurrent.data : [];
   const allDaily = [...prevDaily, ...currDaily].filter(item => item && item.rainfall_datetime);
+  const dailyWithData = allDaily.filter(item => item.rainfall_value !== null && item.rainfall_value !== undefined);
   
-  if (allDaily.length > 0) {
-    allDaily.sort((a, b) => new Date(a.rainfall_datetime) - new Date(b.rainfall_datetime));
-    const minDate = "2025-01-01"; // Force B.E. 2568
+  if (dailyWithData.length > 0) {
+    dailyWithData.sort((a, b) => parseLocalDate(a.rainfall_datetime) - parseLocalDate(b.rainfall_datetime));
+    const maxDate = dailyWithData[dailyWithData.length - 1].rainfall_datetime;
+    setupFilterLimits(minDate, maxDate);
+  } else if (allDaily.length > 0) {
+    allDaily.sort((a, b) => parseLocalDate(a.rainfall_datetime) - parseLocalDate(b.rainfall_datetime));
     const maxDate = allDaily[allDaily.length - 1].rainfall_datetime;
     setupFilterLimits(minDate, maxDate);
   }
@@ -97,7 +152,7 @@ function processData(response) {
   document.getElementById('max-rain-now').innerText = currMonthlyData.maxRain.toFixed(1);
   document.getElementById('max-date-now').innerText = currMonthlyData.maxDate !== "-" ? `วันที่: ${currMonthlyData.maxDate}` : "ไม่มีฝนตกเลย";
   document.getElementById('days-count-now').innerText = currMonthlyData.daysCount;
-  renderDailyChart("#chart-now", currMonthlyData.categories, currMonthlyData.series, "#3b82f6");
+  renderDailyChart("#chart-now", currMonthlyData.categories, currMonthlyData.series, "#3b82f6", currMonthlyData.dateLabels);
 
   // SECTION 2: เดือนล่าสุด (ก่อนหน้า)
   let prevMonthlyData = processDailyData(response.dailyDataPrev.data);
@@ -106,48 +161,78 @@ function processData(response) {
   document.getElementById('max-rain-prev').innerText = prevMonthlyData.maxRain.toFixed(1);
   document.getElementById('max-date-prev').innerText = prevMonthlyData.maxDate !== "-" ? `วันที่: ${prevMonthlyData.maxDate}` : "ไม่มีฝนตกเลย";
   document.getElementById('days-count-prev').innerText = prevMonthlyData.daysCount;
-  renderDailyChart("#chart-prev", prevMonthlyData.categories, prevMonthlyData.series, "#06b6d4");
+  renderDailyChart("#chart-prev", prevMonthlyData.categories, prevMonthlyData.series, "#06b6d4", prevMonthlyData.dateLabels);
 
   // SECTION 3 & 4: รายปี และ 5 ปี
   let currentYear = response.currentYear;
   let prevYear = response.prevYear;
+  let currentYearBE = formatThaiYear(currentYear);
+  let prevYearBE = formatThaiYear(prevYear);
   let rawCurrent = response.dataCurrent;
   let rawPrev = response.dataPrev;
 
   let totalRainCurrent = 0, totalRainPrev = 0;
-  let monthlyCurrent = Array(12).fill(0);
-  let monthlyPrev = Array(12).fill(0);
+  let monthlyCurrent = Array(12).fill(null);
+  let monthlyPrev = Array(12).fill(null);
   let chartCategories = [];
 
   rawCurrent.forEach((item, index) => {
     let val = parseFloat(item.rainfall);
-    if (!isNaN(val) && item.rainfall !== null) { totalRainCurrent += val; monthlyCurrent[index] = val; }
-    let labelDate = new Date(item.date_time.replace(' ', 'T'));
-    chartCategories.push(labelDate.toLocaleDateString('th-TH', {month: 'short'}));
+    if (!isNaN(val) && item.rainfall !== null) {
+      totalRainCurrent += val;
+      monthlyCurrent[index] = parseFloat(val.toFixed(1));
+    }
+    let labelDate = parseLocalDate(item.date_time);
+    chartCategories.push(labelDate.toLocaleDateString('th-TH', { month: 'short' }));
   });
 
+  // เติมยอดสะสมเดือนปัจจุบันจากข้อมูลรายวัน กรณีเดือนปัจจุบันยังไม่ปิดเดือน (rainfall === null)
+  let mtdMonthIndex = -1;
+  if (currMonthlyData.hasAnyValue && currMonthlyData.firstDateObj) {
+    const mIdx = currMonthlyData.firstDateObj.getMonth();
+    const mYear = currMonthlyData.firstDateObj.getFullYear();
+    if (mYear == currentYear && monthlyCurrent[mIdx] === null) {
+      const mtdVal = parseFloat(currMonthlyData.sum.toFixed(1));
+      monthlyCurrent[mIdx] = mtdVal;
+      totalRainCurrent += mtdVal;
+      mtdMonthIndex = mIdx;
+    }
+  }
+
+  let lastValidMonthIdx = -1;
+  for (let i = 0; i < monthlyCurrent.length; i++) {
+    if (monthlyCurrent[i] !== null) lastValidMonthIdx = i;
+  }
+
   let rainRemainingInPrevYear = 0;
+  let ytdRainPrev = 0;
   rawPrev.forEach((item, index) => {
     let val = parseFloat(item.rainfall);
-    if (!isNaN(val)) {
-      totalRainPrev += val; monthlyPrev[index] = val;
-      if (rawCurrent[index] && rawCurrent[index].rainfall === null) rainRemainingInPrevYear += val;
+    if (!isNaN(val) && item.rainfall !== null) {
+      totalRainPrev += val;
+      monthlyPrev[index] = parseFloat(val.toFixed(1));
+      if (index <= lastValidMonthIdx) ytdRainPrev += val;
+      if (monthlyCurrent[index] === null) rainRemainingInPrevYear += val;
     }
   });
 
-  document.getElementById('total-rain-current').innerText = totalRainCurrent.toLocaleString('en-US', {minimumFractionDigits: 1});
-  document.getElementById('forecast-rain').innerText = (totalRainCurrent + rainRemainingInPrevYear).toLocaleString('en-US', {minimumFractionDigits: 1});
+  document.getElementById('total-rain-current').innerText = totalRainCurrent.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  document.getElementById('forecast-rain').innerText = (totalRainCurrent + rainRemainingInPrevYear).toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
   let compareEl = document.getElementById('compare-text');
-  if (totalRainPrev > 0) {
-    let diff = totalRainCurrent - totalRainPrev;
-    let percent = (diff / totalRainPrev) * 100;
+  const compareBase = ytdRainPrev > 0 ? ytdRainPrev : totalRainPrev;
+  if (compareBase > 0 && lastValidMonthIdx >= 0) {
+    let diff = totalRainCurrent - compareBase;
+    let percent = (diff / compareBase) * 100;
     let color = diff >= 0 ? 'text-rose-500 bg-rose-50 border border-rose-100' : 'text-emerald-500 bg-emerald-50 border border-emerald-100';
     let arrow = diff >= 0 ? '▲' : '▼';
+    const rangeLabel = lastValidMonthIdx === 11
+      ? `จากปี ${prevYearBE}`
+      : `เทียบ ${chartCategories[0]}–${chartCategories[lastValidMonthIdx]} ปี ${prevYearBE}`;
     compareEl.className = `text-xs font-semibold mt-2 px-2.5 py-1 rounded-md inline-block ${color}`;
-    compareEl.innerHTML = `${arrow} ${Math.abs(percent).toFixed(1)}% <span class="font-medium text-slate-500 ml-1">จากปี ${prevYear}</span>`;
+    compareEl.innerHTML = `${arrow} ${Math.abs(percent).toFixed(1)}% <span class="font-medium text-slate-500 ml-1">${rangeLabel}</span>`;
   }
-  document.getElementById('monthly-chart-title').innerText = `เปรียบเทียบรายเดือน (${prevYear} vs ${currentYear})`;
+  document.getElementById('monthly-chart-title').innerText = `เปรียบเทียบรายเดือน (พ.ศ. ${prevYearBE} vs ${currentYearBE})`;
 
   // History 5 Years
   let historyKeys = Object.keys(response.history).sort(); 
@@ -168,13 +253,19 @@ function processData(response) {
         if (!isNaN(val) && item.rainfall !== null) { yearlyTotal += val; hasData = true; }
       });
     }
-    historyCategories.push(year);
+    if (year == currentYear && mtdMonthIndex >= 0) {
+      yearlyTotal += currMonthlyData.sum;
+      hasData = true;
+    }
+
+    const yearBE = formatThaiYear(year);
+    historyCategories.push(yearBE);
     historySeriesData.push(parseFloat(yearlyTotal.toFixed(1)));
 
     if (hasData && year != currentYear) {
       sum5Years += yearlyTotal; countCompletedYears++;
-      if (yearlyTotal > maxRain) { maxRain = yearlyTotal; maxYearLabel = year; }
-      if (yearlyTotal < minRain) { minRain = yearlyTotal; minYearLabel = year; }
+      if (yearlyTotal > maxRain) { maxRain = yearlyTotal; maxYearLabel = yearBE; }
+      if (yearlyTotal < minRain) { minRain = yearlyTotal; minYearLabel = yearBE; }
     }
   });
 
@@ -186,12 +277,13 @@ function processData(response) {
     document.getElementById('min-5yr-year').innerText = `ปี ${minYearLabel}`;
   }
 
-  renderYearlyCharts(chartCategories, monthlyCurrent, monthlyPrev, currentYear, prevYear);
-  renderHistoryChart(historyCategories, historySeriesData, currentYear);
+  renderYearlyCharts(chartCategories, monthlyCurrent, monthlyPrev, currentYearBE, prevYearBE, lastValidMonthIdx, mtdMonthIndex);
+  renderHistoryChart(historyCategories, historySeriesData, currentYearBE);
 }
 
-function renderDailyChart(selectorId, categories, seriesData, colorHex) {
-  new ApexCharts(document.querySelector(selectorId), {
+function renderDailyChart(selectorId, categories, seriesData, colorHex, dateLabels = []) {
+  destroyChart(selectorId);
+  chartInstances[selectorId] = new ApexCharts(document.querySelector(selectorId), {
     series: [{ name: 'ปริมาณฝน', data: seriesData }],
     chart: { 
         type: 'bar', height: '100%', fontFamily: 'Sarabun', toolbar: { show: false },
@@ -205,17 +297,28 @@ function renderDailyChart(selectorId, categories, seriesData, colorHex) {
         axisBorder: { show: false }, axisTicks: { show: false },
         labels: { style: { colors: '#94a3b8' }, offsetY: 2 }
     },
-    yaxis: { labels: { style: { colors: '#94a3b8' } } },
+    yaxis: {
+        labels: {
+            style: { colors: '#94a3b8' },
+            formatter: v => v !== null && v !== undefined ? `${v} มม.` : ''
+        }
+    },
     grid: { 
         borderColor: '#f1f5f9', strokeDashArray: 3,
         padding: { top: 10, right: 10, bottom: 15, left: 10 }
     },
-    tooltip: { theme: 'light', y: { formatter: v => `${v} มม.` } }
-  }).render();
+    tooltip: {
+        theme: 'light',
+        x: { formatter: (val, { dataPointIndex }) => dateLabels[dataPointIndex] || `วันที่ ${val}` },
+        y: { formatter: v => (v === null || v === undefined) ? 'ยังไม่มีข้อมูล' : `${v} มม.` }
+    }
+  });
+  chartInstances[selectorId].render();
 }
 
-function renderYearlyCharts(categories, currentData, prevData, currYear, prevYear) {
-  new ApexCharts(document.querySelector("#monthly-chart"), {
+function renderYearlyCharts(categories, currentData, prevData, currYear, prevYear, lastValidMonthIdx = -1, mtdMonthIndex = -1) {
+  destroyChart('#monthly-chart');
+  chartInstances['#monthly-chart'] = new ApexCharts(document.querySelector("#monthly-chart"), {
     series: [{ name: `ปี ${prevYear}`, data: prevData }, { name: `ปี ${currYear}`, data: currentData }],
     chart: { 
         type: 'bar', height: '100%', fontFamily: 'Sarabun', toolbar: { show: false },
@@ -228,11 +331,32 @@ function renderYearlyCharts(categories, currentData, prevData, currYear, prevYea
     yaxis: { labels: { style: { colors: '#94a3b8' } } },
     grid: { borderColor: '#f1f5f9', strokeDashArray: 3, padding: { top: 10, right: 10, bottom: 15, left: 10 } },
     legend: { position: 'top', horizontalAlign: 'right', markers: { radius: 10 } },
-    tooltip: { theme: 'light' }
-  }).render();
+    tooltip: {
+        theme: 'light',
+        y: {
+            formatter: (v, { seriesIndex, dataPointIndex }) => {
+                if (v === null || v === undefined) return 'ยังไม่มีข้อมูล';
+                const suffix = (seriesIndex === 1 && dataPointIndex === mtdMonthIndex) ? ' (สะสมถึงปัจจุบัน)' : '';
+                return `${v} มม.${suffix}`;
+            }
+        }
+    }
+  });
+  chartInstances['#monthly-chart'].render();
 
-  new ApexCharts(document.querySelector("#trend-chart"), {
-    series: [{ name: 'ปริมาณฝน', data: currentData.filter((v, i) => i < 4) }], 
+  const sliceEnd = lastValidMonthIdx >= 0 ? lastValidMonthIdx + 1 : currentData.length;
+  const trendData = currentData.slice(0, sliceEnd);
+  const trendCategories = categories.slice(0, sliceEnd);
+
+  const trendSubtitle = document.getElementById('trend-chart-subtitle');
+  if (trendSubtitle && trendCategories.length > 0) {
+    const mtdTag = mtdMonthIndex >= 0 ? ' (ถึงปัจจุบัน)' : '';
+    trendSubtitle.innerText = `${trendCategories[0]} – ${trendCategories[trendCategories.length - 1]} ${currYear}${mtdTag}`;
+  }
+
+  destroyChart('#trend-chart');
+  chartInstances['#trend-chart'] = new ApexCharts(document.querySelector("#trend-chart"), {
+    series: [{ name: 'ปริมาณฝน', data: trendData }], 
     chart: { 
         type: 'area', height: '100%', fontFamily: 'Sarabun', toolbar: { show: false },
         parentHeightOffset: 0 
@@ -241,16 +365,27 @@ function renderYearlyCharts(categories, currentData, prevData, currYear, prevYea
     fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.05, stops: [0, 100] } },
     dataLabels: { enabled: false },
     stroke: { curve: 'smooth', width: 3 },
-    xaxis: { categories: categories.slice(0, 4), axisBorder: { show: false }, axisTicks: { show: false }, labels: { style: { colors: '#94a3b8' }, offsetY: 2 } },
+    xaxis: { categories: trendCategories, axisBorder: { show: false }, axisTicks: { show: false }, labels: { style: { colors: '#94a3b8' }, offsetY: 2 } },
     yaxis: { labels: { style: { colors: '#94a3b8' } } },
     grid: { borderColor: '#f1f5f9', strokeDashArray: 3, padding: { top: 10, right: 10, bottom: 15, left: 10 } },
     markers: { size: 4, strokeColors: '#fff', strokeWidth: 2, hover: { size: 6 } },
-    tooltip: { theme: 'light' }
-  }).render();
+    tooltip: {
+        theme: 'light',
+        y: {
+            formatter: (v, { dataPointIndex }) => {
+                if (v === null || v === undefined) return 'ยังไม่มีข้อมูล';
+                const suffix = (dataPointIndex === mtdMonthIndex) ? ' (สะสมถึงปัจจุบัน)' : '';
+                return `${v} มม.${suffix}`;
+            }
+        }
+    }
+  });
+  chartInstances['#trend-chart'].render();
 }
 
 function renderHistoryChart(categories, seriesData, currentYear) {
-  new ApexCharts(document.querySelector("#history-chart"), {
+  destroyChart('#history-chart');
+  chartInstances['#history-chart'] = new ApexCharts(document.querySelector("#history-chart"), {
     series: [{ name: 'ยอดรวมน้ำฝน', data: seriesData }],
     chart: { 
         type: 'bar', height: '100%', fontFamily: 'Sarabun', toolbar: { show: false },
@@ -262,8 +397,17 @@ function renderHistoryChart(categories, seriesData, currentYear) {
     xaxis: { categories: categories, axisBorder: { show: false }, axisTicks: { show: false }, labels: { style: { colors: '#64748b', fontSize: '13px', fontWeight: 500 }, offsetY: 2 } },
     yaxis: { show: false },
     grid: { show: false, padding: { top: 10, right: 10, bottom: 15, left: 10 } },
-    tooltip: { theme: 'light', y: { formatter: v => `${v} มม.` } }
-  }).render();
+    tooltip: {
+        theme: 'light',
+        y: {
+            formatter: (v, { dataPointIndex }) => {
+                const note = categories[dataPointIndex] == currentYear ? ' (ยังไม่ครบปี)' : '';
+                return `${v} มม.${note}`;
+            }
+        }
+    }
+  });
+  chartInstances['#history-chart'].render();
 }
 
 function getRainfallCategory(val) {
@@ -285,10 +429,10 @@ function setupFilterLimits(minDate, maxDate) {
     ...(globalResponseData.dailyDataCurrent ? globalResponseData.dailyDataCurrent.data : [])
   ].filter(item => item && item.rainfall_datetime);
   
-  const recordsWithData = allDaily.filter(item => item.rainfall_value !== null);
+  const recordsWithData = allDaily.filter(item => item.rainfall_value !== null && item.rainfall_value !== undefined);
   let latestDateStr = maxDate;
   if (recordsWithData.length > 0) {
-    recordsWithData.sort((a, b) => new Date(a.rainfall_datetime) - new Date(b.rainfall_datetime));
+    recordsWithData.sort((a, b) => parseLocalDate(a.rainfall_datetime) - parseLocalDate(b.rainfall_datetime));
     latestDateStr = recordsWithData[recordsWithData.length - 1].rainfall_datetime;
   }
   
@@ -301,8 +445,8 @@ function setupFilterLimits(minDate, maxDate) {
   
   const rangeText = document.getElementById('available-range-text');
   if (rangeText) {
-    const dMin = new Date(minDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' });
-    const dMax = new Date(maxDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' });
+    const dMin = parseLocalDate(minDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' });
+    const dMax = parseLocalDate(latestDateStr).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' });
     rangeText.innerText = `ช่วงข้อมูลในระบบ: ${dMin} - ${dMax}`;
   }
 
@@ -377,7 +521,7 @@ function clearFilter() {
 }
 
 function getDailyRainfallFor2025(dateStr) {
-  const date = new Date(dateStr);
+  const date = parseLocalDate(dateStr);
   if (date.getFullYear() !== 2025) return 0;
   
   const month = date.getMonth(); 
@@ -408,7 +552,7 @@ function getDailyRainfallFor2025(dateStr) {
 function getCumulativeRainfallFor2025(endDateStr, numDays) {
   let sum = 0;
   let hasData = false;
-  const endDate = new Date(endDateStr);
+  const endDate = parseLocalDate(endDateStr);
   
   for (let i = 0; i < numDays; i++) {
     const d = new Date(endDate);
@@ -457,9 +601,9 @@ function executeFilter() {
   let dailyMinDate = null;
   let dailyMaxDate = null;
   if (allDaily.length > 0) {
-    const sorted = [...allDaily].sort((a, b) => new Date(a.rainfall_datetime) - new Date(b.rainfall_datetime));
-    dailyMinDate = new Date(sorted[0].rainfall_datetime);
-    dailyMaxDate = new Date(sorted[sorted.length - 1].rainfall_datetime);
+    const sorted = [...allDaily].sort((a, b) => parseLocalDate(a.rainfall_datetime) - parseLocalDate(b.rainfall_datetime));
+    dailyMinDate = parseLocalDate(sorted[0].rainfall_datetime);
+    dailyMaxDate = parseLocalDate(sorted[sorted.length - 1].rainfall_datetime);
   }
   
   const resultsContainer = document.getElementById('filter-results');
@@ -472,15 +616,17 @@ function executeFilter() {
   const warningTitle = document.getElementById('warning-title');
   const warningDesc = document.getElementById('warning-desc');
   const warningActions = document.getElementById('warning-actions');
+  const rangeEstimateNotice = document.getElementById('range-estimate-notice');
   
   resultsContainer.classList.remove('hidden');
   viewSingle.classList.add('hidden');
   viewRange.classList.add('hidden');
   viewMonthly.classList.add('hidden');
   viewWarning.classList.add('hidden');
+  if (rangeEstimateNotice) rangeEstimateNotice.classList.add('hidden');
   warningActions.innerHTML = "";
   
-  const selectedDate = new Date(selectedDateStr);
+  const selectedDate = parseLocalDate(selectedDateStr);
   const yearVal = selectedDate.getFullYear();
   const monthVal = selectedDate.getMonth();
   const options = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' };
@@ -546,6 +692,9 @@ function executeFilter() {
     
     if (yearVal === 2025 || isRangeDaily) {
       viewRange.classList.remove('hidden');
+      if (rangeEstimateNotice) {
+        rangeEstimateNotice.classList.toggle('hidden', yearVal !== 2025);
+      }
       
       const opt = { day: 'numeric', month: 'short', year: 'numeric' };
       periodText.innerText = `${startDate.toLocaleDateString('th-TH', opt)} ถึง ${selectedDate.toLocaleDateString('th-TH', opt)} (ปริมาณฝนสะสม ${numDays} วัน)`;

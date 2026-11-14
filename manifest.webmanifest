@@ -1,0 +1,27 @@
+{
+  "name": "เฝ้าน้ำหยงมัส - เทศบาลตำบลตันหยงมัส",
+  "short_name": "เฝ้าน้ำหยงมัส",
+  "description": "ระบบรายงานสถานการณ์น้ำท่วมและเฝ้าระวังระดับน้ำ เทศบาลตำบลตันหยงมัส อ.ระแงะ จ.นราธิวาส",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#1e3a8a",
+  "background_color": "#f8fafc",
+  "lang": "th",
+  "icons": [
+    {
+      "src": "assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
+

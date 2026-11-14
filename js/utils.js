@@ -106,7 +106,7 @@ function setupUserInterface(user) {
             'shelter': 'SHELTER',
             'water_staff': 'WATER STAFF',
             'relief': 'RELIEF',
-            'community': 'COMMUNITY',
+            'community': 'DISASTER OFFICER (งานป้องกันฯ)',
             'flood_report': 'FLOOD REPORT'
         };
         roleDisplay.innerText = roleLabels[user.role] || user.role.toUpperCase();

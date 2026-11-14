@@ -14,9 +14,14 @@
     <link rel="dns-prefetch" href="https://script.google.com">
 
     <link rel="icon" type="image/x-icon" href="assets/favicon.ico">
-    <link rel="apple-touch-icon" sizes="180x180" href="assets/logo.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="assets/icon-192.png">
     <link rel="icon" type="image/png" sizes="32x32" href="assets/logo.png">
     <link rel="icon" type="image/png" sizes="16x16" href="assets/logo.png">
+    <link rel="manifest" href="manifest.webmanifest">
+    <meta name="theme-color" content="#1e3a8a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="เฝ้าน้ำหยงมัส">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns" defer></script>
@@ -66,6 +71,55 @@
 
             <!-- ฟอร์มเข้าสู่ระบบเจ้าหน้าที่ -->
             <form onsubmit="event.preventDefault(); doLogin();" class="space-y-3.5 text-left">
+                <!-- ปุ่มเลือกบัญชีเจ้าหน้าที่ด่วน (Quick-Select User - ย่อ/ขยายได้) -->
+                <div class="bg-slate-50/80 border border-slate-200/80 rounded-2xl p-2.5 transition-all">
+                    <button type="button" onclick="toggleQuickLoginSection()" id="quickLoginToggleBtn" aria-expanded="false"
+                        class="w-full flex items-center justify-between text-left px-1 py-0.5 rounded-xl hover:bg-slate-100/70 transition-colors">
+                        <span class="text-[11px] font-bold text-slate-600 flex items-center gap-1.5">
+                            <i class="fas fa-bolt text-amber-500 text-[10px]"></i>
+                            <span>เลือกบัญชีเจ้าหน้าที่ด่วน</span>
+                        </span>
+                        <span class="flex items-center gap-1 text-[10px] text-blue-600 font-bold">
+                            <span id="quickLoginToggleText">แสดง</span>
+                            <i id="quickLoginChevron" class="fas fa-chevron-down text-[9px] transition-transform duration-200"></i>
+                        </span>
+                    </button>
+                    <div class="hidden grid grid-cols-4 gap-1.5 sm:gap-2 mt-2.5" id="quickLoginUserGrid">
+                        <button type="button" onclick="selectQuickLoginUser('Officer')" data-quick-user="Officer"
+                            class="quick-user-btn group flex flex-col items-center justify-center p-1.5 sm:p-2.5 rounded-xl sm:rounded-2xl bg-white hover:bg-teal-50/80 border border-slate-200 hover:border-teal-300 transition-all active:scale-95 text-center min-w-0">
+                            <span class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-teal-100/80 text-teal-600 flex items-center justify-center mb-1 sm:mb-1.5 group-hover:scale-105 transition-transform">
+                                <i class="fas fa-shield-halved text-xs sm:text-sm"></i>
+                            </span>
+                            <span class="text-[9.5px] sm:text-[11px] font-extrabold text-slate-700 leading-tight truncate w-full">งานป้องกัน</span>
+                            <span class="text-[8.5px] sm:text-[9px] font-semibold text-slate-400 mt-0.5 truncate w-full">Officer</span>
+                        </button>
+                        <button type="button" onclick="selectQuickLoginUser('Shelter')" data-quick-user="Shelter"
+                            class="quick-user-btn group flex flex-col items-center justify-center p-1.5 sm:p-2.5 rounded-xl sm:rounded-2xl bg-white hover:bg-indigo-50/80 border border-slate-200 hover:border-indigo-300 transition-all active:scale-95 text-center min-w-0">
+                            <span class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-indigo-100/80 text-indigo-600 flex items-center justify-center mb-1 sm:mb-1.5 group-hover:scale-105 transition-transform">
+                                <i class="fas fa-house-chimney-medical text-xs sm:text-sm"></i>
+                            </span>
+                            <span class="text-[9.5px] sm:text-[11px] font-extrabold text-slate-700 leading-tight truncate w-full">ศูนย์พักพิง</span>
+                            <span class="text-[8.5px] sm:text-[9px] font-semibold text-slate-400 mt-0.5 truncate w-full">Shelter</span>
+                        </button>
+                        <button type="button" onclick="selectQuickLoginUser('Relief')" data-quick-user="Relief"
+                            class="quick-user-btn group flex flex-col items-center justify-center p-1.5 sm:p-2.5 rounded-xl sm:rounded-2xl bg-white hover:bg-amber-50/80 border border-slate-200 hover:border-amber-300 transition-all active:scale-95 text-center min-w-0">
+                            <span class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-amber-100/80 text-amber-600 flex items-center justify-center mb-1 sm:mb-1.5 group-hover:scale-105 transition-transform">
+                                <i class="fas fa-box-open text-xs sm:text-sm"></i>
+                            </span>
+                            <span class="text-[9.5px] sm:text-[11px] font-extrabold text-slate-700 leading-tight truncate w-full">ถุงยังชีพ</span>
+                            <span class="text-[8.5px] sm:text-[9px] font-semibold text-slate-400 mt-0.5 truncate w-full">Relief</span>
+                        </button>
+                        <button type="button" onclick="selectQuickLoginUser('Report')" data-quick-user="Report"
+                            class="quick-user-btn group flex flex-col items-center justify-center p-1.5 sm:p-2.5 rounded-xl sm:rounded-2xl bg-white hover:bg-sky-50/80 border border-slate-200 hover:border-sky-300 transition-all active:scale-95 text-center min-w-0">
+                            <span class="w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-sky-100/80 text-sky-600 flex items-center justify-center mb-1 sm:mb-1.5 group-hover:scale-105 transition-transform">
+                                <i class="fas fa-chart-line text-xs sm:text-sm"></i>
+                            </span>
+                            <span class="text-[9.5px] sm:text-[11px] font-extrabold text-slate-700 leading-tight truncate w-full">รายงานน้ำท่วม</span>
+                            <span class="text-[8.5px] sm:text-[9px] font-semibold text-slate-400 mt-0.5 truncate w-full">Report</span>
+                        </button>
+                    </div>
+                </div>
+
                 <!-- ช่อง Username -->
                 <div>
                     <label for="username" class="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1.5">
@@ -74,6 +128,7 @@
                     </label>
                     <div class="relative">
                         <input type="text" id="username" placeholder="ระบุชื่อผู้ใช้งาน" autocomplete="username"
+                            oninput="if(typeof syncQuickLoginSelection === 'function') syncQuickLoginSelection(this.value)"
                             onkeydown="if(event.key === 'Enter') { const pw=document.getElementById('password'); if(pw && !pw.value) { pw.focus(); } else { doLogin(); } }"
                             class="w-full pl-9 pr-4 py-2.5 sm:py-3 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 focus:border-blue-500 rounded-2xl text-xs sm:text-sm font-bold text-slate-800 outline-none focus:ring-4 focus:ring-blue-100 transition-all">
                         <i class="fas fa-id-badge absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
@@ -3122,7 +3177,7 @@
                                             <option value="shelter">Shelter (เฉพาะศูนย์พักพิง)</option>
                                             <option value="water_staff">Water Staff (เฉพาะการจัดการระดับน้ำ)</option>
                                             <option value="relief">Relief Staff (เฉพาะการจัดการถุงยังชีพ)</option>
-                                            <option value="community">Community (ตัวแทนชุมชน - ระดับน้ำและอพยพ)</option>
+                                            <option value="community">Disaster Officer (เจ้าหน้าที่งานป้องกันฯ - ระดับน้ำและอพยพ)</option>
                                             <option value="flood_report">Flood Report (เข้าถึงหน้ารายงานข้อมูลน้ำท่วม อย่างเดียว)</option>
                                         </select>
                                     </div>
@@ -4295,6 +4350,31 @@
 
     <!-- 🚀 Core Application Orchestrator -->
     <script src="js/dashboard.js?v=2569.2" defer></script>
+
+    <!-- 📱 PWA Floating Install Button -->
+    <div id="pwaInstallFloating" class="hidden fixed z-[1100] bottom-20 right-4 lg:bottom-6 lg:right-6 no-print animate-fade-in">
+        <!-- แบบเต็ม (Expanded Pill) -->
+        <div id="pwaInstallExpanded" class="flex items-center gap-1.5 bg-sky-500 hover:bg-sky-600 text-white pl-3 pr-2 py-2 rounded-full shadow-xl shadow-sky-500/30 border border-white/25 transition-colors">
+            <button type="button" onclick="triggerPwaInstall()" class="flex items-center gap-2 text-xs font-bold hover:opacity-95 active:scale-95 transition-all pr-1">
+                <img src="assets/icon-192.png" alt="เฝ้าน้ำหยงมัส" class="w-6 h-6 rounded-lg object-cover border border-white/30 bg-white">
+                <span>ติดตั้งแอป</span>
+                <i class="fas fa-download text-[11px] text-white/90"></i>
+            </button>
+            <button type="button" onclick="minimizePwaInstallBanner()" aria-label="ย่อปุ่มติดตั้งแอป" title="ย่อเป็นไอคอนเล็ก" class="w-6 h-6 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-[11px] text-white transition-colors">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+
+        <!-- แบบย่อ (Minimized Icon) -->
+        <button type="button" id="pwaInstallMini" onclick="triggerPwaInstall()" aria-label="ติดตั้งแอป" title="ติดตั้งแอป เฝ้าน้ำหยงมัส"
+            class="hidden relative w-11 h-11 rounded-full bg-sky-500 hover:bg-sky-600 text-white shadow-xl shadow-sky-500/30 border border-white/30 flex items-center justify-center active:scale-95 transition-all">
+            <i class="fas fa-mobile-screen-button text-base"></i>
+            <span class="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-white text-sky-600 flex items-center justify-center shadow-sm">
+                <i class="fas fa-download text-[8px]"></i>
+            </span>
+        </button>
+    </div>
+    <script src="js/pwa.js?v=2569.2" defer></script>
 </body>
 
 </html>

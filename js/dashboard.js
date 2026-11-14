@@ -134,6 +134,7 @@ let dashLayerStates = {
                         const remEl = document.getElementById('rememberMe');
                         const passEl = document.getElementById('password');
                         if (userEl) userEl.value = rememberedUser;
+                        if (typeof syncQuickLoginSelection === 'function') syncQuickLoginSelection(rememberedUser);
                         if (remEl) remEl.checked = true;
                         if (passEl) setTimeout(() => passEl.focus(), 250);
                     }
@@ -216,9 +217,9 @@ let dashLayerStates = {
                         </span>`;
                 } else if (cleanRole === 'community') {
                     badgeHtml = `
-                        <span class="inline-flex items-center gap-1 text-[9px] font-black tracking-wider px-2 py-0.5 rounded-md bg-teal-100 text-teal-800 border border-teal-200 truncate" title="ตัวแทนชุมชน">
-                            <i class="fas fa-users text-[8px] text-teal-600"></i>
-                            <span>ชุมชน</span>
+                        <span class="inline-flex items-center gap-1 text-[9px] font-black tracking-wider px-2 py-0.5 rounded-md bg-teal-100 text-teal-800 border border-teal-200 truncate" title="เจ้าหน้าที่งานป้องกันฯ (Disaster Officer)">
+                            <i class="fas fa-shield-alt text-[8px] text-teal-600"></i>
+                            <span>งานป้องกันฯ</span>
                         </span>`;
                 } else if (cleanRole === 'flood_report') {
                     badgeHtml = `
@@ -423,6 +424,49 @@ let dashLayerStates = {
             }
         }
         window.toggleLoginPasswordVisibility = toggleLoginPasswordVisibility;
+
+        function toggleQuickLoginSection(forceExpand) {
+            const gridEl = document.getElementById('quickLoginUserGrid');
+            const toggleBtn = document.getElementById('quickLoginToggleBtn');
+            const toggleText = document.getElementById('quickLoginToggleText');
+            const chevronEl = document.getElementById('quickLoginChevron');
+            if (!gridEl) return;
+
+            const shouldExpand = typeof forceExpand === 'boolean' ? forceExpand : gridEl.classList.contains('hidden');
+            gridEl.classList.toggle('hidden', !shouldExpand);
+            if (toggleBtn) toggleBtn.setAttribute('aria-expanded', shouldExpand ? 'true' : 'false');
+            if (toggleText) toggleText.innerText = shouldExpand ? 'ซ่อน' : 'แสดง';
+            if (chevronEl) chevronEl.classList.toggle('rotate-180', shouldExpand);
+        }
+        window.toggleQuickLoginSection = toggleQuickLoginSection;
+
+        function syncQuickLoginSelection(value) {
+            const cleanVal = String(value || '').trim().toLowerCase();
+            document.querySelectorAll('.quick-user-btn').forEach(btn => {
+                const targetUser = String(btn.getAttribute('data-quick-user') || '').toLowerCase();
+                const isSelected = cleanVal !== '' && targetUser === cleanVal;
+                btn.classList.toggle('ring-2', isSelected);
+                btn.classList.toggle('ring-blue-500', isSelected);
+                btn.classList.toggle('bg-blue-50/80', isSelected);
+                btn.classList.toggle('border-blue-400', isSelected);
+                btn.classList.toggle('shadow-sm', isSelected);
+                btn.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+            });
+        }
+        window.syncQuickLoginSelection = syncQuickLoginSelection;
+
+        function selectQuickLoginUser(username) {
+            const userEl = document.getElementById('username');
+            const passEl = document.getElementById('password');
+            if (userEl) {
+                userEl.value = username;
+            }
+            syncQuickLoginSelection(username);
+            if (passEl) {
+                passEl.focus();
+            }
+        }
+        window.selectQuickLoginUser = selectQuickLoginUser;
 
         async function doLogin() {
             const user = (document.getElementById('username') ? document.getElementById('username').value : '').trim();
