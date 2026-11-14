@@ -852,8 +852,8 @@
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
 
                             <!-- กล่องสถานี X.73 (ปลายน้ำ - เทศบาลตำบลตันหยงมัส) -->
-                            <div id="rid_card_mini"
-                                class="h-[120px] w-full flex items-center justify-between bg-emerald-50/40 rounded-2xl p-4 md:p-5 shadow-sm border border-emerald-100 relative overflow-hidden transition-all hover:shadow-md">
+                            <div id="rid_card_mini" onclick="openRidHistoryModal('X.73')" title="คลิกเพื่อดูกราฟประวัติระดับน้ำ สถานี X.73"
+                                class="h-[120px] w-full flex items-center justify-between bg-emerald-50/40 rounded-2xl p-4 md:p-5 shadow-sm border border-emerald-100 relative overflow-hidden transition-all hover:shadow-md hover:ring-2 hover:ring-blue-400/40 cursor-pointer active:scale-[0.99]">
 
                                 <div class="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-emerald-400 to-green-500">
                                 </div>
@@ -864,8 +864,13 @@
                                         <i class="fas fa-water"></i>
                                     </div>
                                     <div class="min-w-0 flex-1 pr-2">
-                                        <p class="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-wide truncate">
-                                            สถานี X.73 กรมชลประทาน (ปลายน้ำ)</p>
+                                        <div class="flex items-center gap-1.5">
+                                            <p class="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-wide truncate">
+                                                สถานี X.73 กรมชลประทาน (ปลายน้ำ)</p>
+                                            <span class="text-[8px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-md font-extrabold shrink-0">
+                                                <i class="fas fa-chart-line mr-0.5"></i> กราฟ
+                                            </span>
+                                        </div>
                                         <h3 class="text-sm md:text-base font-black text-slate-700 leading-tight truncate">
                                             ระดับน้ำคลองตันหยงมัส</h3>
                                         <p class="text-[9px] text-slate-400 mt-1 flex items-center gap-1 truncate">
@@ -891,8 +896,8 @@
                             </div>
 
                             <!-- กล่องสถานี X.73A (ต้นน้ำ - บ้านบองอ อ.ระแงะ แจ้งเตือนล่วงหน้า) -->
-                            <div id="rid_x73a_card_mini"
-                                class="h-[120px] w-full flex items-center justify-between bg-emerald-50/40 rounded-2xl p-4 md:p-5 shadow-sm border border-emerald-100 relative overflow-hidden transition-all hover:shadow-md">
+                            <div id="rid_x73a_card_mini" onclick="openRidHistoryModal('X.73A')" title="คลิกเพื่อดูกราฟประวัติระดับน้ำ สถานี X.73A"
+                                class="h-[120px] w-full flex items-center justify-between bg-emerald-50/40 rounded-2xl p-4 md:p-5 shadow-sm border border-emerald-100 relative overflow-hidden transition-all hover:shadow-md hover:ring-2 hover:ring-blue-400/40 cursor-pointer active:scale-[0.99]">
 
                                 <div id="rid_x73a_sidebar_mini"
                                     class="absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-emerald-400 to-green-500">
@@ -904,10 +909,13 @@
                                         <i class="fas fa-mountain"></i>
                                     </div>
                                     <div class="min-w-0 flex-1 pr-2">
-                                        <div class="flex items-center gap-1">
+                                        <div class="flex items-center gap-1 flex-wrap">
                                             <p class="text-[9px] md:text-[10px] font-bold text-slate-400 uppercase tracking-wide truncate">
                                                 สถานี X.73A กรมชลประทาน</p>
                                             <span class="text-[8px] bg-indigo-100 text-indigo-700 px-1.5 py-0.2 rounded-md font-extrabold shrink-0">เตือนล่วงหน้า</span>
+                                            <span class="text-[8px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-md font-extrabold shrink-0">
+                                                <i class="fas fa-chart-line mr-0.5"></i> กราฟ
+                                            </span>
                                         </div>
                                         <h3 class="text-sm md:text-base font-black text-slate-700 leading-tight truncate">
                                             บ้านบองอ อ.ระแงะ</h3>
@@ -4161,6 +4169,113 @@
         <img id="lightboxImg" src=""
             class="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl scale-95 transition-transform duration-300"
             onclick="event.stopPropagation()">
+    </div>
+
+    <!-- 📈 Modal: กราฟประวัติระดับน้ำสถานี X.73 และ X.73A -->
+    <div id="ridHistoryModal" onclick="if(event.target === this) closeRidHistoryModal()"
+        class="hidden fixed inset-0 z-[9998] bg-slate-900/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+        <div class="bg-white w-full max-w-3xl rounded-3xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[92vh] animate-fade-in">
+            <!-- Header -->
+            <div class="bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 text-white px-5 py-4 flex items-center justify-between gap-3 shrink-0">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div id="ridHistIconBox" class="w-10 h-10 rounded-2xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-sky-300 shrink-0">
+                        <i class="fas fa-chart-area text-lg"></i>
+                    </div>
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                            <span id="ridHistCodeBadge" class="text-[10px] font-black bg-sky-500 text-white px-2 py-0.5 rounded-full">X.73</span>
+                            <h3 id="ridHistTitle" class="text-sm sm:text-base font-black truncate">ประวัติระดับน้ำ สถานี X.73</h3>
+                        </div>
+                        <p id="ridHistSubtitle" class="text-[10px] sm:text-[11px] text-slate-300 truncate mt-0.5">คลังข้อมูลน้ำแห่งชาติ (ThaiWater) • เฝ้าระวัง 13.50 ม. | ตลิ่ง 14.90 ม.</p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeRidHistoryModal()"
+                    class="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors shrink-0" title="ปิดหน้าต่าง">
+                    <i class="fas fa-times text-sm"></i>
+                </button>
+            </div>
+
+            <!-- Body -->
+            <div class="p-4 sm:p-5 space-y-4 overflow-y-auto custom-scrollbar">
+                <!-- Filter Tabs + Station Switcher -->
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                    <div class="inline-flex bg-slate-100 p-1 rounded-2xl gap-1 w-full sm:w-auto">
+                        <button type="button" id="ridHistBtn_today" onclick="loadRidHistoryChart('today')"
+                            class="rid-hist-tab flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-black transition-all bg-blue-600 text-white shadow-sm">
+                            วันนี้ <span class="hidden sm:inline font-bold opacity-90">(ชั่วโมงที่เปลี่ยน)</span>
+                        </button>
+                        <button type="button" id="ridHistBtn_3d" onclick="loadRidHistoryChart('3d')"
+                            class="rid-hist-tab flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-black transition-all text-slate-600 hover:text-slate-900">
+                            3 วัน
+                        </button>
+                        <button type="button" id="ridHistBtn_7d" onclick="loadRidHistoryChart('7d')"
+                            class="rid-hist-tab flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-black transition-all text-slate-600 hover:text-slate-900">
+                            7 วัน
+                        </button>
+                    </div>
+
+                    <div class="flex items-center gap-1.5 text-[11px] font-bold">
+                        <span class="text-slate-400">สลับสถานี:</span>
+                        <button type="button" id="ridSwitch_X73" onclick="openRidHistoryModal('X.73')"
+                            class="px-2.5 py-1 rounded-lg border border-slate-200 hover:border-blue-400 transition-colors">X.73 ตันหยงมัส</button>
+                        <button type="button" id="ridSwitch_X73A" onclick="openRidHistoryModal('X.73A')"
+                            class="px-2.5 py-1 rounded-lg border border-slate-200 hover:border-blue-400 transition-colors">X.73A บ้านบองอ</button>
+                    </div>
+                </div>
+
+                <!-- Summary KPI Strip -->
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    <div class="bg-slate-50 border border-slate-100 rounded-2xl p-3 text-center">
+                        <p class="text-[10px] font-bold text-slate-400">ระดับล่าสุด</p>
+                        <p id="ridHistLatest" class="text-base sm:text-lg font-black text-blue-700 mt-0.5">--.-- ม.</p>
+                    </div>
+                    <div class="bg-rose-50/70 border border-rose-100 rounded-2xl p-3 text-center">
+                        <p class="text-[10px] font-bold text-rose-500">สูงสุดในช่วง</p>
+                        <p id="ridHistMax" class="text-base sm:text-lg font-black text-rose-600 mt-0.5">--.-- ม.</p>
+                    </div>
+                    <div class="bg-emerald-50/70 border border-emerald-100 rounded-2xl p-3 text-center">
+                        <p class="text-[10px] font-bold text-emerald-600">ต่ำสุดในช่วง</p>
+                        <p id="ridHistMin" class="text-base sm:text-lg font-black text-emerald-700 mt-0.5">--.-- ม.</p>
+                    </div>
+                    <div class="bg-indigo-50/70 border border-indigo-100 rounded-2xl p-3 text-center">
+                        <p class="text-[10px] font-bold text-indigo-500">จุดข้อมูลที่แสดง</p>
+                        <p id="ridHistCount" class="text-base sm:text-lg font-black text-indigo-700 mt-0.5">0 จุด</p>
+                    </div>
+                </div>
+
+                <!-- Chart Area -->
+                <div class="relative bg-slate-50/50 border border-slate-100 rounded-2xl p-3 sm:p-4">
+                    <div id="ridHistLoading" class="hidden absolute inset-0 bg-white/80 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center rounded-2xl gap-2">
+                        <i class="fas fa-circle-notch fa-spin text-2xl text-blue-600"></i>
+                        <span class="text-xs font-bold text-slate-600">กำลังโหลดข้อมูลกราฟประวัติระดับน้ำ...</span>
+                    </div>
+                    <div id="ridHistEmptyNotice" class="hidden text-center py-2 px-3 mb-2 bg-amber-50 border border-amber-200 rounded-xl text-[11px] font-bold text-amber-800"></div>
+                    <div class="h-[220px] sm:h-[270px] w-full">
+                        <canvas id="ridHistoryChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Hourly Change Log Table -->
+                <div class="border border-slate-100 rounded-2xl overflow-hidden">
+                    <div class="bg-slate-50 px-4 py-2 border-b border-slate-100 flex items-center justify-between">
+                        <span class="text-[11px] font-black text-slate-700"><i class="fas fa-list-ul mr-1.5 text-blue-500"></i>รายละเอียดการเปลี่ยนแปลงระดับน้ำ</span>
+                        <span id="ridHistTableHint" class="text-[10px] text-slate-400 font-bold">ม.รทก.</span>
+                    </div>
+                    <div class="max-h-[160px] overflow-y-auto custom-scrollbar">
+                        <table class="w-full text-left border-collapse text-[11px]">
+                            <thead class="bg-slate-50/80 sticky top-0 text-[10px] text-slate-500 font-bold border-b border-slate-100">
+                                <tr>
+                                    <th class="py-2 px-3">วัน / เวลา</th>
+                                    <th class="py-2 px-3 text-right">ระดับน้ำ (ม.รทก.)</th>
+                                    <th class="py-2 px-3 text-right">เปลี่ยนแปลง</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ridHistTableBody" class="divide-y divide-slate-50"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- ⚡ Supabase Client & Service Layer (PostgreSQL Database) -->

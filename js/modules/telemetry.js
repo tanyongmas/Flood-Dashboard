@@ -142,7 +142,7 @@ async function loadRIDWaterLevel(forceRefresh = false) {
             if (dotMiniEl) dotMiniEl.className = 'w-1.5 h-1.5 rounded-full bg-red-500 animate-ping';
             if (levelMiniEl) levelMiniEl.className = 'text-2xl md:text-3xl font-black text-red-600 tracking-tight';
             if (cardMiniEl) {
-                cardMiniEl.className = 'h-[120px] w-full flex items-center justify-between bg-red-50/80 rounded-2xl p-4 md:p-5 shadow-sm border border-red-200 relative overflow-hidden transition-all hover:shadow-md';
+                cardMiniEl.className = 'h-[120px] w-full flex items-center justify-between bg-red-50/80 rounded-2xl p-4 md:p-5 shadow-sm border border-red-200 relative overflow-hidden transition-all hover:shadow-md hover:ring-2 hover:ring-blue-400/40 cursor-pointer active:scale-[0.99]';
                 const sidebar = cardMiniEl.querySelector('.absolute.left-0');
                 if (sidebar) sidebar.className = 'absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-red-400 to-red-600';
             }
@@ -155,7 +155,7 @@ async function loadRIDWaterLevel(forceRefresh = false) {
             if (dotMiniEl) dotMiniEl.className = 'w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse';
             if (levelMiniEl) levelMiniEl.className = 'text-2xl md:text-3xl font-black text-amber-600 tracking-tight';
             if (cardMiniEl) {
-                cardMiniEl.className = 'h-[120px] w-full flex items-center justify-between bg-amber-50/50 rounded-2xl p-4 md:p-5 shadow-sm border border-amber-200 relative overflow-hidden transition-all hover:shadow-md';
+                cardMiniEl.className = 'h-[120px] w-full flex items-center justify-between bg-amber-50/50 rounded-2xl p-4 md:p-5 shadow-sm border border-amber-200 relative overflow-hidden transition-all hover:shadow-md hover:ring-2 hover:ring-blue-400/40 cursor-pointer active:scale-[0.99]';
                 const sidebar = cardMiniEl.querySelector('.absolute.left-0');
                 if (sidebar) sidebar.className = 'absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-amber-400 to-orange-500';
             }
@@ -168,7 +168,7 @@ async function loadRIDWaterLevel(forceRefresh = false) {
             if (dotMiniEl) dotMiniEl.className = 'w-1.5 h-1.5 rounded-full bg-emerald-500';
             if (levelMiniEl) levelMiniEl.className = 'text-2xl md:text-3xl font-black text-emerald-600 tracking-tight';
             if (cardMiniEl) {
-                cardMiniEl.className = 'h-[120px] w-full flex items-center justify-between bg-emerald-50/40 rounded-2xl p-4 md:p-5 shadow-sm border border-emerald-100 relative overflow-hidden transition-all hover:shadow-md';
+                cardMiniEl.className = 'h-[120px] w-full flex items-center justify-between bg-emerald-50/40 rounded-2xl p-4 md:p-5 shadow-sm border border-emerald-100 relative overflow-hidden transition-all hover:shadow-md hover:ring-2 hover:ring-blue-400/40 cursor-pointer active:scale-[0.99]';
                 const sidebar = cardMiniEl.querySelector('.absolute.left-0');
                 if (sidebar) sidebar.className = 'absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-emerald-400 to-green-500';
             }
@@ -202,21 +202,21 @@ async function loadRIDWaterLevel(forceRefresh = false) {
                 if (statusX73aEl) { statusX73aEl.innerText = 'วิกฤต / น้ำล้นตลิ่ง'; statusX73aEl.className = 'text-[10px] md:text-xs font-bold text-red-600'; }
                 if (dotX73aEl) dotX73aEl.className = 'w-1.5 h-1.5 rounded-full bg-red-500 animate-ping';
                 if (levelX73aEl) levelX73aEl.className = 'text-2xl md:text-3xl font-black text-red-600 tracking-tight';
-                if (cardX73aEl) cardX73aEl.className = 'h-[120px] w-full flex items-center justify-between bg-red-50/80 rounded-2xl p-4 md:p-5 shadow-sm border border-red-200 relative overflow-hidden transition-all hover:shadow-md';
+                if (cardX73aEl) cardX73aEl.className = 'h-[120px] w-full flex items-center justify-between bg-red-50/80 rounded-2xl p-4 md:p-5 shadow-sm border border-red-200 relative overflow-hidden transition-all hover:shadow-md hover:ring-2 hover:ring-blue-400/40 cursor-pointer active:scale-[0.99]';
                 if (sidebarX73a) sidebarX73a.className = 'absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-red-400 to-red-600';
                 if (iconX73aBg) iconX73aBg.className = 'w-12 h-12 md:w-14 md:h-14 bg-gradient-to-br from-red-500 to-red-600 text-white rounded-[1rem] flex items-center justify-center text-2xl md:text-3xl shrink-0 shadow-lg shadow-red-500/40 animate-pulse';
             } else if (levelX73a >= 25.80) {
                 if (statusX73aEl) { statusX73aEl.innerText = 'เตือนภัย / เตรียมพร้อม'; statusX73aEl.className = 'text-[10px] md:text-xs font-bold text-amber-600'; }
                 if (dotX73aEl) dotX73aEl.className = 'w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse';
                 if (levelX73aEl) levelX73aEl.className = 'text-2xl md:text-3xl font-black text-amber-600 tracking-tight';
-                if (cardX73aEl) cardX73aEl.className = 'h-[120px] w-full flex items-center justify-between bg-amber-50/50 rounded-2xl p-4 md:p-5 shadow-sm border border-amber-200 relative overflow-hidden transition-all hover:shadow-md';
+                if (cardX73aEl) cardX73aEl.className = 'h-[120px] w-full flex items-center justify-between bg-amber-50/50 rounded-2xl p-4 md:p-5 shadow-sm border border-amber-200 relative overflow-hidden transition-all hover:shadow-md hover:ring-2 hover:ring-blue-400/40 cursor-pointer active:scale-[0.99]';
                 if (sidebarX73a) sidebarX73a.className = 'absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-amber-400 to-orange-500';
                 if (iconX73aBg) iconX73aBg.className = 'w-12 h-12 md:w-14 md:h-14 bg-gradient-to-br from-amber-400 to-orange-500 text-white rounded-[1rem] flex items-center justify-center text-2xl md:text-3xl shrink-0 shadow-md';
             } else {
                 if (statusX73aEl) { statusX73aEl.innerText = 'ระดับปกติ'; statusX73aEl.className = 'text-[10px] md:text-xs font-bold text-emerald-600'; }
                 if (dotX73aEl) dotX73aEl.className = 'w-1.5 h-1.5 rounded-full bg-emerald-500';
                 if (levelX73aEl) levelX73aEl.className = 'text-2xl md:text-3xl font-black text-emerald-600 tracking-tight';
-                if (cardX73aEl) cardX73aEl.className = 'h-[120px] w-full flex items-center justify-between bg-emerald-50/40 rounded-2xl p-4 md:p-5 shadow-sm border border-emerald-100 relative overflow-hidden transition-all hover:shadow-md';
+                if (cardX73aEl) cardX73aEl.className = 'h-[120px] w-full flex items-center justify-between bg-emerald-50/40 rounded-2xl p-4 md:p-5 shadow-sm border border-emerald-100 relative overflow-hidden transition-all hover:shadow-md hover:ring-2 hover:ring-blue-400/40 cursor-pointer active:scale-[0.99]';
                 if (sidebarX73a) sidebarX73a.className = 'absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-emerald-400 to-green-500';
                 if (iconX73aBg) iconX73aBg.className = 'w-12 h-12 md:w-14 md:h-14 bg-gradient-to-br from-emerald-400 to-green-500 text-white rounded-[1rem] flex items-center justify-center text-2xl md:text-3xl shrink-0 shadow-md';
             }
@@ -932,3 +932,418 @@ window.toggleHeroRainEffect = function (enable) {
 window.setHeroWeatherMode = setHeroWeatherMode;
 window.setHeroCardRainEffect = setHeroCardRainEffect;
 window.checkAndApplyHeroRainEffect = checkAndApplyHeroRainEffect;
+
+// =========================================================================
+// 📈 ระบบกราฟประวัติระดับน้ำย้อนหลัง (สถานี X.73 และ X.73A)
+// =========================================================================
+const _ridHistState = {
+    station: 'X.73',
+    range: 'today',
+    chart: null,
+    cache: {} // key: `${station}_${days}` -> { ts, payload }
+};
+
+function openRidHistoryModal(stationCode = 'X.73') {
+    const station = String(stationCode).toUpperCase().includes('73A') ? 'X.73A' : 'X.73';
+    _ridHistState.station = station;
+
+    const modal = document.getElementById('ridHistoryModal');
+    if (!modal) return;
+
+    const isX73A = (station === 'X.73A');
+    const codeBadge = document.getElementById('ridHistCodeBadge');
+    const titleEl = document.getElementById('ridHistTitle');
+    const subtitleEl = document.getElementById('ridHistSubtitle');
+    const btnX73 = document.getElementById('ridSwitch_X73');
+    const btnX73A = document.getElementById('ridSwitch_X73A');
+
+    if (codeBadge) {
+        codeBadge.innerText = station;
+        codeBadge.className = isX73A
+            ? 'text-[10px] font-black bg-indigo-500 text-white px-2 py-0.5 rounded-full'
+            : 'text-[10px] font-black bg-sky-500 text-white px-2 py-0.5 rounded-full';
+    }
+    if (titleEl) {
+        titleEl.innerText = isX73A ? 'ประวัติระดับน้ำ สถานี X.73A (บ้านบองอ)' : 'ประวัติระดับน้ำ สถานี X.73 (คลองตันหยงมัส)';
+    }
+    if (subtitleEl) {
+        subtitleEl.innerText = isX73A
+            ? 'คลังข้อมูลน้ำแห่งชาติ (ThaiWater) • เฝ้าระวัง 25.80 ม. | ตลิ่ง 26.80 ม.'
+            : 'คลังข้อมูลน้ำแห่งชาติ (ThaiWater) • เฝ้าระวัง 13.50 ม. | ตลิ่ง 14.90 ม.';
+    }
+
+    if (btnX73 && btnX73A) {
+        btnX73.className = !isX73A
+            ? 'px-2.5 py-1 rounded-lg bg-blue-600 text-white font-black shadow-xs transition-colors'
+            : 'px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:border-blue-400 transition-colors';
+        btnX73A.className = isX73A
+            ? 'px-2.5 py-1 rounded-lg bg-indigo-600 text-white font-black shadow-xs transition-colors'
+            : 'px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:border-indigo-400 transition-colors';
+    }
+
+    modal.classList.remove('hidden');
+    loadRidHistoryChart('today');
+}
+
+function closeRidHistoryModal() {
+    const modal = document.getElementById('ridHistoryModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function formatRidHistLabel(dtStr, isTodayOnly) {
+    if (!dtStr) return '-';
+    const s = String(dtStr).trim();
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})[\sT](\d{2}):(\d{2})/);
+    if (!m) return s;
+    const [, yyyy, mm, dd, hh, min] = m;
+    if (isTodayOnly) return `${hh}:${min} น.`;
+    const thMonths = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+    const mName = thMonths[parseInt(mm, 10) - 1] || mm;
+    return `${parseInt(dd, 10)} ${mName} ${hh}:${min}`;
+}
+
+function filterTodayHourlyChanges(records) {
+    if (!Array.isArray(records) || records.length === 0) return { points: [], isFlat: false };
+
+    // หาวันที่ล่าสุดหรือวันที่ปัจจุบันใน Timezone ไทย
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    let todayRecords = records.filter(r => String(r.datetime).startsWith(todayStr));
+
+    // กรณี API ยังไม่มีข้อมูลของวันนี้ (เช่น ช่วงหลังเที่ยงคืนเล็กน้อย) ให้ใช้วันล่าสุดที่มีในข้อมูล
+    if (todayRecords.length === 0) {
+        const latestDatePrefix = String(records[records.length - 1].datetime).slice(0, 10);
+        todayRecords = records.filter(r => String(r.datetime).startsWith(latestDatePrefix));
+    }
+
+    if (todayRecords.length <= 1) {
+        return { points: todayRecords, isFlat: true };
+    }
+
+    // คัดกรองเฉพาะชั่วโมงที่มีการเปลี่ยนแปลงระดับน้ำ (คงจุดแรกของวัน และจุดล่าสุดไว้เสมอเพื่อความต่อเนื่อง)
+    const changedPoints = [todayRecords[0]];
+    let lastVal = todayRecords[0].value;
+    let hasAnyChange = false;
+
+    for (let i = 1; i < todayRecords.length - 1; i++) {
+        const cur = todayRecords[i];
+        if (Math.abs(cur.value - lastVal) >= 0.005) {
+            changedPoints.push(cur);
+            lastVal = cur.value;
+            hasAnyChange = true;
+        }
+    }
+
+    const latestPt = todayRecords[todayRecords.length - 1];
+    if (Math.abs(latestPt.value - lastVal) >= 0.005) {
+        hasAnyChange = true;
+    }
+    if (changedPoints[changedPoints.length - 1].datetime !== latestPt.datetime) {
+        changedPoints.push(latestPt);
+    }
+
+    return { points: changedPoints, isFlat: !hasAnyChange };
+}
+
+async function fetchRidHistoryDirectFallback(station, days) {
+    const isX73A = (station === 'X.73A');
+    const loadRes = await fetch('https://api-v3.thaiwater.net/api/v1/thaiwater30/public/waterlevel_load');
+    if (!loadRes.ok) throw new Error('ไม่สามารถเชื่อมต่อคลังข้อมูลน้ำแห่งชาติได้');
+    const loadJson = await loadRes.json();
+    const list = (loadJson && loadJson.waterlevel_data && Array.isArray(loadJson.waterlevel_data.data)) ? loadJson.waterlevel_data.data : [];
+    const found = list.find(d => {
+        if (!d.station) return false;
+        const code = d.station.tele_station_oldcode || '';
+        const thName = (d.station.tele_station_name && d.station.tele_station_name.th) ? d.station.tele_station_name.th : '';
+        return isX73A ? (code === 'X.73A' || thName.includes('บองอ')) : (code === 'X.73');
+    });
+    if (!found || !found.station || !found.station.id) {
+        throw new Error('ไม่พบรหัสสถานีจาก ThaiWater API');
+    }
+
+    const stationId = found.station.id;
+    const bankLevel = parseFloat(found.station.min_bank) || (isX73A ? 26.80 : 14.90);
+    const warnLevel = isX73A ? 25.80 : 13.50;
+
+    const now = new Date();
+    const startDt = new Date(now.getTime() - ((days - 1) * 24 * 60 * 60 * 1000));
+    const fmt = (dt) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+
+    const graphUrl = `https://api-v3.thaiwater.net/api/v1/thaiwater30/public/waterlevel_graph?station_type=tele_waterlevel&station_id=${encodeURIComponent(stationId)}&start_date=${fmt(startDt)}&end_date=${fmt(now)}`;
+    const gRes = await fetch(graphUrl);
+    if (!gRes.ok) throw new Error('ไม่สามารถดึงข้อมูลกราฟจาก ThaiWater API ได้');
+    const gJson = await gRes.json();
+
+    let rawPoints = [];
+    if (gJson && gJson.data && Array.isArray(gJson.data.graph_data)) {
+        rawPoints = gJson.data.graph_data;
+    } else if (gJson && gJson.waterlevel_data && gJson.waterlevel_data.data) {
+        if (Array.isArray(gJson.waterlevel_data.data.graph_data)) rawPoints = gJson.waterlevel_data.data.graph_data;
+        else if (Array.isArray(gJson.waterlevel_data.data)) rawPoints = gJson.waterlevel_data.data;
+    } else if (gJson && Array.isArray(gJson.graph_data)) {
+        rawPoints = gJson.graph_data;
+    } else if (gJson && Array.isArray(gJson.data)) {
+        rawPoints = gJson.data;
+    }
+
+    const records = [];
+    rawPoints.forEach(item => {
+        const dt = item.datetime || item.waterlevel_datetime || item.date || '';
+        const valRaw = (item.value !== undefined && item.value !== null) ? item.value : (item.waterlevel_msl !== undefined ? item.waterlevel_msl : item.waterlevel_m);
+        const numVal = parseFloat(valRaw);
+        if (dt && !isNaN(numVal)) {
+            records.push({ datetime: String(dt).trim(), value: parseFloat(numVal.toFixed(2)) });
+        }
+    });
+    records.sort((a, b) => new Date(a.datetime.replace(' ', 'T')) - new Date(b.datetime.replace(' ', 'T')));
+
+    return {
+        success: true,
+        station,
+        stationId,
+        bankLevel,
+        warnLevel,
+        records
+    };
+}
+
+async function loadRidHistoryChart(rangeKey = 'today') {
+    _ridHistState.range = rangeKey;
+    const station = _ridHistState.station;
+    const days = rangeKey === '7d' ? 7 : (rangeKey === '3d' ? 3 : 1);
+
+    // อัปเดตปุ่มแท็บ Active
+    ['today', '3d', '7d'].forEach(k => {
+        const btn = document.getElementById(`ridHistBtn_${k}`);
+        if (!btn) return;
+        if (k === rangeKey) {
+            btn.className = 'rid-hist-tab flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-black transition-all bg-blue-600 text-white shadow-sm';
+        } else {
+            btn.className = 'rid-hist-tab flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-black transition-all text-slate-600 hover:text-slate-900';
+        }
+    });
+
+    const loadingEl = document.getElementById('ridHistLoading');
+    const noticeEl = document.getElementById('ridHistEmptyNotice');
+    if (loadingEl) loadingEl.classList.remove('hidden');
+    if (noticeEl) {
+        noticeEl.classList.add('hidden');
+        noticeEl.innerText = '';
+    }
+
+    try {
+        const cacheKey = `${station}_${days}`;
+        const cached = _ridHistState.cache[cacheKey];
+        let dataPayload = null;
+
+        if (cached && (Date.now() - cached.ts) < 3 * 60 * 1000) {
+            dataPayload = cached.payload;
+        } else {
+            try {
+                const res = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({ action: 'getRIDHistory', station: station, days: days })
+                });
+                if (res.ok) {
+                    const parsed = await res.json();
+                    if (parsed && parsed.success && Array.isArray(parsed.records) && parsed.records.length > 0) {
+                        dataPayload = parsed;
+                    }
+                }
+            } catch (gasErr) {
+                console.warn('⚠️ GAS getRIDHistory unavailable, trying direct ThaiWater fallback:', gasErr);
+            }
+
+            // Fallback: ดึงตรงจาก ThaiWater Public API กรณียังไม่ได้ Deploy Code.gs เวอร์ชันใหม่
+            if (!dataPayload) {
+                dataPayload = await fetchRidHistoryDirectFallback(station, days);
+            }
+
+            if (dataPayload && dataPayload.success) {
+                _ridHistState.cache[cacheKey] = { ts: Date.now(), payload: dataPayload };
+            }
+        }
+
+        if (!dataPayload || !dataPayload.success || !Array.isArray(dataPayload.records) || dataPayload.records.length === 0) {
+            throw new Error((dataPayload && dataPayload.error) ? dataPayload.error : 'ไม่พบข้อมูลระดับน้ำย้อนหลังในช่วงเวลาที่เลือก');
+        }
+
+        const bankLevel = parseFloat(dataPayload.bankLevel) || (station === 'X.73A' ? 26.80 : 14.90);
+        const warnLevel = parseFloat(dataPayload.warnLevel) || (station === 'X.73A' ? 25.80 : 13.50);
+
+        let displayPoints = dataPayload.records;
+        if (rangeKey === 'today') {
+            const filtered = filterTodayHourlyChanges(dataPayload.records);
+            displayPoints = filtered.points;
+            if (filtered.isFlat && noticeEl) {
+                noticeEl.innerText = 'ℹ️ วันนี้ระดับน้ำทรงตัวตลอดช่วงเวลา (แสดงจุดเริ่มต้นและค่าล่าสุดเพื่อความต่อเนื่อง)';
+                noticeEl.classList.remove('hidden');
+            }
+        }
+
+        // คำนวณ KPI
+        const values = displayPoints.map(p => p.value);
+        const latestVal = values[values.length - 1];
+        const maxVal = Math.max(...values);
+        const minVal = Math.min(...values);
+
+        const latestEl = document.getElementById('ridHistLatest');
+        const maxEl = document.getElementById('ridHistMax');
+        const minEl = document.getElementById('ridHistMin');
+        const countEl = document.getElementById('ridHistCount');
+
+        if (latestEl) latestEl.innerText = `${latestVal.toFixed(2)} ม.`;
+        if (maxEl) maxEl.innerText = `${maxVal.toFixed(2)} ม.`;
+        if (minEl) minEl.innerText = `${minVal.toFixed(2)} ม.`;
+        if (countEl) countEl.innerText = `${displayPoints.length} จุด`;
+
+        // วาดกราฟ Chart.js
+        const canvas = document.getElementById('ridHistoryChart');
+        if (canvas && typeof Chart !== 'undefined') {
+            if (_ridHistState.chart) {
+                _ridHistState.chart.destroy();
+                _ridHistState.chart = null;
+            }
+
+            const ctx = canvas.getContext('2d');
+            const gradient = ctx.createLinearGradient(0, 0, 0, 260);
+            gradient.addColorStop(0, station === 'X.73A' ? 'rgba(99, 102, 241, 0.35)' : 'rgba(2, 132, 199, 0.35)');
+            gradient.addColorStop(1, 'rgba(255, 255, 255, 0.0)');
+
+            const labels = displayPoints.map(p => formatRidHistLabel(p.datetime, rangeKey === 'today'));
+            const warnLine = displayPoints.map(() => warnLevel);
+            const bankLine = displayPoints.map(() => bankLevel);
+
+            const yMin = Math.floor((Math.min(minVal, warnLevel - 1.5) - 0.3) * 10) / 10;
+            const yMax = Math.ceil((Math.max(maxVal, bankLevel) + 0.3) * 10) / 10;
+
+            _ridHistState.chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'ระดับน้ำ (ม.รทก.)',
+                            data: values,
+                            borderColor: station === 'X.73A' ? '#4f46e5' : '#0284c7',
+                            backgroundColor: gradient,
+                            borderWidth: 2.5,
+                            pointRadius: displayPoints.length <= 30 ? 4 : 1.5,
+                            pointHoverRadius: 6,
+                            pointBackgroundColor: '#ffffff',
+                            pointBorderWidth: 2,
+                            fill: true,
+                            tension: 0.3
+                        },
+                        {
+                            label: `เฝ้าระวัง (${warnLevel.toFixed(2)} ม.)`,
+                            data: warnLine,
+                            borderColor: '#f59e0b',
+                            borderWidth: 1.5,
+                            borderDash: [6, 4],
+                            pointRadius: 0,
+                            fill: false
+                        },
+                        {
+                            label: `ระดับตลิ่ง (${bankLevel.toFixed(2)} ม.)`,
+                            data: bankLine,
+                            borderColor: '#ef4444',
+                            borderWidth: 1.5,
+                            borderDash: [4, 4],
+                            pointRadius: 0,
+                            fill: false
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: { boxWidth: 12, font: { family: 'Prompt, sans-serif', size: 11, weight: 'bold' } }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                title: (items) => {
+                                    const idx = items[0] ? items[0].dataIndex : 0;
+                                    return displayPoints[idx] ? displayPoints[idx].datetime : '';
+                                },
+                                label: (ctxItem) => {
+                                    if (ctxItem.datasetIndex === 0) {
+                                        const idx = ctxItem.dataIndex;
+                                        const prev = idx > 0 ? values[idx - 1] : values[idx];
+                                        const diff = values[idx] - prev;
+                                        const diffTxt = idx === 0 ? '' : (diff > 0 ? ` (▲ +${diff.toFixed(2)})` : (diff < 0 ? ` (▼ ${diff.toFixed(2)})` : ' (ทรงตัว)'));
+                                        return ` ระดับน้ำ: ${ctxItem.parsed.y.toFixed(2)} ม.รทก.${diffTxt}`;
+                                    }
+                                    return ` ${ctxItem.dataset.label}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false },
+                            ticks: { maxTicksLimit: 8, font: { family: 'Prompt, sans-serif', size: 10 } }
+                        },
+                        y: {
+                            suggestedMin: yMin,
+                            suggestedMax: yMax,
+                            grid: { color: 'rgba(148, 163, 184, 0.15)' },
+                            ticks: {
+                                font: { family: 'Prompt, sans-serif', size: 10 },
+                                callback: (v) => Number(v).toFixed(2)
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // เติมตารางรายละเอียดด้านล่าง (เรียงจากล่าสุดลงมา)
+        const tbody = document.getElementById('ridHistTableBody');
+        if (tbody) {
+            const rowsHtml = [];
+            for (let i = displayPoints.length - 1; i >= 0; i--) {
+                const cur = displayPoints[i];
+                const prev = i > 0 ? displayPoints[i - 1] : null;
+                const diff = prev ? (cur.value - prev.value) : 0;
+
+                let diffHtml = '<span class="text-slate-400 font-bold">—</span>';
+                if (prev && diff > 0.004) {
+                    diffHtml = `<span class="text-rose-600 font-black">▲ +${diff.toFixed(2)} ม.</span>`;
+                } else if (prev && diff < -0.004) {
+                    diffHtml = `<span class="text-emerald-600 font-black">▼ ${diff.toFixed(2)} ม.</span>`;
+                }
+
+                const valColor = cur.value >= bankLevel ? 'text-rose-600' : (cur.value >= warnLevel ? 'text-amber-600' : 'text-slate-700');
+
+                rowsHtml.push(`
+                    <tr class="hover:bg-slate-50">
+                        <td class="py-2 px-3 font-medium text-slate-600">${formatRidHistLabel(cur.datetime, false)} น.</td>
+                        <td class="py-2 px-3 text-right font-black ${valColor}">${cur.value.toFixed(2)}</td>
+                        <td class="py-2 px-3 text-right">${diffHtml}</td>
+                    </tr>
+                `);
+            }
+            tbody.innerHTML = rowsHtml.join('');
+        }
+    } catch (err) {
+        console.error('🚨 loadRidHistoryChart error:', err);
+        if (noticeEl) {
+            noticeEl.innerText = `⚠️ ${err.message || 'ไม่สามารถโหลดข้อมูลกราฟได้ในขณะนี้'}`;
+            noticeEl.classList.remove('hidden');
+        }
+        const tbody = document.getElementById('ridHistTableBody');
+        if (tbody) tbody.innerHTML = '';
+    } finally {
+        if (loadingEl) loadingEl.classList.add('hidden');
+    }
+}
+
+window.openRidHistoryModal = openRidHistoryModal;
+window.closeRidHistoryModal = closeRidHistoryModal;
+window.loadRidHistoryChart = loadRidHistoryChart;

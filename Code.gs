@@ -411,6 +411,11 @@ function doPost(e) {
                .setMimeType(ContentService.MimeType.JSON);
     }
 
+    if (params.action === 'getRIDHistory') {
+        return ContentService.createTextOutput(JSON.stringify(getRIDWaterHistory(params.station, params.days)))
+               .setMimeType(ContentService.MimeType.JSON);
+    }
+
     if (params.action === 'getWeatherData') {
         return createResponse(getWeatherData());
     }
@@ -1140,6 +1145,7 @@ function getRIDWaterLevelFromAPI() {
               const diffBankA = stationDataX73A.diff_wl_bank || "4.46";
 
               dataX73AObj = {
+                stationId: (stationDataX73A.station && stationDataX73A.station.id) ? stationDataX73A.station.id : null,
                 level: parseFloat(waterLevelA).toFixed(2),
                 time: updateTimeA + " น.",
                 bankLevel: bankLevelA,
@@ -1155,6 +1161,7 @@ function getRIDWaterLevelFromAPI() {
               success: true,
               source: "API",
               data: {
+                stationId: (stationData.station && stationData.station.id) ? stationData.station.id : null,
                 level: parseFloat(waterLevel).toFixed(2),
                 time: updateTime + " น. (API เรียลไทม์)",
                 bankLevel: bankLevel,
@@ -1226,6 +1233,173 @@ function getRIDWaterLevelFromAPI() {
       },
       levelX73A: "22.34"
     }
+  };
+}
+
+// ==========================================
+// 📈 ดึงข้อมูลกราฟประวัติระดับน้ำย้อนหลัง (สถานี X.73 และ X.73A) จาก ThaiWater API
+// ==========================================
+function getRIDWaterHistory(stationCode, daysParam) {
+  const station = (String(stationCode || 'X.73').toUpperCase().includes('73A')) ? 'X.73A' : 'X.73';
+  const days = Math.max(1, Math.min(14, parseInt(daysParam, 10) || 1));
+  const isX73A = (station === 'X.73A');
+  const stationName = isX73A ? "สถานี X.73A บ้านบองอ" : "สถานี X.73 คลองตันหยงมัส";
+  const defaultWarn = isX73A ? 25.80 : 13.50;
+  const defaultBank = isX73A ? 26.80 : 14.90;
+
+  const cacheKey = "RID_HIST_" + station + "_" + days;
+  try {
+    const cached = CacheService.getScriptCache().get(cacheKey);
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (parsed && parsed.success && Array.isArray(parsed.records) && parsed.records.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (e) {}
+
+  // 1. ค้นหา stationId ของสถานี X.73 หรือ X.73A
+  let stationId = null;
+  let bankLevel = defaultBank;
+  try {
+    const ridRes = getRIDWaterLevelFromAPI();
+    if (ridRes && ridRes.success && ridRes.data) {
+      if (isX73A && ridRes.data.dataX73A) {
+        stationId = ridRes.data.dataX73A.stationId || null;
+        bankLevel = parseFloat(ridRes.data.dataX73A.bankLevel) || defaultBank;
+      } else if (!isX73A) {
+        stationId = ridRes.data.stationId || null;
+        bankLevel = parseFloat(ridRes.data.bankLevel) || defaultBank;
+      }
+    }
+  } catch (e) {}
+
+  const fetchOptions = {
+    "method": "get",
+    "headers": {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      "Accept": "application/json, text/plain, */*"
+    },
+    "validateHttpsCertificates": false,
+    "followRedirects": true,
+    "muteHttpExceptions": true
+  };
+
+  // หากยังไม่มี stationId (เช่น แคชเก่า) ให้ดึงจาก waterlevel_load โดยตรง
+  if (!stationId) {
+    const loadUrls = [
+      "https://api-v3.thaiwater.net/api/v1/thaiwater30/public/waterlevel_load",
+      "https://api.thaiwater.net/api/v1/thaiwater30/public/waterlevel_load"
+    ];
+    for (let u = 0; u < loadUrls.length; u++) {
+      try {
+        const res = UrlFetchApp.fetch(loadUrls[u], fetchOptions);
+        if (res.getResponseCode() === 200) {
+          const json = JSON.parse(res.getContentText());
+          const list = (json && json.waterlevel_data && Array.isArray(json.waterlevel_data.data)) ? json.waterlevel_data.data : [];
+          const found = list.find(d => {
+            if (!d.station) return false;
+            const code = d.station.tele_station_oldcode || '';
+            const thName = (d.station.tele_station_name && d.station.tele_station_name.th) ? d.station.tele_station_name.th : '';
+            return isX73A ? (code === 'X.73A' || thName.includes('บองอ')) : (code === 'X.73');
+          });
+          if (found && found.station && found.station.id) {
+            stationId = found.station.id;
+            if (found.station.min_bank) bankLevel = parseFloat(found.station.min_bank) || defaultBank;
+            break;
+          }
+        }
+      } catch (e) {}
+    }
+  }
+
+  if (!stationId) {
+    return {
+      success: false,
+      station: station,
+      stationName: stationName,
+      error: "ไม่พบรหัสอ้างอิงสถานี (station_id) จากคลังข้อมูลน้ำแห่งชาติ"
+    };
+  }
+
+  // 2. คำนวณช่วงวันที่ (YYYY-MM-DD ตามเวลาประเทศไทย GMT+7)
+  const now = new Date();
+  const startDt = new Date(now.getTime() - ((days - 1) * 24 * 60 * 60 * 1000));
+  const endDateStr = Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
+  const startDateStr = Utilities.formatDate(startDt, "GMT+7", "yyyy-MM-dd");
+
+  // 3. เรียก ThaiWater Graph API
+  const graphUrls = [
+    "https://api-v3.thaiwater.net/api/v1/thaiwater30/public/waterlevel_graph?station_type=tele_waterlevel&station_id=" + encodeURIComponent(stationId) + "&start_date=" + startDateStr + "&end_date=" + endDateStr,
+    "https://api.thaiwater.net/api/v1/thaiwater30/public/waterlevel_graph?station_type=tele_waterlevel&station_id=" + encodeURIComponent(stationId) + "&start_date=" + startDateStr + "&end_date=" + endDateStr
+  ];
+
+  for (let i = 0; i < graphUrls.length; i++) {
+    try {
+      const resp = UrlFetchApp.fetch(graphUrls[i], fetchOptions);
+      if (resp.getResponseCode() === 200) {
+        const gJson = JSON.parse(resp.getContentText());
+        let rawPoints = [];
+
+        if (gJson && gJson.data && Array.isArray(gJson.data.graph_data)) {
+          rawPoints = gJson.data.graph_data;
+        } else if (gJson && gJson.waterlevel_data && gJson.waterlevel_data.data) {
+          if (Array.isArray(gJson.waterlevel_data.data.graph_data)) {
+            rawPoints = gJson.waterlevel_data.data.graph_data;
+          } else if (Array.isArray(gJson.waterlevel_data.data)) {
+            rawPoints = gJson.waterlevel_data.data;
+          }
+        } else if (gJson && Array.isArray(gJson.graph_data)) {
+          rawPoints = gJson.graph_data;
+        } else if (gJson && Array.isArray(gJson.data)) {
+          rawPoints = gJson.data;
+        }
+
+        const records = [];
+        for (let p = 0; p < rawPoints.length; p++) {
+          const item = rawPoints[p];
+          const dt = item.datetime || item.waterlevel_datetime || item.date || '';
+          const valRaw = (item.value !== undefined && item.value !== null) ? item.value : (item.waterlevel_msl !== undefined ? item.waterlevel_msl : item.waterlevel_m);
+          const numVal = parseFloat(valRaw);
+          if (dt && !isNaN(numVal)) {
+            records.push({
+              datetime: String(dt).trim(),
+              value: parseFloat(numVal.toFixed(2))
+            });
+          }
+        }
+
+        // เรียงจากเวลาเก่า -> ล่าสุด
+        records.sort((a, b) => new Date(a.datetime.replace(' ', 'T')) - new Date(b.datetime.replace(' ', 'T')));
+
+        const out = {
+          success: true,
+          station: station,
+          stationId: stationId,
+          stationName: stationName,
+          bankLevel: bankLevel,
+          warnLevel: defaultWarn,
+          startDate: startDateStr,
+          endDate: endDateStr,
+          records: records
+        };
+
+        try {
+          CacheService.getScriptCache().put(cacheKey, JSON.stringify(out), 300); // Cache 5 นาที
+        } catch (cErr) {}
+
+        return out;
+      }
+    } catch (gErr) {
+      console.warn("⚠️ getRIDWaterHistory fetch failed:", gErr.toString());
+    }
+  }
+
+  return {
+    success: false,
+    station: station,
+    stationName: stationName,
+    error: "ไม่สามารถดึงข้อมูลกราฟย้อนหลังจาก ThaiWater API ได้ในขณะนี้"
   };
 }
 
