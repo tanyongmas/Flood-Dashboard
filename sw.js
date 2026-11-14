@@ -4,7 +4,7 @@
  * และไม่ดักจับ Request ภายนอก (Supabase, GAS, ThaiWater, Map Tiles, CDN)
  */
 
-const CACHE_NAME = 'flood-dashboard-pwa-v1';
+const CACHE_NAME = 'flood-dashboard-pwa-v2';
 const CORE_ASSETS = [
   './',
   './index.html',
