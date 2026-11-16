@@ -62,12 +62,14 @@ async function sbLogin(username, password) {
 
         let userRecord = data;
 
-        // Fallback รองรับชื่อ superadmin และ admin หากยังไม่มีในตาราง
+        // Fallback รองรับชื่อ superadmin, admin และ pr หากยังไม่มีในตาราง
         if (!userRecord) {
             if (lowerUser === 'superadmin') {
                 userRecord = { username: 'superadmin', role: 'superadmin' };
             } else if (lowerUser === 'admin') {
                 userRecord = { username: 'admin', role: 'admin' };
+            } else if (lowerUser === 'pr') {
+                userRecord = { username: 'pr', role: 'pr' };
             }
         }
 
@@ -99,6 +101,9 @@ async function sbLogin(username, password) {
             if (userSpecificPw) {
                 // หากมีการกำหนดรหัสผ่านเฉพาะสำหรับผู้ใช้นี้ ให้ตรวจตรงกับรหัสผ่านนั้น
                 isStaffValid = (cleanPassword === userSpecificPw);
+            } else if (lowerUser === 'pr') {
+                // บัญชีงานประชาสัมพันธ์ (PR) ใช้รหัสเริ่มต้น 8888
+                isStaffValid = (cleanPassword === '8888');
             } else {
                 // หากยังไม่เคยตั้งรหัสผ่านเฉพาะ ให้ใช้รหัสเริ่มต้น 1234 หรือ 1122
                 isStaffValid = (cleanPassword === '1234' || cleanPassword === '1122');

@@ -112,6 +112,7 @@ let dashLayerStates = {
                     else if (userRole === 'relief') targetPage = 'relief';
                     else if (userRole === 'community') targetPage = 'water';
                     else if (userRole === 'flood_report') targetPage = 'looker';
+                    else if (userRole === 'pr') targetPage = 'dashboard';
 
                     // แสดงหน้าแรกตามสิทธิ์ทันทีก่อนรอโหลดข้อมูล เพื่อไม่ให้กระพริบหน้า waterPage
                     if (typeof showPage === 'function') showPage(targetPage);
@@ -162,11 +163,12 @@ let dashLayerStates = {
         const PAGE_ACCESS = {
             'superadmin': ['dashboard', 'water', 'addWater', 'shelter', 'evacuation', 'regis', 'relief', 'looker', 'cctv', 'userManagement'],
             'admin': ['dashboard', 'water', 'addWater', 'shelter', 'evacuation', 'regis', 'relief', 'looker', 'cctv'],
-            'shelter': ['shelter', 'regis', 'looker', 'cctv'],
-            'water_staff': ['water', 'addWater', 'looker', 'cctv'],
-            'relief': ['relief', 'looker', 'cctv'],
-            'community': ['water', 'addWater', 'evacuation', 'looker', 'cctv'],
-            'flood_report': ['looker', 'cctv']
+            'shelter': ['dashboard', 'shelter', 'regis', 'looker', 'cctv'],
+            'water_staff': ['dashboard', 'water', 'addWater', 'looker', 'cctv'],
+            'relief': ['dashboard', 'relief', 'looker', 'cctv'],
+            'community': ['dashboard', 'water', 'addWater', 'evacuation', 'looker', 'cctv'],
+            'flood_report': ['dashboard', 'looker', 'cctv'],
+            'pr': ['dashboard', 'cctv']
         };
         window.PAGE_ACCESS = PAGE_ACCESS;
         // ==========================================
@@ -227,6 +229,12 @@ let dashLayerStates = {
                         <span class="inline-flex items-center gap-1 text-[9px] font-black tracking-wider px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 border border-blue-200 truncate" title="รายงานสรุปข้อมูล">
                             <i class="fas fa-chart-line text-[8px] text-blue-600"></i>
                             <span>รายงานสรุป</span>
+                        </span>`;
+                } else if (cleanRole === 'pr') {
+                    badgeHtml = `
+                        <span class="inline-flex items-center gap-1 text-[9px] font-black tracking-wider px-2 py-0.5 rounded-md bg-pink-100 text-pink-800 border border-pink-200 truncate" title="งานประชาสัมพันธ์ (PR)">
+                            <i class="fas fa-bullhorn text-[8px] text-pink-600"></i>
+                            <span>งานประชาสัมพันธ์</span>
                         </span>`;
                 } else {
                     badgeHtml = `
@@ -562,6 +570,7 @@ let dashLayerStates = {
                     else if (userRole === 'relief') firstPage = 'relief';
                     else if (userRole === 'community') firstPage = 'water';
                     else if (userRole === 'flood_report') firstPage = 'looker';
+                    else if (userRole === 'pr') firstPage = 'dashboard';
 
                     if (typeof showPage === 'function') showPage(firstPage);
 
@@ -2813,6 +2822,8 @@ let dashLayerStates = {
                 }
             }
 
+            const canEditRoadClosure = (typeof userRole !== 'undefined') && ['superadmin', 'pr'].includes(String(userRole || '').toLowerCase().trim());
+
             if (items.length === 0) {
                 listEl.innerHTML = `
                     <div class="col-span-full py-10 text-center bg-slate-50/80 rounded-2xl border border-dashed border-slate-200">
@@ -2821,9 +2832,11 @@ let dashLayerStates = {
                         </div>
                         <h4 class="text-sm font-bold text-slate-700">ไม่มีรายงานเส้นทางปิดในขณะนี้</h4>
                         <p class="text-xs text-slate-400 mt-1">ถนนและเส้นทางสัญจรในเขตเทศบาลตำบลตันหยงมัสสามารถใช้งานได้ตามปกติ</p>
-                        <button onclick="openAddRoadClosureModal()" class="mt-4 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-rose-600 text-white font-bold text-xs transition shadow-sm hover:opacity-95 active:scale-95">
-                            <i class="fas fa-plus mr-1"></i> รายงานเส้นทางปิดใหม่
-                        </button>
+                        ${canEditRoadClosure ? `
+                            <button onclick="openAddRoadClosureModal()" class="mt-4 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-rose-600 text-white font-bold text-xs transition shadow-sm hover:opacity-95 active:scale-95">
+                                <i class="fas fa-plus mr-1"></i> รายงานเส้นทางปิดใหม่
+                            </button>
+                        ` : ''}
                     </div>
                 `;
                 return;
@@ -2896,9 +2909,11 @@ let dashLayerStates = {
                                         <i class="fas fa-location-crosshairs text-[10px]"></i> แผนที่
                                     </button>
                                 ` : ''}
-                                <button onclick="deleteRoadClosure('${item.id}')" class="px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-bold transition flex items-center gap-1" title="ลบรายงาน">
-                                    <i class="fas fa-trash-alt text-[10px]"></i> ลบ
-                                </button>
+                                ${canEditRoadClosure ? `
+                                    <button onclick="deleteRoadClosure('${item.id}')" class="px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-bold transition flex items-center gap-1" title="ลบรายงาน">
+                                        <i class="fas fa-trash-alt text-[10px]"></i> ลบ
+                                    </button>
+                                ` : ''}
                             </div>
                         </div>
                     </div>
@@ -3044,6 +3059,16 @@ let dashLayerStates = {
         };
 
         function openAddRoadClosureModal(initialData = null) {
+            const currentRole = (typeof userRole !== 'undefined' ? String(userRole || '') : '').toLowerCase().trim();
+            if (!['superadmin', 'pr'].includes(currentRole)) {
+                return Swal.fire({
+                    icon: 'info',
+                    title: 'สิทธิ์ดูข้อมูลเท่านั้น',
+                    text: 'สิทธิ์ของคุณสามารถดูภาพรวมได้อย่างเดียว ไม่สามารถรายงานเส้นทางปิดได้',
+                    confirmButtonColor: '#3b82f6',
+                    customClass: { popup: 'rounded-2xl' }
+                });
+            }
             const data = initialData || {};
             const initialLat = data.lat || '6.294450';
             const initialLng = data.lng || '101.723620';
@@ -3194,6 +3219,16 @@ let dashLayerStates = {
         async function deleteRoadClosure(id) {
             if (!id) return;
             if (typeof checkAdminReadOnlyAction === 'function' && checkAdminReadOnlyAction()) return;
+            const currentRole = (typeof userRole !== 'undefined' ? String(userRole || '') : '').toLowerCase().trim();
+            if (!['superadmin', 'pr'].includes(currentRole)) {
+                return Swal.fire({
+                    icon: 'info',
+                    title: 'สิทธิ์ดูข้อมูลเท่านั้น',
+                    text: 'สิทธิ์ของคุณสามารถดูภาพรวมได้อย่างเดียว ไม่สามารถลบรายงานเส้นทางปิดได้',
+                    confirmButtonColor: '#3b82f6',
+                    customClass: { popup: 'rounded-2xl' }
+                });
+            }
 
             const res = await Swal.fire({
                 title: 'ยืนยันการลบ?',

@@ -19,6 +19,7 @@
     <link rel="icon" type="image/png" sizes="16x16" href="assets/logo.png">
     <link rel="manifest" href="manifest.webmanifest">
     <meta name="theme-color" content="#1e3a8a">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="เฝ้าน้ำหยงมัส">
@@ -196,16 +197,18 @@
         <aside id="sidebar"
             class="sidebar-desktop sidebar-expanded bg-white shadow-md flex-shrink-0 flex flex-col border-r border-blue-50 transition-all duration-300 sticky top-0 h-screen no-print">
             <div class="p-4 text-center border-b border-blue-50 relative">
-                <img src="assets/logo.png" class="w-16 mx-auto">
+                <div class="w-full max-w-[64px] aspect-square mx-auto rounded-2xl bg-gradient-to-b from-blue-50 to-slate-100/90 p-1 shadow-sm border border-blue-100/80 flex items-center justify-center overflow-hidden">
+                    <img src="assets/icon-pwa.png" class="w-full h-full object-contain rounded-xl" alt="ตราเทศบาลตำบลตันหยงมัส">
+                </div>
                 <h1 class="logo-text text-[14px] font-bold text-blue-800 mt-2 uppercase">
                     ระบบรายงาน<br>สถานการณ์น้ำท่วม<br>เทศบาลตำบลตันหยงมัส</h1>
             </div>
 
             <!-- ส่วนรายการเมนู Desktop -->
             <nav class="mt-4 flex-1 overflow-y-auto custom-scrollbar">
-                <!-- 🌟 เมนูหน้าหลัก (Dashboard) ซ่อนไว้สำหรับ Admin เท่านั้น 🌟 -->
+                <!-- 🌟 เมนูหน้าหลัก (Dashboard) แสดงตามสิทธิ์ใน PAGE_ACCESS 🌟 -->
                 <button onclick="showPage('dashboard')"
-                    class="nav-btn admin-only hidden w-full text-left px-6 py-4 flex items-center text-sm text-indigo-600 hover:bg-indigo-50 font-bold"
+                    class="nav-btn hidden w-full text-left px-6 py-4 flex items-center text-sm text-indigo-600 hover:bg-indigo-50 font-bold"
                     data-page="dashboard">
                     <i class="fas fa-home w-6 text-center text-lg"></i>
                     <span class="nav-text ml-3">หน้าหลัก (ภาพรวม)</span>
@@ -323,6 +326,11 @@
                     data-page="shelter" title="ศูนย์พักพิง">
                     <i class="fas fa-hotel text-[22px]"></i>
                 </button>
+                <button id="mobileNavCctvLeft" onclick="showPage('cctv')"
+                    class="mobile-nav-btn hidden items-center justify-center text-slate-400 hover:text-blue-600 transition-colors w-full h-full"
+                    data-page="cctv" title="กล้อง CCTV">
+                    <i class="fas fa-video text-[22px]"></i>
+                </button>
             </div>
 
             <!-- 🌟 ปุ่มหน้าหลักตรงกลาง (Floating Center: ปุ่มกลมเด่นลอยขึ้นมา ไม่มีตัวหนังสือ) -->
@@ -353,6 +361,11 @@
                     class="mobile-nav-btn hidden items-center justify-center text-slate-400 hover:text-blue-600 transition-colors w-full h-full"
                     data-page="looker" title="รายงานสรุปข้อมูลน้ำท่วม">
                     <i class="fas fa-chart-pie text-[22px]"></i>
+                </button>
+                <button id="mobileNavCctvRight" onclick="showPage('cctv')"
+                    class="mobile-nav-btn hidden items-center justify-center text-slate-400 hover:text-blue-600 transition-colors w-full h-full"
+                    data-page="cctv" title="กล้อง CCTV">
+                    <i class="fas fa-video text-[22px]"></i>
                 </button>
             </div>
         </div>
@@ -446,6 +459,11 @@
             <div class="p-4 md:p-8 max-w-7xl mx-auto w-full content-area">
                 <!-- ================= หน้าหลัก (Dashboard - รูปแบบใหม่) ================= -->
                 <section id="dashboardPage" class="page-section hidden max-w-7xl mx-auto space-y-6 fade-in pb-10">
+                    <!-- แถบแจ้งเตือนโหมดดูภาพรวมอย่างเดียว -->
+                    <div id="dashViewOnlyBanner" class="hidden flex items-center gap-2.5 px-4 py-2.5 rounded-2xl bg-indigo-50/90 border border-indigo-200 text-indigo-800 text-xs font-bold shadow-xs">
+                        <i class="fas fa-eye text-indigo-600"></i>
+                        <span>โหมดดูภาพรวมสถานการณ์ (View-Only) — สิทธิ์ของคุณสามารถดูข้อมูลภาพรวมได้อย่างเดียว ไม่สามารถส่งประกาศหรือแก้ไขข้อมูลในหน้านี้ได้</span>
+                    </div>
 
                     <!-- 🌟 Skeleton Loading Placeholder (แสดงระหว่างรอโหลดข้อมูล) -->
                     <div id="dashboardSkeleton" class="space-y-6 animate-fade-in">
@@ -843,8 +861,8 @@
                                 </div>
                             </div>
 
-                            <!-- กลุ่มปุ่มแบบ Outline พร้อมเอฟเฟกต์ Glow -->
-                            <div class="grid grid-cols-3 gap-3 md:gap-4 relative z-10">
+                            <!-- กลุ่มปุ่มแบบ Outline พร้อมเอฟเฟกต์ Glow (เฉพาะ Superadmin) -->
+                            <div id="dashLineAlertButtons" class="grid grid-cols-3 gap-3 md:gap-4 relative z-10">
                                 <!-- ปุ่มปกติ (Outline เขียว) -->
                                 <button onclick="sendMessagingAPI('normal')"
                                     class="group flex flex-col items-center justify-center gap-2 py-3 border-2 border-green-500 text-green-600 rounded-2xl transition-all duration-300 hover:bg-green-500 hover:text-white hover:shadow-[0_0_15px_rgba(34,197,94,0.3)] active:scale-95 bg-transparent overflow-hidden relative">
@@ -883,7 +901,7 @@
                             </div>
 
                             <!-- 📢 แถวล่าง: ปุ่มส่งแจ้งเตือนข่าวสารสถานการณ์ (พร้อมแนบรูปภาพ) -->
-                            <div class="mt-3 relative z-10">
+                            <div id="dashLineNewsBtnWrap" class="mt-3 relative z-10">
                                 <button onclick="sendMessagingAPI('news')"
                                     class="w-full group flex items-center justify-between px-4 py-3 border-2 border-sky-500 text-sky-600 rounded-2xl transition-all duration-300 hover:bg-sky-500 hover:text-white hover:shadow-[0_0_15px_rgba(14,165,233,0.35)] active:scale-98 bg-sky-50/40 overflow-hidden relative">
                                     <div class="flex items-center gap-3 relative z-10">
@@ -1254,7 +1272,7 @@
                                     </div>
                                 </div>
 
-                                <button onclick="openAddRoadClosureModal()"
+                                <button id="btnOpenAddRoadClosure" onclick="openAddRoadClosureModal()"
                                     class="self-start md:self-auto px-5 py-3 rounded-2xl bg-gradient-to-r from-amber-500 to-rose-600 hover:from-amber-600 hover:to-rose-700 text-white font-bold text-xs shadow-md shadow-rose-500/20 active:scale-95 transition-all flex items-center gap-2">
                                     <i class="fas fa-plus"></i>
                                     <span>รายงานเส้นทางปิดใหม่</span>
@@ -3183,6 +3201,7 @@
                                             <option value="relief">Relief Staff (เฉพาะการจัดการถุงยังชีพ)</option>
                                             <option value="community">Disaster Officer (เจ้าหน้าที่งานป้องกันฯ - ระดับน้ำและอพยพ)</option>
                                             <option value="flood_report">Flood Report (เข้าถึงหน้ารายงานข้อมูลน้ำท่วม อย่างเดียว)</option>
+                                            <option value="pr">PR (งานประชาสัมพันธ์ - ข่าวสาร/เส้นทางปิด/CCTV)</option>
                                         </select>
                                     </div>
                                     <button type="submit"

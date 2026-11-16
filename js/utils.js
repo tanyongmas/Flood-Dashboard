@@ -107,7 +107,8 @@ function setupUserInterface(user) {
             'water_staff': 'WATER STAFF',
             'relief': 'RELIEF',
             'community': 'DISASTER OFFICER (งานป้องกันฯ)',
-            'flood_report': 'FLOOD REPORT'
+            'flood_report': 'FLOOD REPORT',
+            'pr': 'PR (งานประชาสัมพันธ์)'
         };
         roleDisplay.innerText = roleLabels[user.role] || user.role.toUpperCase();
     }
@@ -126,11 +127,12 @@ function updateMenuByRole() {
     const roleAccessMap = {
         'superadmin': ['dashboard', 'water', 'addWater', 'shelter', 'evacuation', 'regis', 'relief', 'looker', 'cctv', 'userManagement'],
         'admin': ['dashboard', 'water', 'addWater', 'shelter', 'evacuation', 'regis', 'relief', 'looker', 'cctv'],
-        'shelter': ['shelter', 'regis', 'looker', 'cctv'],
-        'water_staff': ['water', 'addWater', 'looker', 'cctv'],
-        'relief': ['relief', 'looker', 'cctv'],
-        'community': ['water', 'addWater', 'evacuation', 'looker', 'cctv'],
-        'flood_report': ['looker', 'cctv']
+        'shelter': ['dashboard', 'shelter', 'regis', 'looker', 'cctv'],
+        'water_staff': ['dashboard', 'water', 'addWater', 'looker', 'cctv'],
+        'relief': ['dashboard', 'relief', 'looker', 'cctv'],
+        'community': ['dashboard', 'water', 'addWater', 'evacuation', 'looker', 'cctv'],
+        'flood_report': ['dashboard', 'looker', 'cctv'],
+        'pr': ['dashboard', 'cctv']
     };
     const accessMap = (typeof PAGE_ACCESS !== 'undefined' && PAGE_ACCESS) ? PAGE_ACCESS : (window.PAGE_ACCESS || roleAccessMap);
     const allowed = accessMap[currentRole] || ['shelter'];
@@ -158,6 +160,30 @@ function updateMenuByRole() {
         } else {
             mobileLookerBtn.style.setProperty('display', 'none', 'important');
             mobileLookerBtn.classList.add('hidden');
+        }
+    }
+
+    // 📹 ควบคุมปุ่ม กล้อง CCTV บนแถบ Bottom Navigation:
+    // - ฝั่งซ้าย (#mobileNavCctvLeft): แสดงเฉพาะสิทธิ์ relief และ flood_report
+    // - ฝั่งขวา (#mobileNavCctvRight): แสดงเฉพาะสิทธิ์ shelter
+    const mobileCctvLeftBtn = document.getElementById('mobileNavCctvLeft');
+    if (mobileCctvLeftBtn) {
+        if (['relief', 'flood_report'].includes(currentRole)) {
+            mobileCctvLeftBtn.style.display = 'flex';
+            mobileCctvLeftBtn.classList.remove('hidden');
+        } else {
+            mobileCctvLeftBtn.style.setProperty('display', 'none', 'important');
+            mobileCctvLeftBtn.classList.add('hidden');
+        }
+    }
+    const mobileCctvRightBtn = document.getElementById('mobileNavCctvRight');
+    if (mobileCctvRightBtn) {
+        if (currentRole === 'shelter') {
+            mobileCctvRightBtn.style.display = 'flex';
+            mobileCctvRightBtn.classList.remove('hidden');
+        } else {
+            mobileCctvRightBtn.style.setProperty('display', 'none', 'important');
+            mobileCctvRightBtn.classList.add('hidden');
         }
     }
 
@@ -263,6 +289,25 @@ function updateMenuByRole() {
         const badge = document.getElementById('viewOnlyBadge');
         if (badge) badge.classList.add('hidden');
     }
+
+    // ควบคุมปุ่มการทำงานบนหน้าหลัก (Dashboard):
+    // - ปุ่มแจ้งเตือน LINE (ปกติ/เฝ้าระวัง/วิกฤต): เฉพาะ Superadmin
+    // - ปุ่มข่าวสารสถานการณ์ (LINE) และรายงานเส้นทางปิด: เฉพาะ Superadmin และ PR (งานประชาสัมพันธ์)
+    const isPrRole = currentRole === 'pr';
+    const canSendLineAlerts = isSuperAdminOnly;
+    const canSendLineNewsAndRoad = isSuperAdminOnly || isPrRole;
+
+    const lineAlertsEl = document.getElementById('dashLineAlertButtons');
+    if (lineAlertsEl) lineAlertsEl.classList.toggle('hidden', !canSendLineAlerts);
+
+    const lineNewsEl = document.getElementById('dashLineNewsBtnWrap');
+    if (lineNewsEl) lineNewsEl.classList.toggle('hidden', !canSendLineNewsAndRoad);
+
+    const addRoadBtnEl = document.getElementById('btnOpenAddRoadClosure');
+    if (addRoadBtnEl) addRoadBtnEl.classList.toggle('hidden', !canSendLineNewsAndRoad);
+
+    const dashViewOnlyBanner = document.getElementById('dashViewOnlyBanner');
+    if (dashViewOnlyBanner) dashViewOnlyBanner.classList.toggle('hidden', canSendLineNewsAndRoad);
 }
 window.updateMenuByRole = updateMenuByRole;
 

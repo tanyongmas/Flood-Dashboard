@@ -173,6 +173,21 @@ function setWeatherMode(mode) {
 }
 
 async function sendMessagingAPI(type) {
+    const currentRole = (typeof userRole !== 'undefined' ? String(userRole || '') : '').toLowerCase().trim();
+    const canSend = currentRole === 'superadmin' || (currentRole === 'pr' && type === 'news');
+    if (!canSend) {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'info',
+                title: 'สิทธิ์ดูข้อมูลเท่านั้น',
+                text: 'สิทธิ์ของคุณสามารถดูภาพรวมได้อย่างเดียว ไม่สามารถส่งประกาศแจ้งเตือนเข้ากลุ่มไลน์ได้',
+                confirmButtonColor: '#3b82f6',
+                customClass: { popup: 'rounded-2xl' }
+            });
+        }
+        return;
+    }
+
     const config = {
         normal: {
             title: 'สถานการณ์ปกติ',
