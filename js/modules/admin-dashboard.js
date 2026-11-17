@@ -395,6 +395,13 @@ window.getFloodRiskCategory = function (riskStr, detailsStr = '') {
     };
 };
 
+function findFloodColIdx(headers, kws, exactOnly = false) {
+    const cleanHeaders = (headers || []).map(h => String(h || '').trim().toLowerCase());
+    const exactIdx = cleanHeaders.findIndex(clean => kws.some(kw => clean === kw.toLowerCase()));
+    if (exactIdx !== -1 || exactOnly) return exactIdx;
+    return cleanHeaders.findIndex(clean => kws.some(kw => clean.includes(kw.toLowerCase()) || kw.toLowerCase().includes(clean)));
+}
+
 window.filterFloodMap = function () {
     if (!floodReportMap) return;
 
@@ -408,12 +415,7 @@ window.filterFloodMap = function () {
 
     const floodData = (store.floodData && store.floodData.length > 0) ? store.floodData : [];
     const headers = floodData[0] || [];
-    const findColIdx = (kws) => {
-        return headers.findIndex(h => {
-            const clean = String(h || '').trim().toLowerCase();
-            return kws.some(kw => clean.includes(kw.toLowerCase()) || kw.toLowerCase().includes(clean));
-        });
-    };
+    const findColIdx = (kws, exactOnly = false) => findFloodColIdx(headers, kws, exactOnly);
 
     const houseIdIdx = findColIdx(['house id', 'house_id', 'รหัสบ้าน']);
     const roadIdx = findColIdx(['ถนน', 'road']);
@@ -426,7 +428,7 @@ window.filterFloodMap = function () {
     const lngIdx = findColIdx(['longtitude', 'longitude', 'ลองจิจูด', 'lng']);
     const riskIdx = findColIdx(['ความเสี่ยง', 'risk']);
     const detailsIdx = findColIdx(['รายละเอียด', 'note', 'detail', 'details']);
-    const idIdx = findColIdx(['id', 'rowid', 'row_id']);
+    const idIdx = findColIdx(['id', 'rowid', 'row_id'], true);
 
     const isSuperadmin = (typeof userRole !== 'undefined' && userRole === 'superadmin');
     const thActions = document.getElementById('thFloodDataActions');
@@ -784,7 +786,7 @@ window.renderFloodReportDashboard = function () {
     const placeholder = document.getElementById('riskMapPlaceholder');
     let mapUrl = store.riskMapImageUrl || '';
     if (!mapUrl) {
-        try { mapUrl = localStorage.getItem('risk_map_image_url') || ''; } catch (e) {}
+        try { mapUrl = localStorage.getItem('risk_map_image_url') || ''; } catch (e) { }
     }
     if (!mapUrl) {
         mapUrl = 'https://lh3.googleusercontent.com/d/1tIGTXKoPI88Y_7-NSISSGPCuFy31Cfeh';
@@ -1042,12 +1044,7 @@ window.handleFloodDataFormSubmit = async function (e) {
         }
 
         const headers = store.floodData[0] || [];
-        const findColIdx = (kws) => {
-            return headers.findIndex(h => {
-                const clean = String(h || '').trim().toLowerCase();
-                return kws.some(kw => clean.includes(kw.toLowerCase()) || kw.toLowerCase().includes(clean));
-            });
-        };
+        const findColIdx = (kws, exactOnly = false) => findFloodColIdx(headers, kws, exactOnly);
 
         const roadIdx = findColIdx(['ถนน', 'road']);
         const addressIdx = findColIdx(['ที่อยู่', 'address']);
@@ -1059,7 +1056,7 @@ window.handleFloodDataFormSubmit = async function (e) {
         const lngIdx = findColIdx(['longtitude', 'longitude', 'ลองจิจูด', 'lng']);
         const riskIdx = findColIdx(['ความเสี่ยง', 'risk']);
         const detailsIdx = findColIdx(['รายละเอียด', 'note', 'detail']);
-        const idIdx = findColIdx(['id']);
+        const idIdx = findColIdx(['id', 'rowid', 'row_id'], true);
 
         let targetRowIdx = -1;
         if (id && idIdx !== -1) {
@@ -1164,13 +1161,8 @@ window.confirmDeleteFloodData = async function (rowId, name, address, originalIn
         // ลบออกจาก store.floodData
         if (store.floodData && store.floodData.length > 1) {
             const headers = store.floodData[0] || [];
-            const findColIdx = (kws) => {
-                return headers.findIndex(h => {
-                    const clean = String(h || '').trim().toLowerCase();
-                    return kws.some(kw => clean.includes(kw.toLowerCase()) || kw.toLowerCase().includes(clean));
-                });
-            };
-            const idIdx = findColIdx(['id']);
+            const findColIdx = (kws, exactOnly = false) => findFloodColIdx(headers, kws, exactOnly);
+            const idIdx = findColIdx(['id', 'rowid', 'row_id'], true);
             const nameIdx = findColIdx(['ชื่อ-สกุล', 'ชื่อสกุล', 'ชื่อ', 'name']);
             const addressIdx = findColIdx(['ที่อยู่', 'address']);
 
@@ -1334,11 +1326,11 @@ window.uploadRiskMapImage = async function (event) {
             if (!finalUrl) finalUrl = base64Data;
 
             if (typeof sbSaveRiskMapUrl === 'function') {
-                try { await sbSaveRiskMapUrl(finalUrl); } catch (sbErr) {}
+                try { await sbSaveRiskMapUrl(finalUrl); } catch (sbErr) { }
             }
 
             store.riskMapImageUrl = finalUrl;
-            try { localStorage.setItem('risk_map_image_url', finalUrl); } catch (e) {}
+            try { localStorage.setItem('risk_map_image_url', finalUrl); } catch (e) { }
 
             // รีเซ็ต input value เพื่อให้สามารถเลือกรูปเดิมซ้ำได้ถ้าต้องการ
             if (event.target) event.target.value = '';

@@ -1427,7 +1427,7 @@ async function sbSaveFloodDataRecord(payload, period = '2569') {
                         const { data: fbData, error: fbErr } = await sbClient
                             .from(targetTable)
                             .update(record)
-                            .eq('ชื่อ-สกุล', payload.oldName || payload.name)
+                            .eq('"ชื่อ-สกุล"', payload.oldName || payload.name)
                             .eq('ที่อยู่', payload.oldAddress || payload.address)
                             .select();
                         if (fbErr) throw fbErr;
@@ -1444,7 +1444,7 @@ async function sbSaveFloodDataRecord(payload, period = '2569') {
                 const { data, error } = await sbClient
                     .from(targetTable)
                     .update(record)
-                    .eq('ชื่อ-สกุล', payload.oldName)
+                    .eq('"ชื่อ-สกุล"', payload.oldName)
                     .eq('ที่อยู่', payload.oldAddress)
                     .select();
 
@@ -1499,17 +1499,17 @@ async function sbDeleteFloodDataRecord(target, period = '2569') {
                 const { error } = await sbClient.from(targetTable).delete().eq('id', target.id);
                 if (error) {
                     if (error.code === '42703' || String(error.message).includes('id')) {
-                        const { error: fbErr } = await sbClient.from(targetTable).delete().eq('ชื่อ-สกุล', target.name).eq('ที่อยู่', target.address);
+                        const { error: fbErr } = await sbClient.from(targetTable).delete().eq('"ชื่อ-สกุล"', target.name).eq('ที่อยู่', target.address);
                         if (fbErr) throw fbErr;
                     } else {
                         throw error;
                     }
                 }
             } else if (target.name && target.address) {
-                const { error } = await sbClient.from(targetTable).delete().eq('ชื่อ-สกุล', target.name).eq('ที่อยู่', target.address);
+                const { error } = await sbClient.from(targetTable).delete().eq('"ชื่อ-สกุล"', target.name).eq('ที่อยู่', target.address);
                 if (error) throw error;
             } else if (target.name) {
-                const { error } = await sbClient.from(targetTable).delete().eq('ชื่อ-สกุล', target.name);
+                const { error } = await sbClient.from(targetTable).delete().eq('"ชื่อ-สกุล"', target.name);
                 if (error) throw error;
             }
             console.log("⚡ [Supabase 100%] ลบข้อมูลผู้ประสบภัยสำเร็จ");
