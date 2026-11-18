@@ -4,7 +4,28 @@
  */
 
 (function () {
-    const LAST_SEEN_KEY = 'notif_last_seen_at';
+    const LAST_SEEN_PREFIX = 'notif_last_seen_at_';
+    const ROLE_NOTIF_CATEGORIES = {
+        'superadmin': ['evacuation', 'shelter', 'water', 'dashboard', 'relief'],
+        'admin': ['evacuation', 'shelter', 'water', 'dashboard', 'relief'],
+        'shelter': ['shelter', 'dashboard'],
+        'relief': ['relief', 'dashboard'],
+        'water_staff': ['water', 'dashboard'],
+        'community': ['evacuation', 'water', 'dashboard'],
+        'pr': ['dashboard', 'evacuation', 'water'],
+        'flood_report': ['dashboard']
+    };
+
+    function getCurrentRoleKey() {
+        let role = (typeof userRole !== 'undefined' && userRole) ? userRole : '';
+        if (!role) {
+            try {
+                const saved = localStorage.getItem('user_session');
+                if (saved) role = JSON.parse(saved).role || '';
+            } catch (e) {}
+        }
+        return String(role || 'public').toLowerCase().trim();
+    }
 
     function escapeHtml(str) {
         return String(str || '')
@@ -39,7 +60,7 @@
 
     function getLastSeenMs() {
         try {
-            const val = parseInt(localStorage.getItem(LAST_SEEN_KEY) || '0', 10);
+            const val = parseInt(localStorage.getItem(LAST_SEEN_PREFIX + getCurrentRoleKey()) || '0', 10);
             return isNaN(val) ? 0 : val;
         } catch (e) {
             return 0;
@@ -48,7 +69,7 @@
 
     function setLastSeenNow() {
         try {
-            localStorage.setItem(LAST_SEEN_KEY, String(Date.now()));
+            localStorage.setItem(LAST_SEEN_PREFIX + getCurrentRoleKey(), String(Date.now()));
         } catch (e) {}
     }
 
@@ -162,8 +183,11 @@
             });
         }
 
-        items.sort((a, b) => b.ts - a.ts);
-        return items.slice(0, 20);
+        const roleKey = getCurrentRoleKey();
+        const allowedCategories = ROLE_NOTIF_CATEGORIES[roleKey] || ['dashboard'];
+        const filtered = items.filter(item => allowedCategories.includes(item.targetPage));
+        filtered.sort((a, b) => b.ts - a.ts);
+        return filtered.slice(0, 20);
     }
 
     function renderNotificationBell() {
