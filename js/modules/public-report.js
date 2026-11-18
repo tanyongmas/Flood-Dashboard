@@ -1233,6 +1233,9 @@ window.renderPublicPortal = async function () {
                     <span class="w-2 h-2 rounded-full ${statusTheme.dotColor} animate-ping"></span>
                     <span>${statusTheme.title}</span>
                 </span>
+                <button type="button" data-site-theme-btn onclick="toggleSiteTheme()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center text-xs transition-all active:scale-95 shrink-0" title="${(typeof window.getSiteTheme === 'function' && window.getSiteTheme() === 'dark') ? 'สลับเป็นโหมดสว่าง' : 'สลับเป็นโหมดมืด'}">
+                    ${(typeof window.getSiteTheme === 'function' && window.getSiteTheme() === 'dark') ? '<i class="fas fa-sun text-xs text-amber-400"></i>' : '<i class="fas fa-moon text-xs"></i>'}
+                </button>
                 <button onclick="location.reload()" class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center text-xs transition-all active:scale-95 shrink-0" title="รีเฟรชข้อมูล">
                     <i class="fas fa-rotate text-xs"></i>
                 </button>

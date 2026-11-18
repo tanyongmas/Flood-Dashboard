@@ -19,6 +19,17 @@
     <link rel="icon" type="image/png" sizes="16x16" href="assets/logo.png">
     <link rel="manifest" href="manifest.webmanifest">
     <meta name="theme-color" content="#1e3a8a">
+    <script>
+        (function () {
+            try {
+                if (localStorage.getItem('app_theme') === 'dark') {
+                    document.documentElement.classList.add('theme-dark');
+                    var mt = document.querySelector('meta[name="theme-color"]');
+                    if (mt) mt.setAttribute('content', '#0f172a');
+                }
+            } catch (e) { }
+        })();
+    </script>
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -442,6 +453,13 @@
                         class="text-[10px] text-blue-500 bg-blue-50 px-2 py-2 rounded-full font-bold no-print hidden sm:inline-block">
                         <i class="far fa-clock"></i> <span id="lastUpdate">-</span>
                     </div>
+
+                    <!-- 🌓 ปุ่มสลับโหมดมืด/สว่าง -->
+                    <button type="button" id="btnSiteThemeToggle" data-site-theme-btn onclick="toggleSiteTheme()"
+                        class="bg-slate-100 text-slate-600 w-8 h-8 rounded-lg hover:bg-blue-50 hover:text-blue-600 transition shadow-sm active:scale-90 flex items-center justify-center shrink-0 no-print"
+                        title="สลับเป็นโหมดมืด" aria-pressed="false">
+                        <i class="fas fa-moon text-xs"></i>
+                    </button>
 
                     <!-- 🔔 กระดิ่งแจ้งเตือนความเคลื่อนไหวล่าสุด -->
                     <div id="notifBellWrapper" class="relative no-print">

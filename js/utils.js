@@ -617,3 +617,75 @@ window.toggleModalMask = function (elementId, rawValue, maskedValue, btnElement)
         }
     }
 };
+
+// ==========================================
+// 🌓 ระบบสลับโหมดมืด / โหมดสว่างทั้งเว็บไซต์ (Site-wide Theme)
+// ==========================================
+window.SITE_THEME_STORAGE_KEY = 'app_theme';
+
+window.getSiteTheme = function () {
+    try {
+        return localStorage.getItem(window.SITE_THEME_STORAGE_KEY) === 'dark' ? 'dark' : 'light';
+    } catch (_) {
+        return 'light';
+    }
+};
+
+window.syncSiteThemeButtons = function (theme) {
+    const activeTheme = theme || window.getSiteTheme();
+    const isDark = activeTheme === 'dark';
+    document.querySelectorAll('[data-site-theme-btn]').forEach(btn => {
+        btn.setAttribute('aria-pressed', isDark ? 'true' : 'false');
+        btn.title = isDark ? 'สลับเป็นโหมดสว่าง' : 'สลับเป็นโหมดมืด';
+        btn.innerHTML = isDark
+            ? '<i class="fas fa-sun text-xs text-amber-400"></i>'
+            : '<i class="fas fa-moon text-xs"></i>';
+    });
+};
+
+window.applySiteTheme = function (theme, persist = true) {
+    const resolved = theme === 'dark' ? 'dark' : 'light';
+    const isDark = resolved === 'dark';
+
+    document.documentElement.classList.toggle('theme-dark', isDark);
+
+    const metaTheme = document.querySelector('meta[name="theme-color"]');
+    if (metaTheme) {
+        metaTheme.setAttribute('content', isDark ? '#0f172a' : '#1e3a8a');
+    }
+
+    if (persist) {
+        try { localStorage.setItem(window.SITE_THEME_STORAGE_KEY, resolved); } catch (_) { }
+    }
+
+    // ซิงก์ Chart.js (ถ้าโหลดแล้ว)
+    if (typeof Chart !== 'undefined' && Chart.defaults) {
+        Chart.defaults.color = isDark ? '#cbd5e1' : '#475569';
+        Chart.defaults.borderColor = isDark ? 'rgba(148, 163, 184, 0.18)' : 'rgba(148, 163, 184, 0.25)';
+        if (Chart.instances) {
+            Object.values(Chart.instances).forEach(chart => {
+                try {
+                    if (chart && chart.options && chart.options.scales) {
+                        Object.values(chart.options.scales).forEach(scale => {
+                            if (scale && scale.ticks) scale.ticks.color = isDark ? '#cbd5e1' : '#475569';
+                            if (scale && scale.grid) scale.grid.color = isDark ? 'rgba(148, 163, 184, 0.15)' : 'rgba(226, 232, 240, 0.8)';
+                        });
+                    }
+                    if (chart && typeof chart.update === 'function') chart.update('none');
+                } catch (_) { }
+            });
+        }
+    }
+
+    window.syncSiteThemeButtons(resolved);
+    return resolved;
+};
+
+window.toggleSiteTheme = function () {
+    const nextTheme = window.getSiteTheme() === 'dark' ? 'light' : 'dark';
+    return window.applySiteTheme(nextTheme, true);
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    window.applySiteTheme(window.getSiteTheme(), false);
+});

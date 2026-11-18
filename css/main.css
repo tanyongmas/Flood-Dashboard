@@ -1136,4 +1136,330 @@ body.view-only-mode textarea {
     opacity: 0.85;
 }
 
+/* ===================================================
+   🌙 Site-wide Dark Mode (html.theme-dark)
+   =================================================== */
+html.theme-dark {
+    color-scheme: dark;
+    background-color: #0b1120;
+}
+
+html.theme-dark body {
+    background-color: #0b1120 !important;
+    color: #e2e8f0 !important;
+}
+
+html.theme-dark .main-content-area,
+html.theme-dark #publicPortalContainer {
+    background-color: #0b1120;
+}
+
+/* 🌑 ป้องกันแสงเงาสีเทาในโหมดมืด: ใช้เงาเข้มลึกแทนเงาโทนสว่าง */
+html.theme-dark .shadow-xs,
+html.theme-dark .shadow-sm,
+html.theme-dark .shadow,
+html.theme-dark .shadow-md,
+html.theme-dark .shadow-lg,
+html.theme-dark .shadow-xl,
+html.theme-dark .shadow-2xl {
+    --tw-shadow-color: rgba(2, 6, 23, 0.72) !important;
+    --tw-ring-color: rgba(51, 65, 85, 0.55) !important;
+}
+
+html.theme-dark .shadow-xl,
+html.theme-dark .shadow-2xl {
+    box-shadow: 0 20px 38px -14px rgba(2, 6, 23, 0.75), 0 0 0 1px rgba(148, 163, 184, 0.08) !important;
+}
+
+html.theme-dark .shadow-md,
+html.theme-dark .shadow-lg {
+    box-shadow: 0 10px 24px -8px rgba(2, 6, 23, 0.65), 0 0 0 1px rgba(148, 163, 184, 0.07) !important;
+}
+
+html.theme-dark .shadow-sm,
+html.theme-dark .shadow-xs {
+    box-shadow: 0 4px 12px -4px rgba(2, 6, 23, 0.55) !important;
+}
+
+/* Sidebar, Header, Bottom Nav & Surface Cards */
+html.theme-dark #sidebar,
+html.theme-dark #mainApp header,
+html.theme-dark #publicBottomNav,
+html.theme-dark #mobileBottomNav,
+html.theme-dark .bg-white,
+html.theme-dark .bg-white\/95,
+html.theme-dark .bg-white\/90,
+html.theme-dark .bg-white\/85,
+html.theme-dark .bg-white\/80,
+html.theme-dark .bg-white\/75,
+html.theme-dark .bg-white\/70,
+html.theme-dark .bg-white\/60 {
+    background-color: #111827 !important;
+}
+
+html.theme-dark .bg-slate-50,
+html.theme-dark .bg-slate-50\/90,
+html.theme-dark .bg-slate-50\/80,
+html.theme-dark .bg-gray-50 {
+    background-color: #172033 !important;
+}
+
+html.theme-dark .bg-slate-100,
+html.theme-dark .bg-slate-100\/80,
+html.theme-dark .bg-slate-200,
+html.theme-dark .bg-slate-200\/80,
+html.theme-dark .bg-gray-100,
+html.theme-dark .bg-gray-200 {
+    background-color: #1e293b !important;
+}
+
+/* แก้การ์ดไล่สีโทนสว่าง (from-white / from-slate-50 / to-slate-100) ไม่ให้เป็นสีเทา */
+html.theme-dark .from-white,
+html.theme-dark .from-slate-50,
+html.theme-dark .from-gray-50 {
+    --tw-gradient-from: #111827 !important;
+    --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(17, 24, 39, 0)) !important;
+}
+
+html.theme-dark .via-white,
+html.theme-dark .via-slate-50 {
+    --tw-gradient-via: #172033 !important;
+}
+
+html.theme-dark .to-white,
+html.theme-dark .to-slate-50,
+html.theme-dark .to-slate-100,
+html.theme-dark .to-gray-50 {
+    --tw-gradient-to: #1e293b !important;
+}
+
+/* Pastel Tinted Surfaces -> Rich Dark Translucent Tints */
+html.theme-dark .bg-blue-50,
+html.theme-dark .bg-blue-50\/50,
+html.theme-dark .bg-blue-50\/80 {
+    background-color: rgba(37, 99, 235, 0.16) !important;
+}
+
+html.theme-dark .bg-sky-50,
+html.theme-dark .bg-sky-50\/80 {
+    background-color: rgba(14, 165, 233, 0.15) !important;
+}
+
+html.theme-dark .bg-emerald-50,
+html.theme-dark .bg-emerald-50\/80 {
+    background-color: rgba(16, 185, 129, 0.15) !important;
+}
+
+html.theme-dark .bg-amber-50,
+html.theme-dark .bg-amber-50\/80 {
+    background-color: rgba(245, 158, 11, 0.15) !important;
+}
+
+html.theme-dark .bg-rose-50,
+html.theme-dark .bg-rose-50\/80,
+html.theme-dark .bg-red-50,
+html.theme-dark .bg-red-50\/80 {
+    background-color: rgba(244, 63, 94, 0.16) !important;
+}
+
+html.theme-dark .bg-indigo-50,
+html.theme-dark .bg-indigo-50\/80 {
+    background-color: rgba(99, 102, 241, 0.16) !important;
+}
+
+html.theme-dark .bg-purple-50,
+html.theme-dark .bg-purple-50\/80 {
+    background-color: rgba(168, 85, 247, 0.16) !important;
+}
+
+html.theme-dark .bg-pink-50,
+html.theme-dark .bg-pink-50\/80 {
+    background-color: rgba(236, 72, 153, 0.16) !important;
+}
+
+html.theme-dark .bg-orange-50 {
+    background-color: rgba(249, 115, 22, 0.16) !important;
+}
+
+/* Borders & Dividers */
+html.theme-dark .border-slate-100,
+html.theme-dark .border-slate-100\/80,
+html.theme-dark .border-slate-200,
+html.theme-dark .border-slate-200\/80,
+html.theme-dark .border-slate-200\/90,
+html.theme-dark .border-slate-300,
+html.theme-dark .border-gray-100,
+html.theme-dark .border-gray-200,
+html.theme-dark .border-blue-50,
+html.theme-dark .border-blue-100 {
+    border-color: #263246 !important;
+}
+
+html.theme-dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+html.theme-dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+    border-color: #263246 !important;
+}
+
+/* Typography (ยกเว้นการ์ดกราเดียนท์, Hero Card และหมุดแผนที่) */
+html.theme-dark .text-slate-900,
+html.theme-dark .text-slate-800,
+html.theme-dark .text-gray-900,
+html.theme-dark .text-gray-800 {
+    color: #f1f5f9 !important;
+}
+
+html.theme-dark .text-slate-700,
+html.theme-dark .text-gray-700 {
+    color: #cbd5e1 !important;
+}
+
+html.theme-dark .text-slate-600,
+html.theme-dark .text-slate-500,
+html.theme-dark .text-gray-600,
+html.theme-dark .text-gray-500 {
+    color: #94a3b8 !important;
+}
+
+html.theme-dark .text-blue-900,
+html.theme-dark .text-blue-950,
+html.theme-dark .text-blue-800 {
+    color: #93c5fd !important;
+}
+
+html.theme-dark .text-emerald-800,
+html.theme-dark .text-emerald-700 {
+    color: #6ee7b7 !important;
+}
+
+html.theme-dark .text-amber-800,
+html.theme-dark .text-amber-700 {
+    color: #fcd34d !important;
+}
+
+html.theme-dark .text-rose-800,
+html.theme-dark .text-rose-700,
+html.theme-dark .text-red-700 {
+    color: #fda4af !important;
+}
+
+html.theme-dark .text-indigo-800,
+html.theme-dark .text-indigo-700 {
+    color: #a5b4fc !important;
+}
+
+html.theme-dark .text-purple-800,
+html.theme-dark .text-purple-700 {
+    color: #d8b4fe !important;
+}
+
+/* Form Inputs, Selects & Textareas */
+html.theme-dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+html.theme-dark select,
+html.theme-dark textarea {
+    background-color: #0f172a !important;
+    color: #f1f5f9 !important;
+    border-color: #334155 !important;
+}
+
+html.theme-dark input::placeholder,
+html.theme-dark textarea::placeholder {
+    color: #64748b !important;
+}
+
+/* Tables */
+html.theme-dark table thead th {
+    background-color: #172033 !important;
+    color: #cbd5e1 !important;
+    border-color: #263246 !important;
+}
+
+html.theme-dark table tbody tr {
+    border-color: #263246 !important;
+}
+
+html.theme-dark table tbody tr:hover {
+    background-color: rgba(30, 41, 59, 0.7) !important;
+}
+
+/* SweetAlert2 */
+html.theme-dark .swal2-popup {
+    background-color: #111827 !important;
+    color: #e2e8f0 !important;
+    border: 1px solid #334155;
+    box-shadow: 0 25px 50px -12px rgba(2, 6, 23, 0.85) !important;
+}
+
+html.theme-dark .swal2-title,
+html.theme-dark .swal2-html-container {
+    color: #e2e8f0 !important;
+}
+
+/* 📍 คงหมุดแผนที่และ Popup แผนที่ทุกหมุดให้เป็นโทนสว่างสดใสเหมือนเดิม 100% */
+html.theme-dark .leaflet-marker-pane .bg-white,
+html.theme-dark .leaflet-popup-pane .leaflet-popup-content-wrapper,
+html.theme-dark .leaflet-popup-pane .leaflet-popup-tip,
+html.theme-dark .leaflet-popup-pane .bg-white {
+    background-color: #ffffff !important;
+}
+
+html.theme-dark .leaflet-marker-pane .bg-slate-50,
+html.theme-dark .leaflet-popup-pane .bg-slate-50 {
+    background-color: #f8fafc !important;
+}
+
+html.theme-dark .leaflet-marker-pane .bg-slate-100,
+html.theme-dark .leaflet-popup-pane .bg-slate-100 {
+    background-color: #f1f5f9 !important;
+}
+
+html.theme-dark .leaflet-marker-pane .text-slate-900,
+html.theme-dark .leaflet-marker-pane .text-slate-800,
+html.theme-dark .leaflet-popup-pane .text-slate-900,
+html.theme-dark .leaflet-popup-pane .text-slate-800,
+html.theme-dark .leaflet-popup-pane .leaflet-popup-content {
+    color: #1e293b !important;
+}
+
+html.theme-dark .leaflet-marker-pane .text-slate-700,
+html.theme-dark .leaflet-popup-pane .text-slate-700 {
+    color: #334155 !important;
+}
+
+html.theme-dark .leaflet-marker-pane .text-slate-600,
+html.theme-dark .leaflet-marker-pane .text-slate-500,
+html.theme-dark .leaflet-popup-pane .text-slate-600,
+html.theme-dark .leaflet-popup-pane .text-slate-500 {
+    color: #64748b !important;
+}
+
+html.theme-dark .leaflet-marker-pane .border-slate-100,
+html.theme-dark .leaflet-marker-pane .border-slate-200,
+html.theme-dark .leaflet-popup-pane .border-slate-100,
+html.theme-dark .leaflet-popup-pane .border-slate-200 {
+    border-color: #e2e8f0 !important;
+}
+
+html.theme-dark .leaflet-popup-pane .bg-blue-50 { background-color: #eff6ff !important; }
+html.theme-dark .leaflet-popup-pane .bg-emerald-50 { background-color: #ecfdf5 !important; }
+html.theme-dark .leaflet-popup-pane .bg-amber-50 { background-color: #fffbeb !important; }
+html.theme-dark .leaflet-popup-pane .bg-rose-50 { background-color: #fff1f2 !important; }
+html.theme-dark .leaflet-popup-pane .bg-purple-50 { background-color: #faf5ff !important; }
+html.theme-dark .leaflet-popup-pane .text-blue-800,
+html.theme-dark .leaflet-popup-pane .text-blue-700 { color: #1d4ed8 !important; }
+html.theme-dark .leaflet-popup-pane .text-emerald-800,
+html.theme-dark .leaflet-popup-pane .text-emerald-700 { color: #047857 !important; }
+html.theme-dark .leaflet-popup-pane .text-amber-800,
+html.theme-dark .leaflet-popup-pane .text-amber-700 { color: #b45309 !important; }
+html.theme-dark .leaflet-popup-pane .text-rose-800,
+html.theme-dark .leaflet-popup-pane .text-rose-700 { color: #be123c !important; }
+html.theme-dark .leaflet-popup-pane .text-purple-800,
+html.theme-dark .leaflet-popup-pane .text-purple-700 { color: #7e22ce !important; }
+
+/* คงข้อความสีขาวเดิมบน Hero Card และแถบกราเดียนท์ */
+html.theme-dark .bg-gradient-to-r .text-white,
+html.theme-dark .bg-gradient-to-br .text-white,
+html.theme-dark #x73_hero_card {
+    color: #ffffff !important;
+}
+
 
