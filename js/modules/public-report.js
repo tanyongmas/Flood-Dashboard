@@ -798,7 +798,7 @@ window.openEvacReportModal = function (status = 'อพยพ') {
         title: `<div class="flex items-center justify-center gap-2 ${titleColor} text-base sm:text-lg font-black pt-1"><i class="fas ${titleIcon}"></i> ${titleText}</div>`,
         width: '100%',
         html: `
-            <div class="text-left space-y-3.5 px-1 py-1 mt-1 max-h-[68vh] overflow-y-auto custom-scrollbar">
+            <div class="w-full text-left space-y-3.5 py-1 mt-1 max-h-[68vh] overflow-y-auto custom-scrollbar">
                 <input type="hidden" id="swal_evac_status" value="${status}">
 
                 <div>
@@ -857,8 +857,10 @@ window.openEvacReportModal = function (status = 'อพยพ') {
         confirmButtonColor: btnColor,
         reverseButtons: true,
         customClass: {
-            popup: 'rounded-[1.75rem] w-[95vw] max-w-md p-3.5 sm:p-5',
-            actions: 'w-full flex gap-2 px-1 mt-2',
+            popup: 'rounded-[1.75rem] w-[95vw] max-w-lg p-4 sm:p-6',
+            title: '!px-1 !pt-1 !pb-0',
+            htmlContainer: '!px-0 !mx-0 !mt-2 !mb-0 w-full',
+            actions: 'w-full flex gap-2 !px-0 !mx-0 mt-3',
             confirmButton: 'flex-1 py-3 rounded-xl font-bold text-sm m-0 shadow-md',
             cancelButton: 'flex-1 py-3 rounded-xl font-bold text-sm m-0 bg-slate-100 text-slate-600 hover:bg-slate-200'
         },
