@@ -1593,7 +1593,7 @@ function handleLineWebhook(events) {
                 action: {
                   type: "uri",
                   label: "💧 รายงานระดับน้ำ",
-                  uri: "https://tanyongmasflood.pages.dev/?mode=report&open=water_report"
+                  uri: "https://tanyongmasflood.pages.dev/?mode=public&open=water_report"
                 }
               }
             ]
@@ -1941,7 +1941,7 @@ function handleLineWebhook(events) {
 function createEmergencyCarouselFlexMessage() {
   const groupInviteUrl = getScriptProperty('LINE_GROUP_INVITE_URL', 'https://line.me/R/ti/g/wrrpWNFBXz');
   const webAppUrl = getScriptProperty('LIFF_WEB_APP_URL', 'https://tanyongmasflood.pages.dev/');
-  const publicModeUrl = webAppUrl + (webAppUrl.includes('?') ? '&' : '?') + 'mode=report';
+  const publicModeUrl = webAppUrl + (webAppUrl.includes('?') ? '&' : '?') + 'mode=public';
 
   // 🔴 Bubble 1: เบอร์โทรติดต่อฉุกเฉิน 24 ชั่วโมง
   const emergencyBubble = {
@@ -2716,7 +2716,7 @@ function getCctvCarouselFlexMessage() {
     const imgUrl = getDirectCctvSnapshotUrl(cam);
 
     // ลิงก์เข้าสู่โหมดประชาชนพร้อมพารามิเตอร์เปิดกล้องทันที
-    const targetUrl = "https://tanyongmasflood.pages.dev/?mode=report&cctv_id=" + encodeURIComponent(camId);
+    const targetUrl = "https://tanyongmasflood.pages.dev/?mode=public&cctv_id=" + encodeURIComponent(camId);
 
     // วิเคราะห์และจับคู่ข้อมูลระดับน้ำปัจจุบันตามจุดติดตั้งกล้อง
     const nameLower = (cam.name || '').toLowerCase();
@@ -3179,7 +3179,7 @@ function getRoadClosuresFlexMessage() {
               "action": {
                 "type": "uri",
                 "label": "🗺️ เปิดดูแผนที่ One Map",
-                "uri": "https://tanyongmasflood.pages.dev/?mode=report"
+                "uri": "https://tanyongmasflood.pages.dev/?mode=public"
               }
             }
           ]
@@ -3197,7 +3197,7 @@ function getRoadClosuresFlexMessage() {
       : (r.waterDepth || r.water_level || "มีน้ำท่วมขังบนผิวทาง");
     const detour = r.detour || "ไม่มีเส้นทางเลี่ยง (โปรดระมัดระวัง)";
     const photoUrl = getDirectRoadImageUrl(r);
-    const mapUri = "https://tanyongmasflood.pages.dev/?mode=report&road_id=" + (r.id || '') + "&lat=" + (r.lat || '') + "&lng=" + (r.lng || '');
+    const mapUri = "https://tanyongmasflood.pages.dev/?mode=public&road_id=" + (r.id || '') + "&lat=" + (r.lat || '') + "&lng=" + (r.lng || '');
 
     return {
       "type": "bubble",
@@ -4098,7 +4098,7 @@ function setupLineRichMenu(driveFileId) {
     return "Error: Web App not deployed";
   }
   
-  const reportUrl = webAppUrl + "?mode=report";
+  const reportUrl = webAppUrl + "?mode=public";
   Logger.log("🔗 ลิงก์รายงานสถานะที่จะใช้ใน Rich Menu: " + reportUrl);
   
   // 1. สร้าง Rich Menu Structure (ขนาดมาตรฐาน 2500x1686 พิกเซล แบ่งออกเป็น 3 ปุ่ม)

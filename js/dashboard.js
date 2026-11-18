@@ -44,8 +44,8 @@ let dashLayerStates = {
         window.isPublicMode = false;
 
         window.addEventListener('DOMContentLoaded', async () => {
-            // 1. เช็คว่ามีคำว่า mode=report ใน URL ไหม
-            window.isPublicMode = window.location.href.includes('mode=report');
+            // 1. เช็คว่ามีคำว่า mode=public หรือ mode=report ใน URL ไหม
+            window.isPublicMode = window.location.href.includes('mode=public') || window.location.href.includes('mode=report');
 
             if (window.isPublicMode) {
                 // ==========================================

@@ -951,11 +951,11 @@ function openEvacuationForm(status) {
 
 window.showQRCode = function () {
     // กำหนด URL ปัจจุบันอัตโนมัติ (รองรับทั้ง tanyongmasflood.pages.dev และโดเมนที่ผูกไว้)
-    let publicUrl = "https://tanyongmasflood.pages.dev/?mode=report";
+    let publicUrl = "https://tanyongmasflood.pages.dev/?mode=public";
     if (window.location && window.location.protocol && window.location.protocol.startsWith('http')) {
         let base = window.location.origin + window.location.pathname;
         if (!base.endsWith('/')) base += '/';
-        publicUrl = base + "?mode=report";
+        publicUrl = base + "?mode=public";
     }
 
     const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(publicUrl)}`;
