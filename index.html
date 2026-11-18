@@ -27,13 +27,14 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11" defer></script>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="anonymous" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@0.4.14/dist/leaflet.draw.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@0.4.14/dist/leaflet.draw.css" crossorigin="anonymous" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
         integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw=="
         crossorigin="anonymous" referrerpolicy="no-referrer" />
     <script src="https://unpkg.com/leaflet-draw@0.4.14/dist/leaflet.draw.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js" defer></script>
     <link rel="stylesheet" href="css/main.css">
 </head>
 
@@ -592,6 +593,22 @@
                                 class="absolute -top-24 -right-24 w-96 h-96 bg-sky-500/20 rounded-full blur-3xl pointer-events-none transition-all duration-700">
                             </div>
 
+                            <!-- 📸 แถบปุ่ม Export การ์ดเป็นรูปภาพ (ซ่อนอัตโนมัติในภาพที่ Export ด้วยคลาส no-export) -->
+                            <div class="no-export relative z-10 flex flex-wrap items-center justify-end gap-2 mb-3">
+                                <button type="button" onclick="exportHeroCardImage('save')"
+                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white text-[11px] font-bold backdrop-blur-md shadow-sm active:scale-95 transition-all"
+                                    title="บันทึกรูปภาพการ์ดระดับน้ำ (PNG) หรือแชร์ต่อ">
+                                    <i class="fas fa-camera text-sky-300"></i>
+                                    <span>บันทึกรูปภาพ</span>
+                                </button>
+                                <button type="button" id="btnExportHeroSendLine" onclick="exportHeroCardImage('line')"
+                                    class="hidden inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/90 hover:bg-emerald-500 border border-emerald-300/40 text-white text-[11px] font-bold shadow-md shadow-emerald-950/30 active:scale-95 transition-all"
+                                    title="จับภาพการ์ดนี้แล้วส่งเข้ากลุ่มไลน์ เฝ้าระวังอุทกภัย'69">
+                                    <i class="fab fa-line text-sm"></i>
+                                    <span>ส่งเข้ากลุ่มไลน์</span>
+                                </button>
+                            </div>
+
                             <!-- 🌟 ส่วนเนื้อหาหลัก: องค์ประกอบลอยตัว แยกซ้าย-ขวา รองรับมือถือเต็มรูปแบบ -->
                             <div class="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-stretch">
                                 
@@ -796,6 +813,16 @@
 
                                 </div>
 
+                            </div>
+
+                            <!-- 🏷️ แถบ Footer เครดิตหน่วยงาน (แสดงเฉพาะในภาพที่ Export เพื่อส่ง LINE ให้อ่านง่าย) -->
+                            <div id="x73_hero_export_footer"
+                                class="hidden relative z-10 mt-4 pt-3 border-t border-white/15 flex items-center justify-between gap-2 text-[11px] text-sky-100/90 font-semibold">
+                                <div class="flex items-center gap-2">
+                                    <img src="assets/icon-192.png" alt="ทต.ตันหยงมัส" class="w-5 h-5 rounded-md bg-white/90 p-0.5 object-contain">
+                                    <span>เทศบาลตำบลตันหยงมัส • ระบบเฝ้าระวังอุทกภัย (เฝ้าน้ำหยงมัส)</span>
+                                </div>
+                                <span id="x73_hero_export_timestamp" class="text-[10px] text-sky-200/80 font-mono"></span>
                             </div>
                         </div>
                         <!-- 📢 ระบบส่งแจ้งเตือนภัยแบบ Outline Premium -->

@@ -306,6 +306,9 @@ function updateMenuByRole() {
     const addRoadBtnEl = document.getElementById('btnOpenAddRoadClosure');
     if (addRoadBtnEl) addRoadBtnEl.classList.toggle('hidden', !canSendLineNewsAndRoad);
 
+    const exportHeroLineBtn = document.getElementById('btnExportHeroSendLine');
+    if (exportHeroLineBtn) exportHeroLineBtn.classList.toggle('hidden', !canSendLineNewsAndRoad);
+
     const dashViewOnlyBanner = document.getElementById('dashViewOnlyBanner');
     if (dashViewOnlyBanner) dashViewOnlyBanner.classList.toggle('hidden', canSendLineNewsAndRoad);
 }

@@ -172,7 +172,7 @@ function setWeatherMode(mode) {
     }
 }
 
-async function sendMessagingAPI(type) {
+async function sendMessagingAPI(type, prefilledData = null) {
     const currentRole = (typeof userRole !== 'undefined' ? String(userRole || '') : '').toLowerCase().trim();
     const canSend = currentRole === 'superadmin' || (currentRole === 'pr' && type === 'news');
     if (!canSend) {
@@ -232,8 +232,12 @@ async function sendMessagingAPI(type) {
 
     if (typeof checkAdminReadOnlyAction === 'function' && checkAdminReadOnlyAction()) return;
 
-    let attachedImageData = "";
-    let attachedImageType = "image/jpeg";
+    const escapeHtmlAttr = (str) => String(str || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const initialTitle = (prefilledData && prefilledData.title) ? prefilledData.title : setup.title;
+    const initialMessage = (prefilledData && prefilledData.message) ? prefilledData.message : setup.text;
+    let attachedImageData = (prefilledData && prefilledData.imageData) ? prefilledData.imageData : "";
+    let attachedImageType = (prefilledData && prefilledData.imageType) ? prefilledData.imageType : "image/jpeg";
+    const initialFilename = (prefilledData && prefilledData.filename) ? prefilledData.filename : "";
 
     const modalHTML = `
         <div class="text-left space-y-3 mt-2">
@@ -253,7 +257,7 @@ async function sendMessagingAPI(type) {
                 <label class="block text-[11px] font-bold text-slate-600 mb-1">
                     <i class="fas fa-heading text-slate-400 mr-1"></i>หัวข้อประกาศ:
                 </label>
-                <input type="text" id="swal_line_title" value="${setup.title}"
+                <input type="text" id="swal_line_title" value="${escapeHtmlAttr(initialTitle)}"
                     class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
                     placeholder="ระบุหัวข้อประกาศ...">
             </div>
@@ -265,7 +269,7 @@ async function sendMessagingAPI(type) {
                 </label>
                 <textarea id="swal_line_message" rows="3"
                     class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all custom-scrollbar leading-relaxed"
-                    placeholder="พิมพ์รายละเอียดสถานการณ์ คำแนะนำ หรือข้อมูลเพิ่มเติมที่นี่...">${setup.text}</textarea>
+                    placeholder="พิมพ์รายละเอียดสถานการณ์ คำแนะนำ หรือข้อมูลเพิ่มเติมที่นี่...">${escapeHtmlAttr(initialMessage)}</textarea>
             </div>
 
             <!-- 📸 ส่วนแนบรูปภาพสถานการณ์ (จัดเก็บบน Google Drive) -->
@@ -289,8 +293,8 @@ async function sendMessagingAPI(type) {
                 </div>
 
                 <!-- กล่องพรีวิวรูปภาพก่อนส่ง -->
-                <div id="swal_line_img_preview_box" class="hidden relative rounded-xl overflow-hidden border border-slate-200 bg-white">
-                    <img id="swal_line_img_preview" src="" alt="พรีวิวรูป" class="w-full max-h-40 object-cover rounded-xl">
+                <div id="swal_line_img_preview_box" class="hidden relative rounded-xl overflow-hidden border border-slate-200 bg-slate-900 p-1">
+                    <img id="swal_line_img_preview" src="" alt="พรีวิวรูป" class="max-w-full max-h-72 w-auto h-auto object-contain rounded-lg mx-auto">
                     <button type="button" id="swal_line_img_remove_btn" class="absolute top-2 right-2 w-6 h-6 rounded-full bg-rose-600 text-white flex items-center justify-center text-xs shadow-md hover:bg-rose-700 transition-all" title="ยกเลิกการแนบรูป">
                         <i class="fas fa-times"></i>
                     </button>
@@ -321,7 +325,6 @@ async function sendMessagingAPI(type) {
         confirmButtonText: `<i class="fas fa-paper-plane mr-1.5"></i> ${setup.btnConfirmText}`,
         cancelButtonText: 'ยกเลิก',
         reverseButtons: true,
-        borderRadius: '1.5rem',
         width: '460px',
         customClass: {
             icon: 'border-none w-auto h-auto m-0 mt-4 bg-transparent',
@@ -334,6 +337,12 @@ async function sendMessagingAPI(type) {
             const filenameLabel = document.getElementById('swal_line_img_filename');
             const removeBtn = document.getElementById('swal_line_img_remove_btn');
             const urlInput = document.getElementById('swal_line_img_url');
+
+            if (attachedImageData && previewImg && previewBox) {
+                previewImg.src = attachedImageData;
+                previewBox.classList.remove('hidden');
+                if (filenameLabel && initialFilename) filenameLabel.textContent = initialFilename;
+            }
 
             if (fileInput) {
                 fileInput.addEventListener('change', (e) => {
@@ -427,7 +436,7 @@ async function sendMessagingAPI(type) {
                     timer: 2500,
                     showConfirmButton: false,
                     width: '320px',
-                    borderRadius: '1.25rem'
+                    customClass: { popup: 'rounded-[1.25rem]' }
                 });
             } else {
                 throw new Error(data.error || 'ไม่สามารถส่งข้อความได้');
@@ -438,8 +447,135 @@ async function sendMessagingAPI(type) {
                 title: 'ส่งประกาศล้มเหลว',
                 text: e.message,
                 width: '320px',
-                borderRadius: '1.25rem'
+                customClass: { popup: 'rounded-[1.25rem]' }
             });
+        }
+    }
+}
+
+async function exportHeroCardImage(mode = 'save') {
+    const currentRole = (typeof userRole !== 'undefined' ? String(userRole || '') : '').toLowerCase().trim();
+    if (mode === 'line' && !['superadmin', 'pr'].includes(currentRole)) {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'info',
+                title: 'สิทธิ์ดูข้อมูลเท่านั้น',
+                text: 'สิทธิ์ของคุณสามารถบันทึกรูปภาพได้ แต่ไม่สามารถส่งเข้ากลุ่มไลน์ได้',
+                confirmButtonColor: '#3b82f6',
+                customClass: { popup: 'rounded-2xl' }
+            });
+        }
+        return;
+    }
+
+    const heroEl = document.getElementById('x73_hero_card');
+    if (!heroEl) return;
+
+    if (typeof htmlToImage === 'undefined' || typeof htmlToImage.toPng !== 'function') {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire('ไม่สามารถสร้างรูปภาพได้', 'ไลบรารีจับภาพกำลังโหลด กรุณารอสักครู่แล้วลองใหม่', 'warning');
+        }
+        return;
+    }
+
+    const exportFooter = document.getElementById('x73_hero_export_footer');
+    const exportTs = document.getElementById('x73_hero_export_timestamp');
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const fileStamp = `${now.getFullYear() + 543}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`;
+    const filename = `water-level-X73-${fileStamp}.png`;
+
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            title: 'กำลังสร้างรูปภาพการ์ดระดับน้ำ...',
+            allowOutsideClick: false,
+            didOpen: () => Swal.showLoading(),
+            customClass: { popup: 'rounded-2xl' }
+        });
+    }
+
+    try {
+        if (exportTs) {
+            exportTs.innerText = `บันทึกภาพ: ${now.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })} ${pad(now.getHours())}:${pad(now.getMinutes())} น.`;
+        }
+        if (exportFooter) exportFooter.classList.remove('hidden');
+
+        // รอ 1 เฟรมให้เบราว์เซอร์จัดเรียง Footer ก่อนจับภาพ
+        await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 60)));
+
+        const dataUrl = await htmlToImage.toPng(heroEl, {
+            pixelRatio: 2,
+            cacheBust: true,
+            backgroundColor: '#0f172a',
+            style: {
+                margin: '0',
+                transition: 'none',
+                animation: 'none'
+            },
+            filter: (node) => {
+                if (!node) return true;
+                if (node.id === 'x73_hero_rain_layer') return false;
+                if (node.classList && (node.classList.contains('no-export') || node.classList.contains('hero-rain-container'))) return false;
+                return true;
+            }
+        });
+
+        if (exportFooter) exportFooter.classList.add('hidden');
+        if (typeof Swal !== 'undefined') Swal.close();
+
+        if (mode === 'line') {
+            const levelText = (document.getElementById('x73_hero_water_level')?.innerText || '--.--').trim();
+            const statusText = (document.getElementById('x73_hero_status_title')?.innerText || '').trim();
+            const updateText = (document.getElementById('x73_hero_update_time')?.innerText || '').trim();
+
+            await sendMessagingAPI('news', {
+                title: `รายงานระดับน้ำ สถานี X.73 คลองตันหยงมัส (${levelText} ม.รทก.)`,
+                message: `ระดับน้ำคลองตันหยงมัส (สถานี X.73) ปัจจุบันอยู่ที่ ${levelText} ม.รทก.\nสถานะ: ${statusText || '-'}\n${updateText}\nเทศบาลตำบลตันหยงมัส`,
+                imageData: dataUrl,
+                imageType: 'image/png',
+                filename
+            });
+            return;
+        }
+
+        // โหมดบันทึกรูปภาพ / แชร์บนมือถือ
+        const res = await fetch(dataUrl);
+        const blob = await res.blob();
+        const file = new File([blob], filename, { type: 'image/png' });
+
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            try {
+                await navigator.share({
+                    files: [file],
+                    title: 'รายงานระดับน้ำ สถานี X.73 คลองตันหยงมัส'
+                });
+                return;
+            } catch (shareErr) {
+                if (shareErr && shareErr.name === 'AbortError') return;
+            }
+        }
+
+        const link = document.createElement('a');
+        link.href = dataUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                icon: 'success',
+                title: 'บันทึกรูปภาพสำเร็จ',
+                text: `บันทึกไฟล์ ${filename} เรียบร้อยแล้ว`,
+                timer: 2000,
+                showConfirmButton: false,
+                customClass: { popup: 'rounded-2xl' }
+            });
+        }
+    } catch (err) {
+        if (exportFooter) exportFooter.classList.add('hidden');
+        if (typeof Swal !== 'undefined') {
+            Swal.fire('เกิดข้อผิดพลาด', err.message || 'ไม่สามารถสร้างรูปภาพการ์ดได้', 'error');
         }
     }
 }
@@ -447,3 +583,4 @@ async function sendMessagingAPI(type) {
 window.loadWeatherForecast = loadWeatherForecast;
 window.setWeatherMode = setWeatherMode;
 window.sendMessagingAPI = sendMessagingAPI;
+window.exportHeroCardImage = exportHeroCardImage;
