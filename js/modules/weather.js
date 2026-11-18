@@ -453,6 +453,134 @@ async function sendMessagingAPI(type, prefilledData = null) {
     }
 }
 
+async function captureHeroCardPng(orientation = 'landscape') {
+    const heroEl = document.getElementById('x73_hero_card');
+    if (!heroEl) throw new Error('ไม่พบการ์ดระดับน้ำ');
+
+    if (typeof htmlToImage === 'undefined' || typeof htmlToImage.toPng !== 'function') {
+        throw new Error('ไลบรารีจับภาพกำลังโหลด กรุณารอสักครู่แล้วลองใหม่');
+    }
+
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const fileStamp = `${now.getFullYear() + 543}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`;
+    const filename = `water-level-X73-${orientation}-${fileStamp}.png`;
+
+    const wrapper = document.createElement('div');
+    wrapper.style.position = 'fixed';
+    wrapper.style.left = '-99999px';
+    wrapper.style.top = '0';
+    wrapper.style.pointerEvents = 'none';
+    wrapper.style.zIndex = '-1';
+
+    const clone = heroEl.cloneNode(true);
+    clone.querySelectorAll('.no-export, #x73_hero_rain_layer, .hero-rain-container').forEach(el => el.remove());
+
+    const exportFooter = clone.querySelector('#x73_hero_export_footer');
+    const exportTs = clone.querySelector('#x73_hero_export_timestamp');
+    if (exportTs) {
+        exportTs.innerText = `บันทึกภาพ: ${now.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })} ${pad(now.getHours())}:${pad(now.getMinutes())} น.`;
+    }
+    if (exportFooter) exportFooter.classList.remove('hidden');
+
+    clone.style.margin = '0';
+    clone.style.transition = 'none';
+    clone.style.animation = 'none';
+
+    const mainGrid = clone.querySelector('.grid');
+    const leftCol = clone.querySelector('[class*="col-span-7"]');
+    const rightCol = clone.querySelector('[class*="col-span-5"]');
+
+    if (orientation === 'portrait') {
+        clone.style.width = '410px';
+        clone.style.padding = '18px';
+        if (mainGrid) {
+            mainGrid.style.display = 'grid';
+            mainGrid.style.gridTemplateColumns = 'minmax(0, 1fr)';
+            mainGrid.style.gap = '14px';
+        }
+        if (leftCol) {
+            leftCol.style.gridColumn = 'span 1 / span 1';
+            // จัดเรียงส่วนหัวการ์ดแนวตั้งใหม่: แถวบนชื่อสถานี แถวล่างเน้นตัวเลขระดับน้ำปัจจุบันให้เด่นชัด
+            const headerCard = leftCol.firstElementChild;
+            if (headerCard && headerCard.children.length >= 2) {
+                headerCard.style.display = 'flex';
+                headerCard.style.flexDirection = 'column';
+                headerCard.style.alignItems = 'stretch';
+                headerCard.style.gap = '12px';
+                headerCard.style.padding = '14px';
+
+                const stationWrap = headerCard.children[0];
+                const levelWrap = headerCard.children[1];
+                if (stationWrap) {
+                    stationWrap.style.width = '100%';
+                }
+                if (levelWrap) {
+                    levelWrap.style.width = '100%';
+                    levelWrap.style.paddingLeft = '0';
+                    levelWrap.style.padding = '10px 14px';
+                    levelWrap.style.borderRadius = '14px';
+                    levelWrap.style.background = 'rgba(15, 23, 42, 0.45)';
+                    levelWrap.style.border = '1px solid rgba(56, 189, 248, 0.35)';
+                    levelWrap.style.alignItems = 'center';
+                    levelWrap.style.textAlign = 'center';
+
+                    const levelNumEl = levelWrap.querySelector('#x73_hero_water_level');
+                    if (levelNumEl) {
+                        levelNumEl.style.fontSize = '44px';
+                        levelNumEl.style.lineHeight = '1.05';
+                        levelNumEl.style.fontWeight = '900';
+                        levelNumEl.style.letterSpacing = '-0.02em';
+                        levelNumEl.style.textShadow = '0 4px 14px rgba(56, 189, 248, 0.4)';
+                    }
+                    const unitEl = levelNumEl ? levelNumEl.nextElementSibling : null;
+                    if (unitEl) {
+                        unitEl.style.fontSize = '15px';
+                        unitEl.style.fontWeight = '800';
+                        unitEl.style.color = '#7dd3fc';
+                    }
+                }
+            }
+            const spacerEl = leftCol.children[2];
+            if (spacerEl) spacerEl.style.display = 'none';
+        }
+        if (rightCol) {
+            rightCol.style.gridColumn = 'span 1 / span 1';
+            rightCol.style.paddingTop = '12px';
+            rightCol.style.borderTop = '1px solid rgba(255, 255, 255, 0.12)';
+        }
+    } else {
+        clone.style.width = '980px';
+        clone.style.padding = '32px';
+        if (mainGrid) {
+            mainGrid.style.display = 'grid';
+            mainGrid.style.gridTemplateColumns = 'repeat(12, minmax(0, 1fr))';
+            mainGrid.style.gap = '24px';
+        }
+        if (leftCol) leftCol.style.gridColumn = 'span 7 / span 7';
+        if (rightCol) {
+            rightCol.style.gridColumn = 'span 5 / span 5';
+            rightCol.style.paddingTop = '0';
+            rightCol.style.borderTop = 'none';
+        }
+    }
+
+    wrapper.appendChild(clone);
+    document.body.appendChild(wrapper);
+
+    try {
+        await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 80)));
+        const dataUrl = await htmlToImage.toPng(clone, {
+            pixelRatio: 2,
+            cacheBust: true,
+            backgroundColor: '#0f172a'
+        });
+        return { dataUrl, filename };
+    } finally {
+        if (wrapper.parentNode) wrapper.parentNode.removeChild(wrapper);
+    }
+}
+
 async function exportHeroCardImage(mode = 'save') {
     const currentRole = (typeof userRole !== 'undefined' ? String(userRole || '') : '').toLowerCase().trim();
     if (mode === 'line' && !['superadmin', 'pr'].includes(currentRole)) {
@@ -468,22 +596,72 @@ async function exportHeroCardImage(mode = 'save') {
         return;
     }
 
-    const heroEl = document.getElementById('x73_hero_card');
-    if (!heroEl) return;
+    let orientation = window.innerWidth >= 1024 ? 'landscape' : 'portrait';
+    let saveAction = 'share_or_download';
 
-    if (typeof htmlToImage === 'undefined' || typeof htmlToImage.toPng !== 'function') {
-        if (typeof Swal !== 'undefined') {
-            Swal.fire('ไม่สามารถสร้างรูปภาพได้', 'ไลบรารีจับภาพกำลังโหลด กรุณารอสักครู่แล้วลองใหม่', 'warning');
-        }
-        return;
+    if (mode === 'save' && typeof Swal !== 'undefined') {
+        const canNativeShare = typeof navigator.share === 'function';
+        let selectedOrientation = orientation;
+        const pickResult = await Swal.fire({
+            title: '<div class="text-slate-800 font-black text-base sm:text-lg flex items-center justify-center gap-2"><i class="fas fa-image text-sky-500"></i> เลือกรูปแบบการบันทึกภาพ</div>',
+            html: `
+                <p class="text-xs text-slate-500 mb-3">1. เลือกสัดส่วนรูปภาพการ์ดระดับน้ำ</p>
+                <div class="grid grid-cols-2 gap-2.5 text-left mb-4">
+                    <button type="button" id="btnPickLandscape" class="p-3 rounded-2xl border-2 ${selectedOrientation === 'landscape' ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200' : 'border-slate-200 bg-slate-50'} transition-all active:scale-95 flex flex-col items-center text-center gap-1.5">
+                        <div class="w-11 h-7 rounded-lg bg-blue-600/90 border border-blue-400 flex items-center justify-center text-white shadow-sm">
+                            <i class="fas fa-desktop text-[11px]"></i>
+                        </div>
+                        <div>
+                            <div class="text-xs font-black text-blue-900">แบบแนวนอน</div>
+                            <div class="text-[10px] text-slate-500">กว้างเต็มใบ</div>
+                        </div>
+                    </button>
+                    <button type="button" id="btnPickPortrait" class="p-3 rounded-2xl border-2 ${selectedOrientation === 'portrait' ? 'border-emerald-500 bg-emerald-50 ring-2 ring-emerald-200' : 'border-slate-200 bg-slate-50'} transition-all active:scale-95 flex flex-col items-center text-center gap-1.5">
+                        <div class="w-7 h-10 rounded-lg bg-emerald-600/90 border border-emerald-400 flex items-center justify-center text-white shadow-sm">
+                            <i class="fas fa-mobile-alt text-[11px]"></i>
+                        </div>
+                        <div>
+                            <div class="text-xs font-black text-emerald-900">แบบแนวตั้ง</div>
+                            <div class="text-[10px] text-slate-500">ขนาดจอมือถือ</div>
+                        </div>
+                    </button>
+                </div>
+                <p class="text-xs text-slate-500 mb-2">2. เลือกวิธีดำเนินการ</p>
+                <div class="flex flex-col gap-2">
+                    ${canNativeShare ? `
+                    <button type="button" id="btnExecShareImage" class="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md active:scale-95 transition-all flex items-center justify-center gap-2">
+                        <i class="fas fa-share-alt"></i> แชร์ไปแอปอื่น ๆ (LINE / แอปแชท)
+                    </button>
+                    ` : ''}
+                    <button type="button" id="btnExecDownloadImage" class="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md active:scale-95 transition-all flex items-center justify-center gap-2">
+                        <i class="fas fa-download"></i> บันทึกลงเครื่อง (ไฟล์ PNG)
+                    </button>
+                </div>
+            `,
+            showConfirmButton: false,
+            showCancelButton: true,
+            cancelButtonText: 'ยกเลิก',
+            customClass: { popup: 'rounded-[1.75rem] w-[92vw] max-w-sm p-5' },
+            didOpen: () => {
+                const btnL = document.getElementById('btnPickLandscape');
+                const btnP = document.getElementById('btnPickPortrait');
+                const syncOrientationBtns = () => {
+                    if (btnL) btnL.className = `p-3 rounded-2xl border-2 ${selectedOrientation === 'landscape' ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200' : 'border-slate-200 bg-slate-50'} transition-all active:scale-95 flex flex-col items-center text-center gap-1.5`;
+                    if (btnP) btnP.className = `p-3 rounded-2xl border-2 ${selectedOrientation === 'portrait' ? 'border-emerald-500 bg-emerald-50 ring-2 ring-emerald-200' : 'border-slate-200 bg-slate-50'} transition-all active:scale-95 flex flex-col items-center text-center gap-1.5`;
+                };
+                if (btnL) btnL.onclick = () => { selectedOrientation = 'landscape'; syncOrientationBtns(); };
+                if (btnP) btnP.onclick = () => { selectedOrientation = 'portrait'; syncOrientationBtns(); };
+
+                const btnShare = document.getElementById('btnExecShareImage');
+                const btnDownload = document.getElementById('btnExecDownloadImage');
+                if (btnShare) btnShare.onclick = () => Swal.close({ isConfirmed: true, value: { orientation: selectedOrientation, action: 'share' } });
+                if (btnDownload) btnDownload.onclick = () => Swal.close({ isConfirmed: true, value: { orientation: selectedOrientation, action: 'download' } });
+            }
+        });
+        if (!pickResult || !pickResult.isConfirmed || !pickResult.value) return;
+        orientation = pickResult.value.orientation;
+        saveAction = pickResult.value.action;
     }
-
-    const exportFooter = document.getElementById('x73_hero_export_footer');
-    const exportTs = document.getElementById('x73_hero_export_timestamp');
-    const now = new Date();
-    const pad = (n) => String(n).padStart(2, '0');
-    const fileStamp = `${now.getFullYear() + 543}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`;
-    const filename = `water-level-X73-${fileStamp}.png`;
 
     if (typeof Swal !== 'undefined') {
         Swal.fire({
@@ -495,32 +673,7 @@ async function exportHeroCardImage(mode = 'save') {
     }
 
     try {
-        if (exportTs) {
-            exportTs.innerText = `บันทึกภาพ: ${now.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })} ${pad(now.getHours())}:${pad(now.getMinutes())} น.`;
-        }
-        if (exportFooter) exportFooter.classList.remove('hidden');
-
-        // รอ 1 เฟรมให้เบราว์เซอร์จัดเรียง Footer ก่อนจับภาพ
-        await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 60)));
-
-        const dataUrl = await htmlToImage.toPng(heroEl, {
-            pixelRatio: 2,
-            cacheBust: true,
-            backgroundColor: '#0f172a',
-            style: {
-                margin: '0',
-                transition: 'none',
-                animation: 'none'
-            },
-            filter: (node) => {
-                if (!node) return true;
-                if (node.id === 'x73_hero_rain_layer') return false;
-                if (node.classList && (node.classList.contains('no-export') || node.classList.contains('hero-rain-container'))) return false;
-                return true;
-            }
-        });
-
-        if (exportFooter) exportFooter.classList.add('hidden');
+        const { dataUrl, filename } = await captureHeroCardPng(orientation);
         if (typeof Swal !== 'undefined') Swal.close();
 
         if (mode === 'line') {
@@ -538,23 +691,24 @@ async function exportHeroCardImage(mode = 'save') {
             return;
         }
 
-        // โหมดบันทึกรูปภาพ / แชร์บนมือถือ
-        const res = await fetch(dataUrl);
-        const blob = await res.blob();
-        const file = new File([blob], filename, { type: 'image/png' });
-
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        if (saveAction === 'share') {
             try {
-                await navigator.share({
-                    files: [file],
-                    title: 'รายงานระดับน้ำ สถานี X.73 คลองตันหยงมัส'
-                });
-                return;
+                const res = await fetch(dataUrl);
+                const blob = await res.blob();
+                const file = new File([blob], filename, { type: 'image/png' });
+                if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                    await navigator.share({
+                        files: [file],
+                        title: 'รายงานระดับน้ำ สถานี X.73 คลองตันหยงมัส'
+                    });
+                    return;
+                }
             } catch (shareErr) {
                 if (shareErr && shareErr.name === 'AbortError') return;
             }
         }
 
+        // บันทึกลงเครื่อง (กรณีเลือกบันทึกลงเครื่อง หรืออุปกรณ์ไม่รองรับ Share ไฟล์)
         const link = document.createElement('a');
         link.href = dataUrl;
         link.download = filename;
@@ -565,15 +719,14 @@ async function exportHeroCardImage(mode = 'save') {
         if (typeof Swal !== 'undefined') {
             Swal.fire({
                 icon: 'success',
-                title: 'บันทึกรูปภาพสำเร็จ',
-                text: `บันทึกไฟล์ ${filename} เรียบร้อยแล้ว`,
-                timer: 2000,
+                title: 'บันทึกรูปภาพลงเครื่องแล้ว',
+                text: `ไฟล์: ${filename}`,
+                timer: 2200,
                 showConfirmButton: false,
-                customClass: { popup: 'rounded-2xl' }
+                customClass: { popup: 'rounded-2xl w-[92vw] max-w-sm' }
             });
         }
     } catch (err) {
-        if (exportFooter) exportFooter.classList.add('hidden');
         if (typeof Swal !== 'undefined') {
             Swal.fire('เกิดข้อผิดพลาด', err.message || 'ไม่สามารถสร้างรูปภาพการ์ดได้', 'error');
         }

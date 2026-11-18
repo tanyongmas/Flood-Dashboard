@@ -1444,18 +1444,38 @@ let dashLayerStates = {
                 const note = report[9] ? report[9].toString().trim() : '-';
 
                 const shelterHouseData = houseShelterMap[address];
-                if (shelterHouseData && status !== 'ปลอดภัย') {
-                    count = Math.max(count, shelterHouseData.count);
+                const shelterCount = shelterHouseData ? shelterHouseData.count : 0;
+                const cleanDestType = (destType || '').toString().trim();
+                const isSos = (status && (status.includes('SOS') || status.includes('ช่วยเหลือ'))) || (cleanDestType && cleanDestType.includes('ช่วยเหลือ'));
+                const isMixedSafeAndShelter = !isSos && status === 'ปลอดภัย' && shelterCount > 0;
+                const isMixedOtherAndShelter = !isSos && status !== 'ปลอดภัย' && cleanDestType && cleanDestType !== 'ศูนย์' && shelterCount > 0;
+                const isMixedStatus = isMixedSafeAndShelter || isMixedOtherAndShelter;
+                const safeCount = (status === 'ปลอดภัย') ? count : 0;
+                const otherCount = isMixedOtherAndShelter ? count : 0;
+
+                if (shelterHouseData && status !== 'ปลอดภัย' && !isMixedOtherAndShelter) {
+                    count = Math.max(count, shelterCount);
                     destType = 'ศูนย์';
                     if (shelterHouseData.shelters.size > 0) {
                         destName = Array.from(shelterHouseData.shelters).join(', ');
                     }
                 }
 
-                // สรุปยอด
-                if (status === 'ปลอดภัย') {
+                // สรุปยอด (รองรับกรณีบ้านเดียวกันมีทั้งคนเข้าศูนย์และคนปลอดภัยที่บ้าน หรืออพยพไปบ้านญาติ/อื่นๆ)
+                if (isMixedSafeAndShelter) {
                     safeHouseholds++;
-                    safePeople += count;
+                    safePeople += safeCount;
+                    evacHouseholds++;
+                    evacPeople += shelterCount;
+                    centerPeople += shelterCount;
+                } else if (isMixedOtherAndShelter) {
+                    evacHouseholds++;
+                    centerPeople += shelterCount;
+                    otherPeople += otherCount;
+                    evacPeople += (shelterCount + otherCount);
+                } else if (status === 'ปลอดภัย') {
+                    safeHouseholds++;
+                    safePeople += safeCount;
                 } else {
                     evacHouseholds++;
                     evacPeople += count;
@@ -1480,13 +1500,22 @@ let dashLayerStates = {
                     let iconClass = 'fa-house-user';
                     let bgHeaderColor = 'bg-orange-500';
                     let statusBadge = '';
-                    const isSos = (status && (status.includes('SOS') || status.includes('ช่วยเหลือ'))) || (destType && destType.includes('ช่วยเหลือ'));
+                    const secondaryCount = isMixedSafeAndShelter ? safeCount : otherCount;
+                    const secondaryHex = isMixedSafeAndShelter ? '#10b981' : '#8b5cf6';
+                    const secondaryBg = isMixedSafeAndShelter ? 'bg-emerald-500' : 'bg-purple-600';
+                    const secondaryShortLabel = isMixedSafeAndShelter ? 'ที่บ้าน' : cleanDestType;
 
                     if (isSos) {
                         markerColor = '#e11d48';
                         iconClass = 'fa-life-ring';
                         bgHeaderColor = 'bg-gradient-to-r from-rose-600 via-red-600 to-amber-600';
                         statusBadge = '<span class="bg-rose-100 text-rose-700 px-2 py-0.5 rounded text-[9px] font-black ml-2 animate-pulse border border-rose-300 shadow-xs"><i class="fas fa-triangle-exclamation mr-1"></i>SOS ขอความช่วยเหลือ</span>';
+                    } else if (isMixedStatus) {
+                        markerColor = '#3b82f6';
+                        iconClass = 'fa-house-chimney-user';
+                        bgHeaderColor = isMixedSafeAndShelter ? 'bg-gradient-to-r from-blue-600 to-emerald-500' : 'bg-gradient-to-r from-blue-600 to-purple-600';
+                        const secondPillClass = isMixedSafeAndShelter ? 'bg-emerald-100 text-emerald-700' : 'bg-purple-100 text-purple-700';
+                        statusBadge = `<span class="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-[9px] font-bold ml-1">เข้าศูนย์ ${shelterCount}</span><span class="${secondPillClass} px-2 py-0.5 rounded text-[9px] font-bold ml-1">${secondaryShortLabel} ${secondaryCount}</span>`;
                     } else if (status === 'ปลอดภัย') {
                         markerColor = '#10b981';
                         iconClass = 'fa-check-circle';
@@ -1501,9 +1530,18 @@ let dashLayerStates = {
                         bgHeaderColor = 'bg-purple-500';
                     }
 
-                    const evacIcon = L.divIcon({
-                        className: 'custom-evac-marker bg-transparent border-0',
-                        html: `
+                    const markerHtml = isMixedStatus ? `
+                    <div class="relative flex flex-col items-center">
+                        <div style="background: linear-gradient(135deg, #3b82f6 50%, ${secondaryHex} 50%);" class="p-[2.5px] rounded-full shadow-md z-10 relative">
+                            <div class="bg-white w-7 h-7 rounded-full flex items-center justify-center text-slate-700 text-xs">
+                                <i class="fas ${iconClass}"></i>
+                            </div>
+                            <span title="เข้าศูนย์พักพิง ${shelterCount} คน" class="absolute -top-1.5 -left-2 bg-blue-600 text-white text-[8px] font-black min-w-[16px] h-[16px] flex items-center justify-center rounded-full border border-white shadow-sm leading-none px-1">${shelterCount}</span>
+                            <span title="${secondaryShortLabel} ${secondaryCount} คน" class="absolute -top-1.5 -right-2 ${secondaryBg} text-white text-[8px] font-black min-w-[16px] h-[16px] flex items-center justify-center rounded-full border border-white shadow-sm leading-none px-1">${secondaryCount}</span>
+                        </div>
+                        <div style="border-top-color: #2563eb" class="w-0 h-0 border-l-[5px] border-r-[5px] border-t-[6px] border-l-transparent border-r-transparent mx-auto -mt-[1px] z-0"></div>
+                    </div>
+                ` : `
                     <div class="relative flex flex-col items-center">
                         <div style="color: ${markerColor}; border-color: ${markerColor}" class="bg-white w-8 h-8 rounded-full flex items-center justify-center border-2 shadow-md text-sm z-10 relative ${isSos ? 'ring-4 ring-rose-400/80 animate-bounce' : ''}">
                             <i class="fas ${iconClass}"></i>
@@ -1511,10 +1549,14 @@ let dashLayerStates = {
                         </div>
                         <div style="border-top-color: ${markerColor}" class="w-0 h-0 border-l-[5px] border-r-[5px] border-t-[6px] border-l-transparent border-r-transparent mx-auto -mt-[1px] z-0"></div>
                     </div>
-                `,
-                        iconSize: [32, 38],
-                        iconAnchor: [16, 38],
-                        popupAnchor: [0, -38]
+                `;
+
+                    const evacIcon = L.divIcon({
+                        className: 'custom-evac-marker bg-transparent border-0',
+                        html: markerHtml,
+                        iconSize: [36, 40],
+                        iconAnchor: [18, 40],
+                        popupAnchor: [0, -40]
                     });
 
                     const marker = L.marker([pos.lat, pos.lng], { icon: evacIcon });
@@ -1560,7 +1602,7 @@ let dashLayerStates = {
                     <div class="${bgHeaderColor} p-3 flex justify-between items-center text-white relative overflow-hidden">
                         <i class="fas ${iconClass} absolute -right-2 -bottom-2 text-5xl opacity-20 transform -rotate-12"></i>
                         <span class="text-[10px] font-black uppercase tracking-widest bg-white/20 backdrop-blur-sm px-2.5 py-1 rounded-lg border border-white/20 z-10 shadow-sm">
-                            <i class="fas ${isSos ? 'fa-triangle-exclamation' : 'fa-users'} mr-1"></i> ${isSos ? 'ขอความช่วยเหลือ SOS' : 'ผู้อพยพ/ผู้รายงาน'} ${count} คน
+                            <i class="fas ${isSos ? 'fa-triangle-exclamation' : 'fa-users'} mr-1"></i> ${isSos ? `ขอความช่วยเหลือ SOS ${count} คน` : (isMixedStatus ? `เข้าศูนย์ ${shelterCount} • ${secondaryShortLabel} ${secondaryCount} คน` : `ผู้อพยพ/ผู้รายงาน ${count} คน`)}
                         </span>
                     </div>
                     <div class="p-3.5">
@@ -1568,6 +1610,39 @@ let dashLayerStates = {
                             <span>${address}</span> ${statusBadge}
                         </h4>
                         
+                        ${isMixedStatus ? `
+                        <div class="space-y-2.5">
+                            <!-- ส่วนที่ 1: ผู้อพยพเข้าพักพิงในศูนย์ -->
+                            <div class="bg-blue-50/90 p-2.5 rounded-xl border border-blue-200/80 shadow-xs">
+                                <div class="flex items-center justify-between mb-1.5 pb-1 border-b border-blue-200/60">
+                                    <span class="text-[11px] font-black text-blue-800 flex items-center gap-1.5">
+                                        <i class="fas fa-campground text-blue-600"></i> เข้าศูนย์พักพิง
+                                    </span>
+                                    <span class="text-[10px] font-black bg-blue-600 text-white px-2 py-0.5 rounded-full">${shelterCount} คน</span>
+                                </div>
+                                <ul class="text-[11px] text-slate-700 space-y-1">
+                                    ${shelterHouseData.members.map(m => `<li class="flex items-start gap-1"><span>•</span><span><b>${m.name}</b> <span class="text-slate-500">(${m.shelter || 'ศูนย์พักพิง'})</span> ${m.health !== 'ปกติ' ? `<span class="text-rose-600 font-bold">(${m.health})</span>` : ''}</span></li>`).join('')}
+                                </ul>
+                            </div>
+
+                            <!-- ส่วนที่ 2: ผู้ปลอดภัยอยู่ที่บ้าน หรือ อพยพไปบ้านญาติ/อื่นๆ -->
+                            <div class="${isMixedSafeAndShelter ? 'bg-emerald-50/90 border-emerald-200/80' : 'bg-purple-50/90 border-purple-200/80'} p-2.5 rounded-xl border shadow-xs space-y-1">
+                                <div class="flex items-center justify-between mb-1.5 pb-1 border-b ${isMixedSafeAndShelter ? 'border-emerald-200/60' : 'border-purple-200/60'}">
+                                    <span class="text-[11px] font-black ${isMixedSafeAndShelter ? 'text-emerald-800' : 'text-purple-800'} flex items-center gap-1.5">
+                                        <i class="fas ${isMixedSafeAndShelter ? 'fa-check-circle text-emerald-600' : 'fa-house-user text-purple-600'}"></i> ${isMixedSafeAndShelter ? 'ปลอดภัยอยู่ที่บ้าน' : `อพยพไป${cleanDestType}`}
+                                    </span>
+                                    <span class="text-[10px] font-black ${isMixedSafeAndShelter ? 'bg-emerald-600' : 'bg-purple-600'} text-white px-2 py-0.5 rounded-full">${secondaryCount} คน</span>
+                                </div>
+                                <p class="text-[11px] text-slate-700"><span class="font-bold text-slate-500">${isMixedSafeAndShelter ? 'ผู้พักอาศัย:' : 'ผู้อพยพ:'}</span> <b class="${isMixedSafeAndShelter ? 'text-emerald-700' : 'text-purple-700'}">${evacNameDisplay}</b></p>
+                                ${!isMixedSafeAndShelter && destName ? `<p class="text-[11px] text-slate-700"><span class="font-bold text-slate-500">ปลายทาง:</span> <b>${destName}</b></p>` : ''}
+                                ${note && note !== '-' ? `<p class="text-[10.5px] text-slate-600 bg-white/80 p-1.5 rounded-lg border ${isMixedSafeAndShelter ? 'border-emerald-100' : 'border-purple-100'}">${note}</p>` : ''}
+                                <div class="pt-1 flex items-center justify-between text-[10px] text-slate-500">
+                                    <span><i class="far fa-user mr-1"></i>${reporter}</span>
+                                    <span>${timestamp}</span>
+                                </div>
+                            </div>
+                        </div>
+                        ` : `
                         <div class="bg-slate-50 p-2.5 rounded-xl border border-slate-100 shadow-inner space-y-1.5">
                             <p class="text-[11px] text-slate-600 flex items-start border-b border-slate-200 pb-1.5 mb-1.5">
                                 <span class="font-bold text-slate-500 w-16 shrink-0">ชื่อ-สกุล:</span> 
@@ -1598,6 +1673,7 @@ let dashLayerStates = {
                                 <span>${timestamp}</span>
                             </p>
                         </div>
+                        `}
                     </div>
                 </div>
             `;
@@ -2357,28 +2433,49 @@ let dashLayerStates = {
                     }
 
                     const shelterHouseData = houseShelterMap[address];
-                    if (shelterHouseData) {
-                        count = Math.max(count, shelterHouseData.count);
+                    const shelterCount = shelterHouseData ? shelterHouseData.count : 0;
+                    const cleanDestType = (destType || '').toString().trim();
+                    const isSos = (status && (status.includes('SOS') || status.includes('ช่วยเหลือ'))) || (cleanDestType && cleanDestType.includes('ช่วยเหลือ'));
+                    const isMixedSafeAndShelter = !isSos && status === 'ปลอดภัย' && shelterCount > 0;
+                    const isMixedOtherAndShelter = !isSos && status !== 'ปลอดภัย' && cleanDestType && cleanDestType !== 'ศูนย์' && shelterCount > 0;
+                    const isMixedStatus = isMixedSafeAndShelter || isMixedOtherAndShelter;
+                    const safeCount = (status === 'ปลอดภัย') ? count : 0;
+                    const otherCount = isMixedOtherAndShelter ? count : 0;
+                    const secondaryCount = isMixedSafeAndShelter ? safeCount : otherCount;
+                    const secondaryHex = isMixedSafeAndShelter ? '#10b981' : '#8b5cf6';
+                    const secondaryShortLabel = isMixedSafeAndShelter ? 'บ้าน' : cleanDestType;
+                    if (shelterHouseData && status !== 'ปลอดภัย' && !isMixedOtherAndShelter) {
+                        count = Math.max(count, shelterCount);
                     }
 
                     if (pos) {
-                        let color = '#8b5cf6', iconClass = 'fa-house-user', statusBadge = 'อพยพ', badgeBg = 'bg-purple-950', isSos = false;
-                        if ((status && (status.includes('SOS') || status.includes('ช่วยเหลือ'))) || (destType && destType.includes('ช่วยเหลือ'))) {
-                            color = '#e11d48'; iconClass = 'fa-life-ring'; statusBadge = 'SOS ช่วยเหลือด่วน'; badgeBg = 'bg-rose-950'; isSos = true;
+                        let color = '#8b5cf6', iconClass = 'fa-house-user', statusBadge = 'อพยพ', badgeBg = 'bg-purple-950';
+                        if (isSos) {
+                            color = '#e11d48'; iconClass = 'fa-life-ring'; statusBadge = 'SOS ช่วยเหลือด่วน'; badgeBg = 'bg-rose-950';
+                        } else if (isMixedStatus) {
+                            color = '#3b82f6'; iconClass = 'fa-house-chimney-user'; statusBadge = `ศูนย์ ${shelterCount} • ${secondaryShortLabel} ${secondaryCount}`; badgeBg = 'bg-slate-900';
                         } else if (status === 'ปลอดภัย') {
                             color = '#10b981'; iconClass = 'fa-check-circle'; statusBadge = 'ปลอดภัย'; badgeBg = 'bg-emerald-950';
                         } else if (destType === 'ศูนย์' || shelterHouseData) {
                             color = '#3b82f6'; iconClass = 'fa-campground'; statusBadge = 'อพยพเข้าศูนย์'; badgeBg = 'bg-blue-950';
                         }
 
+                        const circleStyle = isMixedStatus
+                            ? `background: linear-gradient(135deg, #3b82f6 50%, ${secondaryHex} 50%);`
+                            : `background-color: ${color};`;
+
+                        const badgeLabelText = isMixedStatus
+                            ? `${statusBadge} คน`
+                            : `${statusBadge} ${count} คน`;
+
                         const icon = L.divIcon({
                             className: 'custom-one-evac-marker bg-transparent border-0',
                             html: `
                                 <div class="relative flex flex-col items-center">
-                                    <div style="background-color: ${color};" class="text-white w-9 h-9 rounded-full border-2 border-white shadow-xl flex items-center justify-center text-sm font-black ${isSos ? 'ring-4 ring-rose-400/80 animate-bounce' : ''}">
+                                    <div style="${circleStyle}" class="text-white w-9 h-9 rounded-full border-2 border-white shadow-xl flex items-center justify-center text-sm font-black ${isSos ? 'ring-4 ring-rose-400/80 animate-bounce' : ''}">
                                         <i class="fas ${iconClass}"></i>
                                     </div>
-                                    <span class="${badgeBg} text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-md mt-0.5 whitespace-nowrap border border-white/20 ${isSos ? 'bg-rose-600 text-white font-bold animate-pulse' : ''}">${statusBadge} ${count} คน</span>
+                                    <span class="${badgeBg} text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-md mt-0.5 whitespace-nowrap border border-white/20 ${isSos ? 'bg-rose-600 text-white font-bold animate-pulse' : ''}">${badgeLabelText}</span>
                                 </div>
                             `,
                             iconSize: [42, 54],
@@ -2414,7 +2511,35 @@ let dashLayerStates = {
                             evacNameDisplay = `<span>${cleanName}</span> <span class="sos-phone-badge ml-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-rose-600 text-white font-mono font-black text-[10px] shadow-xs" style="color: #ffffff !important;"><i class="fas fa-phone-alt text-[8px]" style="color: #ffffff !important;"></i> ${extractedPhone}</span>`;
                         }
 
-                        const popup = `
+                        const popup = isMixedStatus ? `
+                            <div class="font-sans p-2 min-w-[230px] space-y-2">
+                                <div class="flex items-center justify-between gap-2 border-b border-slate-200 pb-1.5">
+                                    <span class="font-black text-xs text-slate-800">${address}</span>
+                                    <span class="text-[9px] font-bold px-2 py-0.5 rounded-full text-white shrink-0" style="background: linear-gradient(90deg, #3b82f6, ${secondaryHex});">${statusBadge}</span>
+                                </div>
+                                <!-- ส่วนที่ 1: เข้าศูนย์พักพิง -->
+                                <div class="bg-blue-50 p-2 rounded-xl border border-blue-200/80">
+                                    <div class="flex items-center justify-between mb-1">
+                                        <span class="text-[10.5px] font-black text-blue-800"><i class="fas fa-campground mr-1"></i>เข้าศูนย์พักพิง</span>
+                                        <span class="text-[9px] font-black bg-blue-600 text-white px-1.5 py-0.5 rounded-full">${shelterCount} คน</span>
+                                    </div>
+                                    <ul class="text-[10.5px] text-slate-700 space-y-0.5">
+                                        ${shelterHouseData.members.map(m => `<li>• <b>${m.name}</b> (${m.shelter || 'ศูนย์พักพิง'}) ${m.health !== 'ปกติ' ? `<span class="text-red-500 font-bold">(${m.health})</span>` : ''}</li>`).join('')}
+                                    </ul>
+                                </div>
+                                <!-- ส่วนที่ 2: ปลอดภัยอยู่ที่บ้าน หรือ อพยพไปบ้านญาติ/อื่นๆ -->
+                                <div class="${isMixedSafeAndShelter ? 'bg-emerald-50 border-emerald-200/80' : 'bg-purple-50 border-purple-200/80'} p-2 rounded-xl border space-y-0.5">
+                                    <div class="flex items-center justify-between mb-1">
+                                        <span class="text-[10.5px] font-black ${isMixedSafeAndShelter ? 'text-emerald-800' : 'text-purple-800'}"><i class="fas ${isMixedSafeAndShelter ? 'fa-check-circle' : 'fa-house-user'} mr-1"></i>${isMixedSafeAndShelter ? 'ปลอดภัยอยู่ที่บ้าน' : `อพยพไป${cleanDestType}`}</span>
+                                        <span class="text-[9px] font-black ${isMixedSafeAndShelter ? 'bg-emerald-600' : 'bg-purple-600'} text-white px-1.5 py-0.5 rounded-full">${secondaryCount} คน</span>
+                                    </div>
+                                    <p class="text-[10.5px] text-slate-700">ชื่อ: <b class="${isMixedSafeAndShelter ? 'text-emerald-700' : 'text-purple-700'}">${evacNameDisplay}</b></p>
+                                    ${!isMixedSafeAndShelter && destName ? `<p class="text-[10px] text-slate-600">ปลายทาง: <b>${destName}</b></p>` : ''}
+                                    ${note && note !== '-' ? `<p class="text-[10px] text-slate-600">${note}</p>` : ''}
+                                    <p class="text-[9.5px] text-slate-400 pt-0.5">ผู้รายงาน: ${reporter}</p>
+                                </div>
+                            </div>
+                        ` : `
                             <div class="font-sans p-2 min-w-[210px]">
                                 <div class="flex items-center justify-between border-b pb-1 mb-1.5">
                                     <span class="font-black text-xs text-slate-800">${address}</span>

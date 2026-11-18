@@ -4,6 +4,119 @@
  * เทศบาลตำบลตันหยงมัส
  */
 
+// ==========================================
+// 🗺️ Minimap Helper สำหรับปักหมุดพิกัดใน Modal รายงานสถานะ
+// ==========================================
+window._evacMiniMaps = window._evacMiniMaps || {};
+
+function destroyEvacMiniMaps() {
+    Object.keys(window._evacMiniMaps).forEach(key => {
+        try {
+            if (window._evacMiniMaps[key] && window._evacMiniMaps[key].map) {
+                window._evacMiniMaps[key].map.remove();
+            }
+        } catch (e) {}
+        delete window._evacMiniMaps[key];
+    });
+}
+
+function updateEvacMiniMapCoords(containerId, inputId, lat, lng, panMap = true) {
+    const numLat = parseFloat(lat);
+    const numLng = parseFloat(lng);
+    if (isNaN(numLat) || isNaN(numLng)) return;
+
+    const coordsInput = document.getElementById(inputId);
+    if (coordsInput) {
+        coordsInput.value = `${numLat.toFixed(6)},${numLng.toFixed(6)}`;
+    }
+
+    const entry = window._evacMiniMaps[containerId];
+    if (entry && entry.map) {
+        if (entry.marker) {
+            entry.marker.setLatLng([numLat, numLng]);
+        }
+        if (panMap) {
+            entry.map.setView([numLat, numLng], Math.max(entry.map.getZoom(), 16));
+        }
+    }
+}
+
+function initEvacMiniMap(containerId, inputId, markerColor = '#f97316') {
+    const container = document.getElementById(containerId);
+    if (!container || typeof L === 'undefined') return;
+
+    const existing = window._evacMiniMaps[containerId];
+    if (existing && existing.map) {
+        setTimeout(() => {
+            try { existing.map.invalidateSize(); } catch (e) {}
+        }, 120);
+        return;
+    }
+
+    let initLat = 6.29445;
+    let initLng = 101.72362;
+    const inputEl = document.getElementById(inputId);
+    if (inputEl && inputEl.value && inputEl.value.includes(',')) {
+        const parts = inputEl.value.split(',').map(v => parseFloat(v.trim()));
+        if (!isNaN(parts[0]) && !isNaN(parts[1])) {
+            initLat = parts[0];
+            initLng = parts[1];
+        }
+    }
+
+    const miniMap = L.map(containerId, {
+        zoomControl: true,
+        attributionControl: false
+    }).setView([initLat, initLng], 15);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(miniMap);
+
+    const pinIcon = L.divIcon({
+        className: 'custom-evac-minimap-pin bg-transparent border-0',
+        html: `<div style="background-color:${markerColor};" class="w-7 h-7 rounded-full border-2 border-white shadow-lg flex items-center justify-center text-white text-xs"><i class="fas fa-map-pin"></i></div>`,
+        iconSize: [28, 28],
+        iconAnchor: [14, 28]
+    });
+
+    const marker = L.marker([initLat, initLng], { draggable: true, icon: pinIcon }).addTo(miniMap);
+
+    marker.on('dragend', () => {
+        const pos = marker.getLatLng();
+        updateEvacMiniMapCoords(containerId, inputId, pos.lat, pos.lng, false);
+    });
+
+    miniMap.on('click', (e) => {
+        updateEvacMiniMapCoords(containerId, inputId, e.latlng.lat, e.latlng.lng, false);
+    });
+
+    window._evacMiniMaps[containerId] = { map: miniMap, marker };
+
+    setTimeout(() => {
+        try { miniMap.invalidateSize(); } catch (e) {}
+    }, 150);
+}
+
+function fetchGpsToMiniMap(containerId, inputId) {
+    const coordsInput = document.getElementById(inputId);
+    if (!coordsInput) return;
+    coordsInput.value = 'กำลังค้นหาตำแหน่งพิกัด GPS...';
+
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            (p) => {
+                updateEvacMiniMapCoords(containerId, inputId, p.coords.latitude, p.coords.longitude, true);
+            },
+            (err) => {
+                console.warn(err);
+                coordsInput.value = 'แตะบนแผนที่เพื่อปักหมุด หรือเปิด GPS แล้วลองใหม่';
+            },
+            { enableHighAccuracy: true, timeout: 10000 }
+        );
+    } else {
+        coordsInput.value = 'แตะบนแผนที่เพื่อปักหมุดพิกัด';
+    }
+}
+
 // สลับตัวเลือกสถานที่อพยพใน Popup (ศูนย์พักพิง / ที่อื่น)
 window.toggleEvacDest = function (type) {
     const boxC = document.getElementById('box_dest_center');
@@ -21,8 +134,9 @@ window.toggleEvacDest = function (type) {
     } else {
         if (boxO) boxO.classList.remove('hidden');
         if (boxC) boxC.classList.add('hidden');
-        if (btnO) btnO.className = "flex-1 py-3 rounded-xl border-2 border-orange-400 bg-orange-50 text-orange-600 font-bold text-xs transition-all";
+        if (btnO) btnO.className = "flex-1 py-3 rounded-xl border-2 border-purple-400 bg-purple-50 text-purple-700 font-bold text-xs transition-all";
         if (btnC) btnC.className = "flex-1 py-3 rounded-xl border-2 border-transparent bg-slate-50 text-slate-500 font-bold text-xs transition-all";
+        setTimeout(() => initEvacMiniMap('evacDestOtherMap', 'swal_evac_dest_coords', '#8b5cf6'), 100);
     }
 };
 
@@ -96,7 +210,10 @@ window.toggleEvacOtherAddress = function (isChecked) {
             inputSearch.disabled = true;
             inputSearch.classList.add('opacity-50');
         }
-        window.getEvacLocation();
+        setTimeout(() => {
+            initEvacMiniMap('evacOtherAddrMap', 'swal_evac_coords', '#f97316');
+            window.getEvacLocation();
+        }, 100);
     } else {
         if (boxOther) boxOther.classList.add('hidden');
         if (inputSearch) {
@@ -107,24 +224,11 @@ window.toggleEvacOtherAddress = function (isChecked) {
 };
 
 window.getEvacLocation = function () {
-    const coordsInput = document.getElementById('swal_evac_coords');
-    if (!coordsInput) return;
-    coordsInput.value = 'กำลังค้นหาตำแหน่งพิกัด GPS...';
+    fetchGpsToMiniMap('evacOtherAddrMap', 'swal_evac_coords');
+};
 
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-            (p) => {
-                coordsInput.value = `${p.coords.latitude},${p.coords.longitude}`;
-            },
-            (err) => {
-                console.warn(err);
-                coordsInput.value = 'กรุณาเปิด GPS และกดปุ่มดึงพิกัดอีกครั้ง';
-            },
-            { enableHighAccuracy: true, timeout: 10000 }
-        );
-    } else {
-        coordsInput.value = 'อุปกรณ์ไม่รองรับระบบพิกัด';
-    }
+window.getEvacDestLocation = function () {
+    fetchGpsToMiniMap('evacDestOtherMap', 'swal_evac_dest_coords');
 };
 
 async function saveEvacuationData(data) {
@@ -667,58 +771,82 @@ window.openEvacReportModal = function (status = 'อพยพ') {
                     ${shelterOptions}
                 </select>
             </div>
-            <div id="box_dest_other" class="hidden animate-fade-in mt-3">
-                <label class="text-[11px] font-bold text-slate-500 ml-1">ระบุสถานที่อพยพ (คร่าวๆ)</label>
-                <input type="text" id="swal_evac_other_text" class="w-full p-3 border border-slate-200 bg-white rounded-xl outline-none text-sm focus:border-orange-400" placeholder="เช่น บ้านญาติ, ตึกแถวชั้น 2">
+            <div id="box_dest_other" class="hidden animate-fade-in mt-3 bg-purple-50/70 p-3 rounded-2xl border border-purple-200/80 space-y-2.5">
+                <div>
+                    <label class="text-[11px] font-bold text-purple-800 ml-1 block mb-1">ระบุสถานที่อพยพ (คร่าวๆ) *</label>
+                    <input type="text" id="swal_evac_other_text" class="w-full p-3 border border-purple-200 bg-white rounded-xl outline-none text-sm focus:border-purple-500" placeholder="เช่น บ้านญาติ, ตึกแถวชั้น 2">
+                </div>
+                <div>
+                    <div class="flex items-center justify-between mb-1">
+                        <label class="text-[11px] font-bold text-purple-800 ml-1">ปักหมุดตำแหน่งปลายทาง (ไม่บังคับ)</label>
+                        <button type="button" onclick="getEvacDestLocation()" class="text-[10px] font-bold bg-purple-100 hover:bg-purple-200 text-purple-700 px-2.5 py-1 rounded-lg transition active:scale-95 flex items-center gap-1">
+                            <i class="fas fa-crosshairs"></i> ดึง GPS ปัจจุบัน
+                        </button>
+                    </div>
+                    <input type="text" id="swal_evac_dest_coords" readonly class="w-full p-2.5 border border-purple-200 bg-white text-slate-600 rounded-xl outline-none text-[11px] font-mono mb-2" placeholder="แตะบนแผนที่ด้านล่างเพื่อปักหมุดปลายทาง">
+                    <div id="evacDestOtherMap" class="w-full h-[180px] rounded-xl border border-purple-200 overflow-hidden bg-slate-200 z-10"></div>
+                    <p class="text-[10px] text-purple-600/90 mt-1 flex items-center gap-1">
+                        <i class="fas fa-hand-pointer"></i> แตะบนแผนที่หรือลากหมุดเพื่อปรับตำแหน่งปลายทาง
+                    </p>
+                </div>
             </div>
             <input type="hidden" id="swal_evac_type" value="ศูนย์">
         </div>
     `;
 
     Swal.fire({
-        title: `<div class="flex items-center justify-center gap-2 ${titleColor} text-lg font-black"><i class="fas ${titleIcon}"></i> ${titleText}</div>`,
+        title: `<div class="flex items-center justify-center gap-2 ${titleColor} text-base sm:text-lg font-black pt-1"><i class="fas ${titleIcon}"></i> ${titleText}</div>`,
+        width: '100%',
         html: `
-            <div class="text-left space-y-4 p-2 mt-2" style="overflow: visible;">
+            <div class="text-left space-y-3.5 px-1 py-1 mt-1 max-h-[68vh] overflow-y-auto custom-scrollbar">
                 <input type="hidden" id="swal_evac_status" value="${status}">
 
                 <div>
-                    <label class="text-[10px] font-bold text-slate-400 uppercase ml-1">ชื่อ-สกุล (หัวหน้าครอบครัว/ผู้อพยพ)</label>
-                    <input type="text" id="swal_evac_name" class="w-full p-3.5 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-50 transition-all" placeholder="ระบุชื่อ-สกุล..." required>
+                    <label class="text-[11px] font-bold text-slate-500 ml-1 block mb-1">ชื่อ-สกุล (หัวหน้าครอบครัว/ผู้อพยพ) *</label>
+                    <input type="text" id="swal_evac_name" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-50 transition-all" placeholder="ระบุชื่อ-สกุล..." required>
                 </div>
 
                 <div class="relative">
-                    <label class="text-[11px] font-bold text-slate-500 ml-1">ค้นหาที่อยู่ / ชุมชน</label>
-                    <input type="text" id="swal_evac_addr_search" onkeyup="handleEvacAddressSearch(this.value)" autocomplete="off" class="w-full p-3 border border-orange-100 bg-orange-50 rounded-xl outline-none text-sm focus:ring-2 focus:ring-orange-300" placeholder="พิมพ์เพื่อค้นหาที่อยู่เดิม...">
-                    <div id="swal_evac_addr_results" class="absolute z-[99] w-full bg-white border border-slate-200 rounded-xl shadow-2xl hidden max-h-40 overflow-y-auto mt-1"></div>
+                    <label class="text-[11px] font-bold text-slate-500 ml-1 block mb-1">ค้นหาที่อยู่ / ชุมชน *</label>
+                    <input type="text" id="swal_evac_addr_search" onkeyup="handleEvacAddressSearch(this.value)" autocomplete="off" class="w-full p-3 border border-orange-200 bg-orange-50/70 rounded-xl outline-none text-sm focus:ring-2 focus:ring-orange-300" placeholder="พิมพ์เพื่อค้นหาที่อยู่เดิม...">
+                    <div id="swal_evac_addr_results" class="relative z-[99] w-full bg-white border border-slate-200 rounded-xl shadow-lg hidden max-h-40 overflow-y-auto mt-1"></div>
                     
-                    <div class="mt-3 flex items-center bg-slate-50 p-2 rounded-lg border border-slate-100">
-                        <input type="checkbox" id="swal_evac_is_other" onchange="toggleEvacOtherAddress(this.checked)" class="w-4 h-4 text-orange-500 border-slate-300 rounded focus:ring-orange-500">
-                        <label for="swal_evac_is_other" class="ml-2 text-xs font-bold text-slate-600">ระบุที่อยู่อื่นๆ (ดึงพิกัดปัจจุบันอัตโนมัติ)</label>
-                    </div>
+                    <label for="swal_evac_is_other" class="mt-2.5 flex items-center bg-slate-50 p-2.5 rounded-xl border border-slate-200/80 cursor-pointer active:bg-slate-100 transition-colors">
+                        <input type="checkbox" id="swal_evac_is_other" onchange="toggleEvacOtherAddress(this.checked)" class="w-4 h-4 text-orange-500 border-slate-300 rounded focus:ring-orange-500 shrink-0">
+                        <span class="ml-2.5 text-xs font-bold text-slate-700">ระบุที่อยู่อื่น ๆ (ปักหมุด / ดึงพิกัด GPS)</span>
+                    </label>
                 </div>
 
-                <div id="box_evac_other_addr" class="hidden animate-fade-in bg-slate-100 p-3 rounded-xl border border-slate-200 shadow-inner">
-                    <label class="text-[11px] font-bold text-slate-500 ml-1">พิมพ์ที่อยู่อื่นๆ ที่ไม่ได้อยู่ในระบบ</label>
-                    <input type="text" id="swal_evac_custom_addr" class="w-full p-3 border border-slate-200 bg-white rounded-xl outline-none text-sm focus:border-orange-400 mb-3" placeholder="ระบุบ้านเลขที่/ซอย/จุดสังเกต">
+                <div id="box_evac_other_addr" class="hidden animate-fade-in bg-slate-50 p-3 rounded-2xl border border-slate-200 shadow-inner space-y-2.5">
+                    <div>
+                        <label class="text-[11px] font-bold text-slate-600 ml-1 block mb-1">พิมพ์ที่อยู่อื่น ๆ ที่ไม่ได้อยู่ในระบบ *</label>
+                        <input type="text" id="swal_evac_custom_addr" class="w-full p-3 border border-slate-200 bg-white rounded-xl outline-none text-sm focus:border-orange-400" placeholder="ระบุบ้านเลขที่/ซอย/จุดสังเกต">
+                    </div>
                     
-                    <label class="text-[11px] font-bold text-slate-500 ml-1">พิกัด GPS (ดึงอัตโนมัติ)</label>
-                    <div class="flex gap-2">
-                        <input type="text" id="swal_evac_coords" readonly class="w-full p-3 border border-slate-200 bg-white text-slate-500 rounded-xl outline-none text-[10px]" placeholder="รอการดึงพิกัด...">
-                        <button type="button" onclick="getEvacLocation()" class="bg-blue-100 text-blue-600 px-4 rounded-xl hover:bg-blue-200 transition shadow-sm active:scale-95">
-                            <i class="fas fa-map-marker-alt"></i>
-                        </button>
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="text-[11px] font-bold text-slate-600 ml-1">พิกัด GPS บ้าน/จุดสังเกต *</label>
+                            <button type="button" onclick="getEvacLocation()" class="text-[10px] font-bold bg-blue-100 hover:bg-blue-200 text-blue-700 px-2.5 py-1 rounded-lg transition active:scale-95 flex items-center gap-1">
+                                <i class="fas fa-crosshairs"></i> ดึง GPS ปัจจุบัน
+                            </button>
+                        </div>
+                        <input type="text" id="swal_evac_coords" readonly class="w-full p-2.5 border border-slate-200 bg-white text-slate-600 rounded-xl outline-none text-[11px] font-mono mb-2" placeholder="แตะบนแผนที่หรือกดดึงพิกัด GPS">
+                        <div id="evacOtherAddrMap" class="w-full h-[180px] rounded-xl border border-slate-200 overflow-hidden bg-slate-200 z-10"></div>
+                        <p class="text-[10px] text-slate-500 mt-1 flex items-center gap-1">
+                            <i class="fas fa-hand-pointer text-orange-500"></i> แตะบนแผนที่หรือลากหมุดเพื่อปรับตำแหน่งให้ตรงจุด
+                        </p>
                     </div>
                 </div>
 
                 <div>
-                    <label class="text-[11px] font-bold text-slate-500 ml-1">จำนวนคนที่อยู่ด้วยกัน (คน)</label>
-                    <input type="number" id="swal_evac_count" min="1" class="w-full p-3 border border-orange-100 bg-orange-50 rounded-xl outline-none text-sm focus:ring-2 focus:ring-orange-300" placeholder="ระบุจำนวนคน">
+                    <label class="text-[11px] font-bold text-slate-500 ml-1 block mb-1">จำนวนคนที่อยู่ด้วยกัน (คน) *</label>
+                    <input type="number" id="swal_evac_count" min="1" inputmode="numeric" class="w-full p-3 border border-orange-200 bg-orange-50/70 rounded-xl outline-none text-sm focus:ring-2 focus:ring-orange-300" placeholder="ระบุจำนวนคน">
                 </div>
 
                 ${destSectionHtml}
 
-                <div class="mt-4">
-                    <label class="text-[11px] font-bold text-slate-500 ml-1">รายละเอียดเพิ่มเติม / ความช่วยเหลือที่ต้องการ</label>
+                <div>
+                    <label class="text-[11px] font-bold text-slate-500 ml-1 block mb-1">รายละเอียดเพิ่มเติม / ความช่วยเหลือที่ต้องการ</label>
                     <textarea id="swal_evac_note" rows="2" class="w-full p-3 border border-slate-200 bg-white rounded-xl outline-none text-sm focus:border-amber-400 focus:ring-2 focus:ring-amber-50 placeholder-slate-300" placeholder="เช่น ต้องการน้ำดื่ม, ยารักษาโรค, ต้องการเรือเข้ามารับ..."></textarea>
                 </div>
             </div>
@@ -727,10 +855,15 @@ window.openEvacReportModal = function (status = 'อพยพ') {
         confirmButtonText: 'บันทึกรายงาน',
         cancelButtonText: 'ยกเลิก',
         confirmButtonColor: btnColor,
-        customClass: { popup: 'rounded-[2rem]' },
-        didOpen: () => {
-            const content = Swal.getHtmlContainer();
-            if (content) content.style.overflow = 'visible';
+        reverseButtons: true,
+        customClass: {
+            popup: 'rounded-[1.75rem] w-[95vw] max-w-md p-3.5 sm:p-5',
+            actions: 'w-full flex gap-2 px-1 mt-2',
+            confirmButton: 'flex-1 py-3 rounded-xl font-bold text-sm m-0 shadow-md',
+            cancelButton: 'flex-1 py-3 rounded-xl font-bold text-sm m-0 bg-slate-100 text-slate-600 hover:bg-slate-200'
+        },
+        willClose: () => {
+            destroyEvacMiniMaps();
         },
         preConfirm: () => {
             const evacName = document.getElementById('swal_evac_name').value.trim();
@@ -738,15 +871,15 @@ window.openEvacReportModal = function (status = 'อพยพ') {
             let address = document.getElementById('swal_evac_addr_search').value.trim();
             let coords = '';
             const currentStatus = document.getElementById('swal_evac_status').value;
-            const note = document.getElementById('swal_evac_note').value.trim();
+            let note = document.getElementById('swal_evac_note').value.trim();
 
             if (!evacName) { Swal.showValidationMessage('กรุณาระบุชื่อ-สกุล'); return false; }
 
             if (isOtherAddr) {
                 address = document.getElementById('swal_evac_custom_addr').value.trim();
-                coords = document.getElementById('swal_evac_coords').value;
-                if (!address || !coords || coords.includes('กำลัง') || coords.includes('กรุณา')) {
-                    Swal.showValidationMessage('กรุณาระบุที่อยู่อื่นๆ และตรวจสอบพิกัด GPS'); return false;
+                coords = document.getElementById('swal_evac_coords').value.trim();
+                if (!address || !coords || !coords.includes(',')) {
+                    Swal.showValidationMessage('กรุณาระบุที่อยู่อื่น ๆ และปักหมุดพิกัดบนแผนที่'); return false;
                 }
             } else if (!address) {
                 Swal.showValidationMessage('กรุณาค้นหาและเลือกที่อยู่ หรือติ๊กเพื่อระบุที่อยู่อื่น'); return false;
@@ -760,7 +893,16 @@ window.openEvacReportModal = function (status = 'อพยพ') {
 
             if (currentStatus === 'อพยพ') {
                 type = document.getElementById('swal_evac_type').value;
-                dest = (type === 'ศูนย์') ? document.getElementById('swal_evac_shelter').value : document.getElementById('swal_evac_other_text').value;
+                if (type === 'ศูนย์') {
+                    dest = document.getElementById('swal_evac_shelter').value;
+                } else {
+                    const otherDestText = document.getElementById('swal_evac_other_text').value.trim();
+                    const destCoords = (document.getElementById('swal_evac_dest_coords')?.value || '').trim();
+                    dest = otherDestText;
+                    if (dest && destCoords && destCoords.includes(',')) {
+                        note = note ? `${note} | พิกัดปลายทาง: ${destCoords}` : `พิกัดปลายทาง: ${destCoords}`;
+                    }
+                }
                 if (!dest) { Swal.showValidationMessage('กรุณาระบุปลายทางที่อพยพไป'); return false; }
             }
 
