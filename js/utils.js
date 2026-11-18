@@ -502,15 +502,60 @@ function closeDataModal() {
 }
 
 // ==========================================
-// 🚀 ระบบ Browser Storage Caching (TTL Support)
+// 🚀 ระบบ Browser Storage Caching (TTL Support + Memory Fallback)
 // ==========================================
-window.setAppCache = function (key, data, ttlMinutes = 15) {
+window._appMemoryCache = window._appMemoryCache || {};
+
+function pruneExpiredAppCache(excludeKey) {
     try {
-        const item = {
-            data: data,
-            expiry: Date.now() + (ttlMinutes * 60 * 1000)
-        };
-        localStorage.setItem(`flood_cache_${key}`, JSON.stringify(item));
+        const now = Date.now();
+        Object.keys(localStorage).forEach(k => {
+            if (!k.startsWith('flood_cache_') || k === `flood_cache_${excludeKey}`) return;
+            try {
+                const parsed = JSON.parse(localStorage.getItem(k));
+                if (!parsed || (parsed.expiry && now > parsed.expiry)) {
+                    localStorage.removeItem(k);
+                }
+            } catch (_) {
+                localStorage.removeItem(k);
+            }
+        });
+    } catch (_) { }
+}
+
+window.setAppCache = function (key, data, ttlMinutes = 15) {
+    const expiry = Date.now() + (ttlMinutes * 60 * 1000);
+    const item = { data: data, expiry: expiry };
+    window._appMemoryCache[key] = item;
+
+    try {
+        const serialized = JSON.stringify(item);
+        // หลีกเลี่ยงการเขียน payload ขนาดใหญ่มากลง localStorage (จำกัด ~5MB ต่อ origin)
+        // เพื่อไม่ให้เกิด QuotaExceededError และไม่แย่งพื้นที่คีย์สำคัญ (เช่น user_session)
+        if (serialized.length > 1500000) {
+            try { localStorage.removeItem(`flood_cache_${key}`); } catch (_) { }
+            return;
+        }
+        try {
+            localStorage.setItem(`flood_cache_${key}`, serialized);
+        } catch (err) {
+            const isQuotaErr = err && (err.name === 'QuotaExceededError' || err.name === 'NS_ERROR_DOM_QUOTA_REACHED' || err.code === 22 || err.code === 1014);
+            if (!isQuotaErr) throw err;
+
+            // ล้าง cache ที่หมดอายุและ initial_data ของปี/ช่วงอื่นออกแล้วลองอีกครั้ง
+            pruneExpiredAppCache(key);
+            try {
+                Object.keys(localStorage).forEach(k => {
+                    if (k.startsWith('flood_cache_initial_data_') && k !== `flood_cache_${key}`) {
+                        localStorage.removeItem(k);
+                    }
+                });
+                localStorage.setItem(`flood_cache_${key}`, serialized);
+            } catch (_) {
+                // ถ้ายังไม่พอ ให้เก็บเฉพาะใน memory cache แทนอย่างปลอดภัย
+                try { localStorage.removeItem(`flood_cache_${key}`); } catch (__) { }
+            }
+        }
     } catch (e) {
         console.warn("Storage Cache Write Error:", e);
     }
@@ -518,6 +563,12 @@ window.setAppCache = function (key, data, ttlMinutes = 15) {
 
 window.getAppCache = function (key) {
     try {
+        const memItem = window._appMemoryCache && window._appMemoryCache[key];
+        if (memItem) {
+            if (Date.now() <= memItem.expiry) return memItem.data;
+            delete window._appMemoryCache[key];
+        }
+
         const itemStr = localStorage.getItem(`flood_cache_${key}`);
         if (!itemStr) return null;
         const item = JSON.parse(itemStr);
@@ -535,8 +586,10 @@ window.getAppCache = function (key) {
 window.clearAppCache = function (key) {
     try {
         if (key) {
+            if (window._appMemoryCache) delete window._appMemoryCache[key];
             localStorage.removeItem(`flood_cache_${key}`);
         } else {
+            window._appMemoryCache = {};
             Object.keys(localStorage).forEach(k => {
                 if (k.startsWith('flood_cache_')) localStorage.removeItem(k);
             });

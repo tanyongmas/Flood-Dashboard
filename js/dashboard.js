@@ -1339,22 +1339,77 @@ let dashLayerStates = {
         let markerLayer = L.layerGroup();
 
         // ฟังก์ชันสร้างไอคอนหมุดตามระดับน้ำ
-        function getWaterIcon(level) {
-            let color = '#22c55e'; // เขียว (ปกติ 0)
-            let shadowColor = 'rgba(34, 197, 94, 0.4)';
-            let extraClass = ''; // คลาสเสริมสำหรับ Animation
-
-            if (level >= 1 && level <= 30) {
-                color = '#facc15'; // เหลือง
-                shadowColor = 'rgba(250, 204, 21, 0.4)';
-            } else if (level >= 31 && level <= 80) {
-                color = '#f97316'; // ส้ม
-                shadowColor = 'rgba(249, 115, 22, 0.4)';
-            } else if (level >= 81) {
-                color = '#dc2626'; // แดง (วิกฤต)
-                shadowColor = 'rgba(220, 38, 38, 0.5)';
-                extraClass = 'critical-pulse'; // ใส่คลาสกระพริบ
+        function getStaffWaterLevelMeta(level) {
+            const num = parseFloat(level);
+            const val = isNaN(num) ? 0 : num;
+            if (val < 10) {
+                return { label: 'แห้ง', colorHex: '#10b981', shadowColor: 'rgba(16, 185, 129, 0.4)', badgeClass: 'bg-emerald-100 text-emerald-700 border-emerald-200', extraClass: '' };
             }
+            if (val < 50) {
+                return { label: 'ข้อเท้า - เข่า', colorHex: '#0ea5e9', shadowColor: 'rgba(14, 165, 233, 0.45)', badgeClass: 'bg-sky-100 text-sky-700 border-sky-200', extraClass: '' };
+            }
+            if (val < 100) {
+                return { label: 'เข่า - เอว', colorHex: '#f59e0b', shadowColor: 'rgba(245, 158, 11, 0.45)', badgeClass: 'bg-amber-100 text-amber-800 border-amber-200', extraClass: '' };
+            }
+            if (val < 130) {
+                return { label: 'เอว - อก', colorHex: '#f97316', shadowColor: 'rgba(249, 115, 22, 0.5)', badgeClass: 'bg-orange-100 text-orange-700 border-orange-200', extraClass: '' };
+            }
+            if (val <= 180) {
+                return { label: 'อกขึ้นไป', colorHex: '#e11d48', shadowColor: 'rgba(225, 29, 72, 0.55)', badgeClass: 'bg-rose-100 text-rose-700 border-rose-200', extraClass: 'critical-pulse' };
+            }
+            return { label: 'มิดหัว', colorHex: '#9333ea', shadowColor: 'rgba(147, 51, 234, 0.55)', badgeClass: 'bg-purple-100 text-purple-800 border-purple-200', extraClass: 'critical-pulse' };
+        }
+        window.getStaffWaterLevelMeta = getStaffWaterLevelMeta;
+
+        function syncStaffWaterLevelCard(rawVal) {
+            const badgeEl = document.getElementById('staff_water_level_badge');
+            const btns = document.querySelectorAll('.staff-water-level-btn');
+            const baseClass = 'staff-water-level-btn p-2.5 rounded-2xl border text-left transition-all active:scale-95';
+            const inactiveClass = `${baseClass} border-slate-200 bg-slate-50/80 hover:bg-slate-100 text-slate-700`;
+
+            if (rawVal === '' || rawVal === null || rawVal === undefined || isNaN(parseFloat(rawVal))) {
+                btns.forEach(b => { b.className = inactiveClass; });
+                if (badgeEl) {
+                    badgeEl.className = 'text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200';
+                    badgeEl.innerText = 'ยังไม่ได้ระบุ';
+                }
+                return;
+            }
+
+            const num = parseFloat(rawVal);
+            const meta = getStaffWaterLevelMeta(num);
+            if (badgeEl) {
+                badgeEl.className = `text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${meta.badgeClass}`;
+                badgeEl.innerText = `${meta.label} (${num} ซม.)`;
+            }
+
+            btns.forEach(b => {
+                const min = parseFloat(b.getAttribute('data-min'));
+                const max = parseFloat(b.getAttribute('data-max'));
+                const activeCls = b.getAttribute('data-active-class') || '';
+                if (!isNaN(min) && !isNaN(max) && num >= min && num <= max) {
+                    b.className = `${baseClass} ${activeCls}`;
+                } else {
+                    b.className = inactiveClass;
+                }
+            });
+        }
+        window.syncStaffWaterLevelCard = syncStaffWaterLevelCard;
+
+        function selectStaffWaterLevel(presetVal) {
+            const inputEl = document.getElementById('water_val');
+            if (inputEl) {
+                inputEl.value = presetVal;
+            }
+            syncStaffWaterLevelCard(presetVal);
+        }
+        window.selectStaffWaterLevel = selectStaffWaterLevel;
+
+        function getWaterIcon(level) {
+            const meta = getStaffWaterLevelMeta(level);
+            const color = meta.colorHex;
+            const shadowColor = meta.shadowColor;
+            const extraClass = meta.extraClass;
 
             return L.divIcon({
                 className: 'custom-water-marker',
@@ -1955,6 +2010,660 @@ let dashLayerStates = {
             setTimeout(() => { if (dashOneMap) dashOneMap.invalidateSize(); }, 100);
         }
 
+        // ==========================================
+        // 🎛️ One Map Fullscreen Floating HUD Widgets (X.73 / พักพิง / CCTV)
+        // ==========================================
+        const ONEMAP_HUD_STORAGE_KEY = 'onemap_hud_state_v1';
+        let _oneMapHudInitialized = false;
+
+        function getOneMapHudState() {
+            const defaults = {
+                visible: { x73: true, shelter: true, cctv: true, relief: true, evac: true },
+                collapsed: { x73: false, shelter: false, cctv: false, relief: false, evac: false },
+                positions: {},
+                selectedCctvId: '',
+                theme: 'dark'
+            };
+            try {
+                const raw = localStorage.getItem(ONEMAP_HUD_STORAGE_KEY);
+                if (!raw) return defaults;
+                const parsed = JSON.parse(raw);
+                return {
+                    visible: Object.assign({}, defaults.visible, parsed.visible || {}),
+                    collapsed: Object.assign({}, defaults.collapsed, parsed.collapsed || {}),
+                    positions: parsed.positions || {},
+                    selectedCctvId: parsed.selectedCctvId || '',
+                    theme: parsed.theme === 'light' ? 'light' : 'dark'
+                };
+            } catch (_) {
+                return defaults;
+            }
+        }
+
+        function saveOneMapHudState(state) {
+            try {
+                localStorage.setItem(ONEMAP_HUD_STORAGE_KEY, JSON.stringify(state));
+            } catch (_) { }
+        }
+
+        function clampHudWidgetToLayer(widgetEl, layerEl) {
+            if (!widgetEl || !layerEl) return;
+            const lw = layerEl.clientWidth;
+            const lh = layerEl.clientHeight;
+            const ww = widgetEl.offsetWidth || 280;
+            const wh = widgetEl.offsetHeight || 160;
+            if (!lw || !lh) return;
+
+            const currentLeft = widgetEl.offsetLeft;
+            const currentTop = widgetEl.offsetTop;
+            const maxLeft = Math.max(8, lw - ww - 8);
+            const maxTop = Math.max(8, lh - wh - 8);
+            const clampedLeft = Math.min(Math.max(8, currentLeft), maxLeft);
+            const clampedTop = Math.min(Math.max(8, currentTop), maxTop);
+
+            widgetEl.style.left = `${clampedLeft}px`;
+            widgetEl.style.top = `${clampedTop}px`;
+            widgetEl.style.right = 'auto';
+            widgetEl.style.bottom = 'auto';
+        }
+
+        function applyOneMapHudDefaultPositions() {
+            const layer = document.getElementById('onemapHudLayer');
+            const x73 = document.getElementById('hudWidgetX73');
+            const shelter = document.getElementById('hudWidgetShelter');
+            const cctv = document.getElementById('hudWidgetCctv');
+            const relief = document.getElementById('hudWidgetRelief');
+            const evac = document.getElementById('hudWidgetEvac');
+            if (!layer) return;
+
+            const lw = layer.clientWidth || window.innerWidth;
+            const lh = layer.clientHeight || window.innerHeight;
+            const isMobile = lw < 640;
+
+            if (x73) {
+                x73.style.right = 'auto';
+                x73.style.bottom = 'auto';
+                x73.style.left = isMobile ? '12px' : `${Math.max(12, lw - (x73.offsetWidth || 280) - 16)}px`;
+                x73.style.top = '16px';
+            }
+            if (shelter) {
+                shelter.style.right = 'auto';
+                shelter.style.bottom = 'auto';
+                const x73Bottom = x73 ? (x73.offsetTop + (x73.offsetHeight || 155) + 12) : 185;
+                shelter.style.left = isMobile ? '12px' : `${Math.max(12, lw - (shelter.offsetWidth || 280) - 16)}px`;
+                shelter.style.top = `${Math.min(x73Bottom, Math.max(16, lh - 220))}px`;
+            }
+            if (relief) {
+                relief.style.right = 'auto';
+                relief.style.bottom = 'auto';
+                relief.style.left = '16px';
+                relief.style.top = '16px';
+            }
+            if (evac) {
+                evac.style.right = 'auto';
+                evac.style.bottom = 'auto';
+                const reliefBottom = relief ? (relief.offsetTop + (relief.offsetHeight || 155) + 12) : 185;
+                evac.style.left = '16px';
+                evac.style.top = `${Math.min(reliefBottom, Math.max(16, lh - 220))}px`;
+            }
+            if (cctv) {
+                cctv.style.right = 'auto';
+                cctv.style.bottom = 'auto';
+                cctv.style.left = isMobile ? '12px' : `${Math.max(16, Math.round((lw - (cctv.offsetWidth || 310)) / 2))}px`;
+                cctv.style.top = `${Math.max(16, lh - (cctv.offsetHeight || 270) - 16)}px`;
+            }
+        }
+
+        function makeOneMapWidgetDraggable(widgetId, stateKey) {
+            const widgetEl = document.getElementById(widgetId);
+            const layerEl = document.getElementById('onemapHudLayer');
+            if (!widgetEl || !layerEl) return;
+
+            const handleEl = widgetEl.querySelector('.onemap-hud-drag-handle');
+            if (!handleEl) return;
+
+            // ป้องกันการคลิก/เลื่อน/ซูมทะลุไปขยับแผนที่ Leaflet ด้านหลัง
+            ['pointerdown', 'mousedown', 'touchstart', 'wheel', 'dblclick'].forEach(evtName => {
+                widgetEl.addEventListener(evtName, (e) => e.stopPropagation(), { passive: true });
+            });
+
+            handleEl.addEventListener('pointerdown', (e) => {
+                if (e.target.closest('button, select, input, a')) return;
+                e.preventDefault();
+                e.stopPropagation();
+
+                const startX = e.clientX;
+                const startY = e.clientY;
+                const startLeft = widgetEl.offsetLeft;
+                const startTop = widgetEl.offsetTop;
+
+                widgetEl.classList.add('is-dragging');
+                try { handleEl.setPointerCapture(e.pointerId); } catch (_) { }
+
+                const onMove = (moveEvt) => {
+                    const lw = layerEl.clientWidth;
+                    const lh = layerEl.clientHeight;
+                    const ww = widgetEl.offsetWidth || 280;
+                    const wh = widgetEl.offsetHeight || 160;
+                    const maxLeft = Math.max(8, lw - ww - 8);
+                    const maxTop = Math.max(8, lh - wh - 8);
+
+                    const nextLeft = Math.min(Math.max(8, startLeft + (moveEvt.clientX - startX)), maxLeft);
+                    const nextTop = Math.min(Math.max(8, startTop + (moveEvt.clientY - startY)), maxTop);
+
+                    widgetEl.style.left = `${nextLeft}px`;
+                    widgetEl.style.top = `${nextTop}px`;
+                    widgetEl.style.right = 'auto';
+                    widgetEl.style.bottom = 'auto';
+                };
+
+                const onUp = (upEvt) => {
+                    widgetEl.classList.remove('is-dragging');
+                    try { handleEl.releasePointerCapture(upEvt.pointerId); } catch (_) { }
+                    handleEl.removeEventListener('pointermove', onMove);
+                    handleEl.removeEventListener('pointerup', onUp);
+                    handleEl.removeEventListener('pointercancel', onUp);
+
+                    const state = getOneMapHudState();
+                    state.positions[stateKey] = {
+                        left: widgetEl.offsetLeft,
+                        top: widgetEl.offsetTop
+                    };
+                    saveOneMapHudState(state);
+                };
+
+                handleEl.addEventListener('pointermove', onMove);
+                handleEl.addEventListener('pointerup', onUp);
+                handleEl.addEventListener('pointercancel', onUp);
+            });
+        }
+
+        const ONEMAP_HUD_WIDGET_CONFIG = [
+            { key: 'x73', widgetId: 'hudWidgetX73', btnId: 'btnHudToggleX73', collapseBtnId: 'btnHudCollapseX73', activeCls: 'bg-sky-600 text-white shadow-sm' },
+            { key: 'shelter', widgetId: 'hudWidgetShelter', btnId: 'btnHudToggleShelter', collapseBtnId: 'btnHudCollapseShelter', activeCls: 'bg-pink-600 text-white shadow-sm' },
+            { key: 'cctv', widgetId: 'hudWidgetCctv', btnId: 'btnHudToggleCctv', collapseBtnId: 'btnHudCollapseCctv', activeCls: 'bg-indigo-600 text-white shadow-sm' },
+            { key: 'relief', widgetId: 'hudWidgetRelief', btnId: 'btnHudToggleRelief', collapseBtnId: 'btnHudCollapseRelief', activeCls: 'bg-amber-600 text-white shadow-sm' },
+            { key: 'evac', widgetId: 'hudWidgetEvac', btnId: 'btnHudToggleEvac', collapseBtnId: 'btnHudCollapseEvac', activeCls: 'bg-purple-600 text-white shadow-sm' }
+        ];
+
+        function syncOneMapHudVisibilityUI() {
+            const state = getOneMapHudState();
+            const inactiveCls = 'text-slate-300 hover:text-white hover:bg-slate-700/70';
+
+            const layer = document.getElementById('onemapHudLayer');
+            const isLight = state.theme === 'light';
+            if (layer) layer.classList.toggle('hud-theme-light', isLight);
+
+            const themeBtn = document.getElementById('btnHudThemeToggle');
+            if (themeBtn) {
+                themeBtn.innerHTML = isLight ? '<i class="fas fa-sun"></i> สว่าง' : '<i class="fas fa-moon"></i> มืด';
+                themeBtn.className = isLight
+                    ? 'px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 bg-amber-100 text-amber-800 hover:bg-amber-200 border border-amber-300 shadow-sm'
+                    : 'px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 bg-slate-700 text-amber-300 hover:bg-slate-600 border border-slate-600/80';
+            }
+
+            ONEMAP_HUD_WIDGET_CONFIG.forEach(cfg => {
+                const isShown = state.visible[cfg.key] !== false;
+                const isCollapsed = !!(state.collapsed && state.collapsed[cfg.key]);
+                const w = document.getElementById(cfg.widgetId);
+                const b = document.getElementById(cfg.btnId);
+                const cb = document.getElementById(cfg.collapseBtnId);
+
+                if (w) {
+                    w.classList.toggle('hidden', !isShown);
+                    w.classList.toggle('is-collapsed', isCollapsed);
+                }
+                if (b) {
+                    b.className = `px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 ${isShown ? cfg.activeCls : inactiveCls}`;
+                }
+                if (cb) {
+                    cb.innerHTML = isCollapsed ? '<i class="fas fa-chevron-down"></i>' : '<i class="fas fa-chevron-up"></i>';
+                    cb.title = isCollapsed ? 'ขยายกล่องนี้' : 'ย่อกล่องนี้';
+                }
+            });
+        }
+
+        window.toggleOneMapHudTheme = function () {
+            const state = getOneMapHudState();
+            state.theme = state.theme === 'light' ? 'dark' : 'light';
+            saveOneMapHudState(state);
+            syncOneMapHudVisibilityUI();
+        };
+
+        window.toggleOneMapHudCollapse = function (key, evt) {
+            if (evt) evt.stopPropagation();
+            const state = getOneMapHudState();
+            state.collapsed = state.collapsed || {};
+            state.collapsed[key] = !state.collapsed[key];
+            saveOneMapHudState(state);
+            syncOneMapHudVisibilityUI();
+
+            const cfg = ONEMAP_HUD_WIDGET_CONFIG.find(c => c.key === key);
+            const layer = document.getElementById('onemapHudLayer');
+            if (cfg && layer) {
+                clampHudWidgetToLayer(document.getElementById(cfg.widgetId), layer);
+            }
+        };
+
+        window.toggleOneMapHudWidget = function (key, forceState) {
+            const state = getOneMapHudState();
+            const current = state.visible[key] !== false;
+            state.visible[key] = typeof forceState === 'boolean' ? forceState : !current;
+            saveOneMapHudState(state);
+            syncOneMapHudVisibilityUI();
+
+            if (state.visible[key]) {
+                const layer = document.getElementById('onemapHudLayer');
+                const cfg = ONEMAP_HUD_WIDGET_CONFIG.find(c => c.key === key);
+                const el = cfg ? document.getElementById(cfg.widgetId) : null;
+                if (el && layer) clampHudWidgetToLayer(el, layer);
+                renderOneMapHudWidgets();
+            }
+        };
+
+        window.resetOneMapHudPositions = function () {
+            const state = getOneMapHudState();
+            state.positions = {};
+            state.visible = { x73: true, shelter: true, cctv: true, relief: true, evac: true };
+            state.collapsed = { x73: false, shelter: false, cctv: false, relief: false, evac: false };
+            saveOneMapHudState(state);
+            syncOneMapHudVisibilityUI();
+            renderOneMapHudWidgets();
+            requestAnimationFrame(() => applyOneMapHudDefaultPositions());
+        };
+
+        window.refreshOneMapHudTelemetry = async function (evt) {
+            if (evt) evt.stopPropagation();
+            if (typeof fetchRIDWaterLevel === 'function') {
+                await fetchRIDWaterLevel(true);
+            }
+            renderOneMapHudWidgets();
+        };
+
+        window.selectOneMapHudCctv = function (camId) {
+            const state = getOneMapHudState();
+            state.selectedCctvId = camId || '';
+            saveOneMapHudState(state);
+            renderOneMapHudCctvWidget();
+        };
+
+        function renderOneMapHudX73Widget() {
+            const body = document.getElementById('hudWidgetX73Body');
+            if (!body) return;
+
+            const ridCache = (typeof window.getAppCache === 'function' ? window.getAppCache('rid_data') : null) || window.latestRIDData;
+            const d = ridCache && ridCache.data ? ridCache.data : null;
+            const levelNum = d && d.level !== undefined && d.level !== null ? parseFloat(d.level) : NaN;
+
+            if (isNaN(levelNum)) {
+                body.innerHTML = `
+                    <div class="text-slate-300 text-[11px] flex items-center justify-between">
+                        <span>ยังไม่มีข้อมูลจากสถานี X.73</span>
+                        <button type="button" onclick="refreshOneMapHudTelemetry(event)" class="text-sky-400 hover:underline font-bold">โหลดใหม่</button>
+                    </div>`;
+                return;
+            }
+
+            let statusText = 'ระดับปกติ';
+            let statusCls = 'bg-emerald-500/20 text-emerald-300 border-emerald-400/30';
+            let barColor = 'bg-emerald-400';
+            if (levelNum > 14.90) {
+                statusText = 'วิกฤต (ล้นตลิ่ง)';
+                statusCls = 'bg-rose-500/25 text-rose-300 border-rose-400/40 animate-pulse';
+                barColor = 'bg-rose-500';
+            } else if (levelNum >= 13.50) {
+                statusText = 'เฝ้าระวังเตือนภัย';
+                statusCls = 'bg-amber-500/25 text-amber-300 border-amber-400/40';
+                barColor = 'bg-amber-400';
+            }
+
+            let trendHtml = '';
+            if (d.previousLevel !== undefined && d.previousLevel !== null && !isNaN(parseFloat(d.previousLevel))) {
+                const diff = levelNum - parseFloat(d.previousLevel);
+                if (diff > 0.005) {
+                    trendHtml = `<span class="text-rose-300 font-bold text-[11px]"><i class="fas fa-arrow-up"></i> +${diff.toFixed(2)}</span>`;
+                } else if (diff < -0.005) {
+                    trendHtml = `<span class="text-emerald-300 font-bold text-[11px]"><i class="fas fa-arrow-down"></i> ${diff.toFixed(2)}</span>`;
+                } else {
+                    trendHtml = `<span class="text-slate-400 font-bold text-[11px]"><i class="fas fa-minus"></i> ทรงตัว</span>`;
+                }
+            }
+
+            const bankLevel = d.bankLevel ? parseFloat(d.bankLevel) : 14.90;
+            const diffBank = d.diffBank !== undefined ? parseFloat(d.diffBank) : (bankLevel - levelNum);
+            const pct = Math.max(5, Math.min(100, Math.round((levelNum / bankLevel) * 100)));
+
+            body.innerHTML = `
+                <div class="flex items-end justify-between gap-2">
+                    <div>
+                        <div class="text-[10px] text-slate-400 font-bold">คลองตันหยงมัส (X.73)</div>
+                        <div class="flex items-baseline gap-1.5 mt-0.5">
+                            <span class="text-2xl font-black text-white tracking-tight">${levelNum.toFixed(2)}</span>
+                            <span class="text-[11px] text-slate-300 font-bold">ม.รทก.</span>
+                            ${trendHtml}
+                        </div>
+                    </div>
+                    <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${statusCls} shrink-0">${statusText}</span>
+                </div>
+                <div class="space-y-1">
+                    <div class="w-full h-1.5 rounded-full bg-slate-700/80 overflow-hidden">
+                        <div class="h-full ${barColor} rounded-full transition-all duration-500" style="width: ${pct}%"></div>
+                    </div>
+                    <div class="flex items-center justify-between text-[10px] text-slate-300">
+                        <span>${diffBank >= 0 ? `ต่ำกว่าตลิ่ง ${diffBank.toFixed(2)} ม.` : `สูงกว่าตลิ่ง ${Math.abs(diffBank).toFixed(2)} ม.`}</span>
+                        <span class="text-slate-400">ตลิ่ง ${bankLevel.toFixed(2)} ม.</span>
+                    </div>
+                </div>
+                <div class="text-[10px] text-slate-400 pt-1 border-t border-slate-700/70 flex items-center justify-between">
+                    <span>อัปเดตล่าสุด</span>
+                    <span class="font-mono text-slate-300">${d.time || '-'}</span>
+                </div>
+            `;
+        }
+
+        function renderOneMapHudShelterWidget() {
+            const body = document.getElementById('hudWidgetShelterBody');
+            if (!body) return;
+
+            const evacuees = (typeof store !== 'undefined' && store && Array.isArray(store.evacuees)) ? store.evacuees : [];
+            const activeEvacuees = evacuees.filter(r => (r[10] || '').toString().trim() !== 'กลับบ้านแล้ว');
+            const returnedCount = evacuees.length - activeEvacuees.length;
+
+            const shelters = [
+                { name: 'ศูนย์เทศบาลตำบลตันหยงมัส', shortName: 'ทต.ตันหยงมัส', cap: 80 },
+                { name: 'ศูนย์มัสยิดตันหยงมัส', shortName: 'มัสยิดตันหยงมัส', cap: 80 },
+                { name: 'ศูนย์โรงเรียนบ้านเขาพระ', shortName: 'รร.บ้านเขาพระ', cap: 60 }
+            ];
+
+            const rowsHtml = shelters.map(s => {
+                const count = activeEvacuees.filter(r => typeof isSameShelter === 'function' ? isSameShelter(r[1], s.name) : String(r[1] || '').includes(s.shortName)).length;
+                const pct = Math.min(100, Math.round((count / s.cap) * 100));
+                const barCls = pct >= 90 ? 'bg-rose-500' : (pct >= 60 ? 'bg-amber-400' : 'bg-pink-400');
+                return `
+                    <div class="bg-slate-800/70 rounded-lg p-2 border border-slate-700/60 space-y-1">
+                        <div class="flex items-center justify-between gap-2 text-[11px]">
+                            <span class="font-bold text-slate-200 truncate">${s.shortName}</span>
+                            <span class="font-black text-pink-300 shrink-0">${count} / ${s.cap} คน</span>
+                        </div>
+                        <div class="w-full h-1.5 rounded-full bg-slate-700 overflow-hidden">
+                            <div class="h-full ${barCls} rounded-full transition-all" style="width: ${pct}%"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            body.innerHTML = `
+                <div class="flex items-center justify-between bg-pink-500/15 border border-pink-400/30 rounded-xl px-2.5 py-2">
+                    <div>
+                        <div class="text-[10px] text-pink-200 font-bold">ยอดเข้าพักพิงปัจจุบัน</div>
+                        <div class="text-xl font-black text-white leading-tight">${activeEvacuees.length.toLocaleString()} <span class="text-xs font-bold text-pink-200">คน</span></div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-[10px] text-slate-400">กลับบ้านแล้ว</div>
+                        <div class="text-xs font-extrabold text-emerald-300">${returnedCount.toLocaleString()} คน</div>
+                    </div>
+                </div>
+                <div class="space-y-1.5">${rowsHtml}</div>
+            `;
+        }
+
+        function renderOneMapHudCctvWidget() {
+            const selectEl = document.getElementById('hudCctvSelect');
+            const body = document.getElementById('hudWidgetCctvBody');
+            if (!selectEl || !body) return;
+
+            const cams = Array.isArray(window.cctvCameras) ? window.cctvCameras : [];
+            if (cams.length === 0) {
+                selectEl.innerHTML = '<option value="">-- ไม่พบกล้อง CCTV --</option>';
+                body.innerHTML = '<div class="text-slate-400 text-[11px] py-6 text-center">ยังไม่มีรายการกล้อง CCTV ในระบบ</div>';
+                return;
+            }
+
+            const state = getOneMapHudState();
+            let selectedId = state.selectedCctvId;
+            if (!selectedId || !cams.some(c => c.id === selectedId)) {
+                selectedId = cams[0].id;
+                state.selectedCctvId = selectedId;
+                saveOneMapHudState(state);
+            }
+
+            selectEl.innerHTML = cams.map(c => `<option value="${c.id}" ${c.id === selectedId ? 'selected' : ''}>${c.name}</option>`).join('');
+
+            const cam = cams.find(c => c.id === selectedId) || cams[0];
+            const isOnline = (cam.status || '').toLowerCase() === 'online';
+            const displayImg = (cam.streamUrl || cam.stream_url || cam.snapshotUrl || cam.snapshot_url || '').trim() ||
+                'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?auto=format&fit=crop&w=1000&q=80';
+            const levelVal = (cam.level !== null && cam.level !== undefined && !isNaN(parseFloat(cam.level))) ? parseFloat(cam.level) : null;
+
+            body.innerHTML = `
+                <div class="relative w-full aspect-video rounded-xl overflow-hidden bg-black border border-slate-700/80 cursor-pointer group"
+                    onclick="if(typeof openCctvFullscreen==='function') openCctvFullscreen('${cam.id}')">
+                    ${isOnline ? `
+                        <img src="${displayImg}" alt="${cam.name}" class="w-full h-full object-cover group-hover:scale-105 transition duration-500">
+                        <div class="absolute top-1.5 left-1.5 px-1.5 py-0.5 bg-black/75 rounded text-white hud-keep-white text-[9px] font-mono font-bold flex items-center gap-1">
+                            <span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-ping"></span> LIVE
+                        </div>
+                        ${levelVal !== null ? `<div class="absolute bottom-1.5 right-1.5 px-2 py-0.5 bg-black/80 rounded text-[10px] font-mono text-amber-300 hud-keep-amber font-bold">${levelVal.toFixed(2)} ม.รทก.</div>` : ''}
+                    ` : `
+                        <div class="w-full h-full flex flex-col items-center justify-center text-slate-400">
+                            <i class="fas fa-video-slash text-xl mb-1"></i>
+                            <span class="text-[10px] font-bold">สัญญาณออฟไลน์</span>
+                        </div>
+                    `}
+                </div>
+                <div class="mt-2 flex items-center justify-between gap-2 text-[10px] text-slate-300">
+                    <span class="truncate"><i class="fas fa-water text-sky-400 mr-1"></i>${cam.waterPoint || '-'}</span>
+                    <button type="button" onclick="if(typeof openCctvFullscreen==='function') openCctvFullscreen('${cam.id}')"
+                        class="px-2 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white hud-keep-white font-bold shrink-0 transition">
+                        <i class="fas fa-expand mr-1"></i>ขยายจอ
+                    </button>
+                </div>
+            `;
+        }
+
+        function renderOneMapHudReliefWidget() {
+            const body = document.getElementById('hudWidgetReliefBody');
+            if (!body) return;
+
+            const reliefData = (typeof store !== 'undefined' && store && Array.isArray(store.reliefData)) ? store.reliefData : [];
+            const reliefStock = (typeof store !== 'undefined' && store && Array.isArray(store.reliefStock)) ? store.reliefStock : [];
+
+            const uniqueAddrs = new Set();
+            reliefData.forEach(r => {
+                const addr = r[4] ? r[4].toString().trim() : '';
+                if (addr) uniqueAddrs.add(addr);
+            });
+
+            let totalIn = 0;
+            let totalOut = 0;
+            reliefStock.forEach(r => {
+                const type = r[1] ? r[1].toString().toLowerCase().trim() : '';
+                const amount = Number(r[2]) || 0;
+                if (type === 'in' || type === 'รับเข้า') totalIn += amount;
+                if (type === 'out' || type === 'จ่ายออก') totalOut += amount;
+            });
+            const remain = totalIn - totalOut;
+            const remainCls = remain <= 0 ? 'text-rose-400' : (remain <= 50 ? 'text-amber-300' : 'text-emerald-300');
+
+            body.innerHTML = `
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="bg-amber-500/15 border border-amber-400/30 rounded-xl p-2">
+                        <div class="text-[10px] text-amber-200 font-bold">แจกจ่ายแล้ว</div>
+                        <div class="text-lg font-black text-white leading-tight">${reliefData.length.toLocaleString()} <span class="text-[10px] font-bold text-amber-200">ชุด</span></div>
+                        <div class="text-[10px] text-slate-300">${uniqueAddrs.size.toLocaleString()} ครัวเรือน</div>
+                    </div>
+                    <div class="bg-slate-800/80 border border-slate-700/70 rounded-xl p-2">
+                        <div class="text-[10px] text-slate-400 font-bold">คงเหลือคลัง</div>
+                        <div class="text-lg font-black ${remainCls} leading-tight">${remain.toLocaleString()} <span class="text-[10px] font-bold text-slate-300">ชุด</span></div>
+                        <div class="text-[10px] text-slate-400">รับ ${totalIn.toLocaleString()} / จ่าย ${totalOut.toLocaleString()}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderOneMapHudEvacWidget() {
+            const body = document.getElementById('hudWidgetEvacBody');
+            if (!body) return;
+
+            const evacuees = (typeof store !== 'undefined' && store && Array.isArray(store.evacuees)) ? store.evacuees : [];
+            const evacReports = (typeof store !== 'undefined' && store && Array.isArray(store.evacReports)) ? store.evacReports : [];
+
+            // นับผู้เข้าพักพิงในศูนย์แยกตามที่อยู่ (เฉพาะที่ยังไม่กลับบ้าน)
+            const houseShelterMap = {};
+            evacuees.forEach(r => {
+                const status = (r[10] || '').toString().trim();
+                const addr = (r[7] || '').toString().trim();
+                if (status !== 'กลับบ้านแล้ว' && addr) {
+                    houseShelterMap[addr] = (houseShelterMap[addr] || 0) + 1;
+                }
+            });
+
+            // ดึงรายงานสถานะล่าสุดของแต่ละบ้าน
+            const latestByAddr = {};
+            evacReports.forEach(report => {
+                const address = report[1] ? report[1].toString().trim() : '';
+                const time = new Date(report[0]).getTime() || 0;
+                if (address && (!latestByAddr[address] || time >= latestByAddr[address].time)) {
+                    latestByAddr[address] = { data: report, time: time };
+                }
+            });
+
+            let evacHouseholds = 0, evacPeople = 0, centerPeople = 0, otherPeople = 0;
+            let safeHouseholds = 0, safePeople = 0;
+            let sosHouseholds = 0, sosPeople = 0;
+            const processedAddresses = new Set();
+
+            Object.values(latestByAddr).forEach(({ data: report }) => {
+                const address = (report[1] || '').toString().trim();
+                processedAddresses.add(address);
+
+                let count = parseInt(report[2]) || 0;
+                const destType = (report[3] || '').toString().trim();
+                const status = (report[8] ? report[8].toString().trim() : 'อพยพ');
+                const shelterCount = houseShelterMap[address] || 0;
+
+                const isSos = status.includes('SOS') || status.includes('ช่วยเหลือ') || destType.includes('ช่วยเหลือ');
+                const isMixedSafeAndShelter = !isSos && status === 'ปลอดภัย' && shelterCount > 0;
+                const isMixedOtherAndShelter = !isSos && status !== 'ปลอดภัย' && destType && destType !== 'ศูนย์' && shelterCount > 0;
+
+                if (isSos) {
+                    sosHouseholds++;
+                    sosPeople += count;
+                } else if (isMixedSafeAndShelter) {
+                    safeHouseholds++;
+                    safePeople += count;
+                    evacHouseholds++;
+                    evacPeople += shelterCount;
+                    centerPeople += shelterCount;
+                } else if (isMixedOtherAndShelter) {
+                    evacHouseholds++;
+                    centerPeople += shelterCount;
+                    otherPeople += count;
+                    evacPeople += (shelterCount + count);
+                } else if (status === 'ปลอดภัย') {
+                    safeHouseholds++;
+                    safePeople += count;
+                } else {
+                    const finalCount = shelterCount > 0 ? Math.max(count, shelterCount) : count;
+                    evacHouseholds++;
+                    evacPeople += finalCount;
+                    if (destType === 'ศูนย์' || shelterCount > 0) {
+                        centerPeople += finalCount;
+                    } else {
+                        otherPeople += finalCount;
+                    }
+                }
+            });
+
+            // รวมบ้านที่ลงทะเบียนเข้าศูนย์พักพิง (store.evacuees) แต่ยังไม่มีใน evacReports
+            Object.entries(houseShelterMap).forEach(([address, shelterCount]) => {
+                if (!processedAddresses.has(address) && shelterCount > 0) {
+                    evacHouseholds++;
+                    evacPeople += shelterCount;
+                    centerPeople += shelterCount;
+                }
+            });
+
+            const totalHouseholds = evacHouseholds + safeHouseholds + sosHouseholds;
+
+            body.innerHTML = `
+                <div class="grid grid-cols-3 gap-1.5 text-center">
+                    <div class="bg-purple-500/20 border border-purple-400/35 rounded-xl p-1.5">
+                        <div class="text-[9px] font-bold text-purple-200">อพยพ</div>
+                        <div class="text-base font-black text-purple-300 leading-tight">${evacPeople.toLocaleString()}</div>
+                        <div class="text-[9px] text-purple-200/80">${evacHouseholds} ครัวเรือน</div>
+                    </div>
+                    <div class="bg-emerald-500/20 border border-emerald-400/35 rounded-xl p-1.5">
+                        <div class="text-[9px] font-bold text-emerald-200">ปลอดภัย</div>
+                        <div class="text-base font-black text-emerald-300 leading-tight">${safePeople.toLocaleString()}</div>
+                        <div class="text-[9px] text-emerald-200/80">${safeHouseholds} ครัวเรือน</div>
+                    </div>
+                    <div class="bg-rose-500/20 border border-rose-400/35 rounded-xl p-1.5">
+                        <div class="text-[9px] font-bold text-rose-200">SOS</div>
+                        <div class="text-base font-black text-rose-300 leading-tight">${sosPeople.toLocaleString()}</div>
+                        <div class="text-[9px] text-rose-200/80">${sosHouseholds} ครัวเรือน</div>
+                    </div>
+                </div>
+                <div class="text-[10px] text-slate-300 pt-1 border-t border-slate-700/70 flex items-center justify-between gap-2">
+                    <span class="truncate">อพยพ: ศูนย์ ${centerPeople.toLocaleString()} • ญาติ/อื่นๆ ${otherPeople.toLocaleString()}</span>
+                    <span class="font-black text-white shrink-0">${totalHouseholds.toLocaleString()} ครัวเรือน</span>
+                </div>
+            `;
+        }
+
+        function renderOneMapHudWidgets() {
+            const card = document.getElementById('dashOneMapCard');
+            if (!card || !card.classList.contains('onemap-fullscreen')) return;
+            syncOneMapHudVisibilityUI();
+            renderOneMapHudX73Widget();
+            renderOneMapHudShelterWidget();
+            renderOneMapHudCctvWidget();
+            renderOneMapHudReliefWidget();
+            renderOneMapHudEvacWidget();
+        }
+        window.renderOneMapHudWidgets = renderOneMapHudWidgets;
+
+        function initOneMapHudWidgets() {
+            const layer = document.getElementById('onemapHudLayer');
+            if (!layer) return;
+
+            if (!_oneMapHudInitialized) {
+                _oneMapHudInitialized = true;
+                ONEMAP_HUD_WIDGET_CONFIG.forEach(cfg => makeOneMapWidgetDraggable(cfg.widgetId, cfg.key));
+
+                window.addEventListener('resize', () => {
+                    const card = document.getElementById('dashOneMapCard');
+                    if (!card || !card.classList.contains('onemap-fullscreen')) return;
+                    ONEMAP_HUD_WIDGET_CONFIG.forEach(cfg => {
+                        clampHudWidgetToLayer(document.getElementById(cfg.widgetId), layer);
+                    });
+                });
+            }
+
+            syncOneMapHudVisibilityUI();
+            renderOneMapHudWidgets();
+
+            requestAnimationFrame(() => {
+                const state = getOneMapHudState();
+                const hasSavedPos = state.positions && Object.keys(state.positions).length > 0;
+                if (!hasSavedPos) {
+                    applyOneMapHudDefaultPositions();
+                } else {
+                    ONEMAP_HUD_WIDGET_CONFIG.forEach(cfg => {
+                        const el = document.getElementById(cfg.widgetId);
+                        const pos = state.positions[cfg.key];
+                        if (el && pos && typeof pos.left === 'number' && typeof pos.top === 'number') {
+                            el.style.left = `${pos.left}px`;
+                            el.style.top = `${pos.top}px`;
+                            el.style.right = 'auto';
+                            el.style.bottom = 'auto';
+                        }
+                        if (el) clampHudWidgetToLayer(el, layer);
+                    });
+                }
+            });
+        }
+
         // ฟังก์ชันสลับโหมดขยายเต็มจอ (Fullscreen Toggle)
         function toggleDashOneMapFullscreen() {
             const card = document.getElementById('dashOneMapCard');
@@ -1966,6 +2675,7 @@ let dashLayerStates = {
             if (isFullscreen) {
                 if (btn) btn.innerHTML = '<i class="fas fa-compress"></i> ย่อขนาด';
                 document.body.style.overflow = 'hidden';
+                initOneMapHudWidgets();
             } else {
                 if (btn) btn.innerHTML = '<i class="fas fa-expand"></i> ขยายเต็มจอ';
                 document.body.style.overflow = '';
@@ -1975,6 +2685,9 @@ let dashLayerStates = {
                 setTimeout(() => {
                     if (window.dashOneMap && typeof window.dashOneMap.invalidateSize === 'function') {
                         window.dashOneMap.invalidateSize();
+                    }
+                    if (isFullscreen && delay === 150) {
+                        renderOneMapHudWidgets();
                     }
                 }, delay);
             });
@@ -3465,11 +4178,10 @@ let dashLayerStates = {
                     coordinateStr = window.waterPointsMap[name];
                 }
 
-                // กำหนดสีและข้อความสถานะสำหรับ Popup
-                let statusText = 'ปกติ', statusColor = 'bg-green-100 text-green-600';
-                if (level >= 1 && level <= 30) { statusText = 'เฝ้าระวัง'; statusColor = 'bg-yellow-100 text-yellow-700'; }
-                else if (level >= 31 && level <= 80) { statusText = 'เตือนภัย'; statusColor = 'bg-orange-100 text-orange-600'; }
-                else if (level >= 81) { statusText = 'วิกฤต'; statusColor = 'bg-red-100 text-red-600'; }
+                // กำหนดสีและข้อความสถานะสำหรับ Popup ตามเกณฑ์ 6 ระดับ (แห้ง - มิดหัว)
+                const levelMeta = getStaffWaterLevelMeta(level);
+                const statusText = levelMeta.label;
+                const statusColor = levelMeta.badgeClass;
 
                 if (coordinateStr.includes(',')) {
                     const [lat, lng] = coordinateStr.split(',').map(v => parseFloat(v.trim()));
@@ -5597,6 +6309,7 @@ let dashLayerStates = {
                 if (typeof renderCctvDashboard === 'function') renderCctvDashboard();
                 if (typeof renderCctvMapMarkers === 'function') renderCctvMapMarkers();
             }
+            if (typeof window.renderOneMapHudWidgets === 'function') window.renderOneMapHudWidgets();
         }
         window.syncCctvTelemetry = syncCctvTelemetry;
 

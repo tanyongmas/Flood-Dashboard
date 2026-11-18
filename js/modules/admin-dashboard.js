@@ -614,7 +614,8 @@ window.filterFloodMap = function () {
 
     let tableHtml = '';
     filteredRows.forEach(row => {
-        const fullAddress = `${row.address}${row.road ? ' ถ.' + row.road : ''}`;
+        const cleanRoad = row.road ? row.road.replace(/^ถนน\s*/i, '').trim() : '';
+        const fullAddress = `${row.address}${cleanRoad ? ' ถ.' + cleanRoad : ''}`;
         const markerData = window.floodMarkersMap ? window.floodMarkersMap[row.name] : null;
         const clickAttr = markerData ? `onclick="zoomToFloodMarker('${row.name.replace(/'/g, "\\'")}', ${markerData.lat}, ${markerData.lng})"` : '';
         const cursorClass = markerData ? 'cursor-pointer hover:text-blue-600 transition-colors' : '';

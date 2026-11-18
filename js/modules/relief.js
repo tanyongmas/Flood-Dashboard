@@ -34,6 +34,7 @@ function getReliefAddressList() {
 }
 
 window.handleReliefAddressSearch = function (val) {
+    updateManualReliefFloodSyncNotice(val);
     const resultBox = document.getElementById('rel_address_results');
     if (!resultBox) return;
 
@@ -74,6 +75,7 @@ window.selectReliefAddress = function (addr) {
             window.copyAddress(true);
         }
     }
+    updateManualReliefFloodSyncNotice(addr);
 };
 
 // ========================================================
@@ -366,6 +368,176 @@ window.renderModalZoneAddresses = function () {
     listContainer.innerHTML = html;
 };
 
+function normalizeThaiAddress(str) {
+    return String(str || '')
+        .replace(/ถ\.\s*/g, '')
+        .replace(/ถนน\s*/g, '')
+        .replace(/ต\.\s*ตันหยงมัส/g, '')
+        .replace(/ตันหยงมัส/g, '')
+        .replace(/หมู่ที่\s*/g, 'ม.')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLowerCase();
+}
+
+function findExistingFloodDataByAddress(cleanAddr) {
+    const target = String(cleanAddr || '').trim().toLowerCase();
+    const targetNorm = normalizeThaiAddress(cleanAddr);
+    if (!targetNorm || typeof store === 'undefined' || !Array.isArray(store.floodData) || store.floodData.length < 2) {
+        return null;
+    }
+
+    const headers = store.floodData[0] || [];
+    const findCol = (kws) => headers.findIndex(h => {
+        const c = String(h || '').trim().toLowerCase();
+        return kws.some(kw => c === kw.toLowerCase() || c.includes(kw.toLowerCase()));
+    });
+    const addrIdx = findCol(['ที่อยู่', 'address']);
+    const roadIdx = findCol(['ถนน', 'road']);
+    const riskIdx = findCol(['ความเสี่ยง', 'risk']);
+    if (addrIdx === -1) return null;
+
+    for (let i = 1; i < store.floodData.length; i++) {
+        const r = store.floodData[i];
+        const rAddr = String(r[addrIdx] || '').trim();
+        const rRoad = roadIdx !== -1 ? String(r[roadIdx] || '').trim() : '';
+        if (!rAddr) continue;
+
+        const combined = `${rAddr} ${rRoad}`.trim();
+        const rAddrNorm = normalizeThaiAddress(rAddr);
+        const combinedNorm = normalizeThaiAddress(combined);
+        const rRoadNorm = normalizeThaiAddress(rRoad);
+
+        const isMatch =
+            rAddr.toLowerCase() === target ||
+            combined.toLowerCase() === target ||
+            rAddrNorm === targetNorm ||
+            combinedNorm === targetNorm ||
+            (rRoadNorm && rAddrNorm && targetNorm.includes(rAddrNorm) && targetNorm.includes(rRoadNorm));
+
+        if (isMatch) {
+            const rawRisk = riskIdx !== -1 ? String(r[riskIdx] || '').trim() : '';
+            return { exists: true, riskLabel: rawRisk || 'ปกติ' };
+        }
+    }
+    return null;
+}
+
+function getCoordsAndRoadForAddress(cleanAddr) {
+    const cleanNorm = normalizeThaiAddress(cleanAddr);
+    let lat = null;
+    let lng = null;
+    if (typeof store !== 'undefined' && Array.isArray(store.addressEvac)) {
+        let found = store.addressEvac.find(row => String(row[0] || '').trim() === cleanAddr);
+        if (!found && cleanNorm) {
+            found = store.addressEvac.find(row => normalizeThaiAddress(row[0]) === cleanNorm);
+        }
+        if (found) {
+            const pLat = parseFloat(found[1]);
+            const pLng = parseFloat(found[2]);
+            if (!isNaN(pLat) && !isNaN(pLng)) {
+                lat = pLat;
+                lng = pLng;
+            }
+        }
+    }
+
+    let road = '';
+    let address = cleanAddr.replace(/\s*ตันหยงมัส$/i, '').trim();
+
+    // 1. ค้นหาชื่อถนนจาก ZONE_RULES โดยเรียงจากชื่อยาวไปสั้น และเก็บเฉพาะชื่อถนน (ไม่มีคำว่า "ถนน" นำหน้า เพื่อให้ตรงกับ Flood_DATA_2569)
+    if (typeof window.ZONE_RULES === 'object' && window.ZONE_RULES) {
+        const allRoads = Object.values(window.ZONE_RULES).flat().sort((a, b) => b.length - a.length);
+        for (const rName of allRoads) {
+            const rCore = rName.replace(/^ถนน\s*/, '').trim();
+            const regex = new RegExp(`(?:ถ\\.\\s*ถนน|ถ\\.\\s*|ถนน\\s*)?${rCore.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+            if (regex.test(address)) {
+                road = rCore;
+                const stripped = address.replace(regex, '').trim();
+                if (stripped) address = stripped;
+                break;
+            }
+        }
+    }
+
+    // 2. Fallback: แยกคำว่า ถนน / ถ. ถึงท้ายข้อความ (ตัดคำว่า ถนน ออกให้ตรงกับ Flood_DATA_2569)
+    if (!road) {
+        const roadMatch = address.match(/(?:ถ\.\s*)?(ถนน.+)$/i) || address.match(/ถ\.\s*(.+)$/i);
+        if (roadMatch) {
+            road = roadMatch[1].replace(/^ถนน\s*/i, '').trim();
+            const stripped = address.slice(0, roadMatch.index).trim();
+            if (stripped) address = stripped;
+        }
+    }
+
+    return { lat, lng, road, address };
+}
+
+function getFloodSyncNoticeHtml(cleanAddr) {
+    const existing = findExistingFloodDataByAddress(cleanAddr);
+    if (existing) {
+        return {
+            exists: true,
+            boxClass: 'bg-amber-50 border-amber-200 text-amber-800',
+            html: `<i class="fas fa-info-circle text-amber-600 mt-0.5 shrink-0"></i><span><b>พบที่อยู่นี้ในรายงานน้ำท่วมแล้ว</b> (กลุ่ม: ${existing.riskLabel}) — ระบบจะบันทึกเฉพาะการแจกถุงยังชีพ ไม่เพิ่มข้อมูลน้ำท่วมซ้ำ</span>`
+        };
+    }
+    return {
+        exists: false,
+        boxClass: 'bg-sky-50 border-sky-200 text-sky-800',
+        html: `<i class="fas fa-map-pin text-sky-600 mt-0.5 shrink-0"></i><span><b>ยังไม่พบในรายงานน้ำท่วม</b> — ระบบจะเพิ่มข้อมูลและปักหมุดกลุ่ม <b>"ปกติ"</b> ในหน้ารายงานน้ำท่วมให้อัตโนมัติ (เว้นชื่อว่าง)</span>`
+    };
+}
+
+function updateManualReliefFloodSyncNotice(addr) {
+    const noticeEl = document.getElementById('rel_flood_sync_notice');
+    if (!noticeEl) return;
+    const cleanAddr = String(addr || '').trim();
+    if (!cleanAddr) {
+        noticeEl.classList.add('hidden');
+        noticeEl.innerHTML = '';
+        return;
+    }
+    const info = getFloodSyncNoticeHtml(cleanAddr);
+    noticeEl.className = `mt-2 p-2.5 rounded-xl border text-[11px] font-bold flex items-start gap-2 ${info.boxClass}`;
+    noticeEl.innerHTML = info.html;
+    noticeEl.classList.remove('hidden');
+}
+
+async function syncReliefToFloodDataIfNeeded(cleanAddr, membersCount) {
+    const existing = findExistingFloodDataByAddress(cleanAddr);
+    if (existing) {
+        return { synced: false, reason: 'exists', riskLabel: existing.riskLabel };
+    }
+    if (typeof sbSaveFloodDataRecord !== 'function') {
+        return { synced: false, reason: 'unavailable' };
+    }
+
+    const { lat, lng, road, address } = getCoordsAndRoadForAddress(cleanAddr);
+    const period = typeof currentPeriod !== 'undefined' && currentPeriod ? currentPeriod : '2569';
+    const res = await sbSaveFloodDataRecord({
+        road,
+        address,
+        name: '',
+        status: 'ปกติ',
+        residents: parseInt(membersCount, 10) || 1,
+        contact: '',
+        lat,
+        lng,
+        risk: 'ปกติ',
+        details: 'เพิ่มอัตโนมัติจากการบันทึกแจกถุงยังชีพ'
+    }, period);
+
+    if (res && res.success && res.data && typeof store !== 'undefined' && Array.isArray(store.floodData) && store.floodData.length > 0) {
+        const headers = store.floodData[0];
+        const newRow = headers.map(h => (res.data[h] !== undefined && res.data[h] !== null) ? res.data[h] : '');
+        store.floodData.push(newRow);
+        if (typeof renderFloodReportDashboard === 'function') renderFloodReportDashboard();
+        if (typeof renderDashOneMapLayers === 'function') renderDashOneMapLayers();
+    }
+    return { synced: true };
+}
+
 window.quickSaveReliefByAddress = async function (addr, btnEl) {
     if (typeof checkAdminReadOnlyAction === 'function' && checkAdminReadOnlyAction()) return;
 
@@ -395,6 +567,62 @@ window.quickSaveReliefByAddress = async function (addr, btnEl) {
         }
     }
 
+    // ตรวจสอบสถานะหมุดในรายงานน้ำท่วม และถามจำนวนผู้อาศัยก่อนบันทึก
+    const syncNotice = getFloodSyncNoticeHtml(cleanAddr);
+    const { value: memberCount } = await Swal.fire({
+        title: '<div class="text-slate-800 font-black text-base sm:text-lg flex items-center justify-center gap-2"><i class="fas fa-box-open text-amber-500"></i> ยืนยันบันทึกแจกถุงยังชีพ</div>',
+        html: `
+            <div class="text-left space-y-3 mt-1">
+                <div class="bg-slate-50 p-3 rounded-xl border border-slate-200">
+                    <span class="text-[10px] font-bold text-slate-400 uppercase block">ที่อยู่ผู้รับถุงยังชีพ</span>
+                    <span class="text-sm font-black text-slate-800">${cleanAddr}</span>
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-slate-700 block mb-1.5">จำนวนผู้อาศัยในบ้าน (คน) *</label>
+                    <div class="grid grid-cols-5 gap-1.5 mb-2">
+                        ${[1, 2, 3, 4, 5].map(n => `
+                            <button type="button" onclick="const inp=document.getElementById('swal_quick_relief_members'); if(inp){inp.value='${n}';}" class="py-2 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 font-black text-xs transition active:scale-95">${n} คน</button>
+                        `).join('')}
+                    </div>
+                    <input type="number" id="swal_quick_relief_members" min="1" value="1" inputmode="numeric"
+                        class="w-full p-3 bg-white border-2 border-amber-300 focus:border-amber-500 rounded-xl text-center text-lg font-black text-slate-800 outline-none">
+                </div>
+                <div class="p-2.5 rounded-xl border text-[11px] font-semibold flex items-start gap-2 ${syncNotice.boxClass}">
+                    ${syncNotice.html}
+                </div>
+            </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: '<i class="fas fa-check mr-1"></i> ยืนยันบันทึกแจก',
+        cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: '#f59e0b',
+        reverseButtons: true,
+        customClass: { popup: 'rounded-[1.75rem] w-[92vw] max-w-sm p-5' },
+        didOpen: () => {
+            const inp = document.getElementById('swal_quick_relief_members');
+            if (inp) {
+                inp.focus();
+                inp.select();
+                inp.addEventListener('keydown', (ev) => {
+                    if (ev.key === 'Enter') {
+                        ev.preventDefault();
+                        Swal.clickConfirm();
+                    }
+                });
+            }
+        },
+        preConfirm: () => {
+            const val = parseInt(document.getElementById('swal_quick_relief_members')?.value, 10);
+            if (isNaN(val) || val < 1) {
+                Swal.showValidationMessage('กรุณาระบุจำนวนผู้อาศัยตั้งแต่ 1 คนขึ้นไป');
+                return false;
+            }
+            return val;
+        }
+    });
+
+    if (!memberCount) return;
+
     const originalBtnHTML = btnEl ? btnEl.innerHTML : '';
     if (btnEl) {
         btnEl.disabled = true;
@@ -405,7 +633,7 @@ window.quickSaveReliefByAddress = async function (addr, btnEl) {
         action: 'saveRelief',
         name: '', // เว้นว่างตามความต้องการเพื่อความรวดเร็ว
         status: 'เจ้าบ้าน',
-        members: 1,
+        members: memberCount,
         address: cleanAddr,
         regisAddress: cleanAddr,
         period: typeof currentPeriod !== 'undefined' ? currentPeriod : ''
@@ -418,14 +646,23 @@ window.quickSaveReliefByAddress = async function (addr, btnEl) {
             throw new Error('Supabase Service ไม่พร้อมทำงาน');
         }
 
+        // เชื่อมโยงเพิ่มข้อมูลกลุ่ม "ปกติ" ในรายงานข้อมูลน้ำท่วมหากยังไม่มีที่อยู่นี้
+        let syncResult = { synced: false };
+        try {
+            syncResult = await syncReliefToFloodDataIfNeeded(cleanAddr, memberCount);
+        } catch (syncErr) {
+            console.warn('⚠️ เชื่อมโยงรายงานน้ำท่วมไม่สำเร็จ:', syncErr);
+        }
+
         // เพิ่มข้อมูลลงใน local store ทันที (Optimistic UI)
         if (!store.reliefData) store.reliefData = [];
         const nowIso = new Date().toISOString();
-        store.reliefData.unshift([nowIso, '', 'เจ้าบ้าน', 1, cleanAddr, cleanAddr]);
+        store.reliefData.unshift([nowIso, '', 'เจ้าบ้าน', memberCount, cleanAddr, cleanAddr]);
 
         // อัปเดตตารางหลักและ Dashboard ด้านหลัง
         if (typeof renderReliefTable === 'function') renderReliefTable();
         if (typeof renderStockDashboard === 'function') renderStockDashboard();
+        if (typeof renderDashOneMapLayers === 'function') renderDashOneMapLayers();
 
         // รีเฟรชรายการใน Modal ทันที ให้เปลี่ยนเป็นสถานะ "รับแล้ว"
         window.renderModalZoneAddresses();
@@ -435,12 +672,12 @@ window.quickSaveReliefByAddress = async function (addr, btnEl) {
             toast: true,
             position: 'top-end',
             showConfirmButton: false,
-            timer: 2000,
+            timer: 2500,
             timerProgressBar: true
         });
         Toast.fire({
             icon: 'success',
-            title: `บันทึกแจกถุงยังชีพสำเร็จ:<br><span class="text-xs text-slate-600 font-bold">${cleanAddr}</span>`
+            title: `บันทึกแจกถุงยังชีพ (${memberCount} คน) สำเร็จ:<br><span class="text-xs text-slate-600 font-bold">${cleanAddr}${syncResult.synced ? ' + ปักหมุดรายงานน้ำท่วมแล้ว' : ''}</span>`
         });
     } catch (err) {
         if (btnEl) {
@@ -467,6 +704,7 @@ window.openReliefModal = function () {
 
     const resultBox = document.getElementById('rel_address_results');
     if (resultBox) resultBox.classList.add('hidden');
+    updateManualReliefFloodSyncNotice('');
 
     const searchInput = document.getElementById('reliefZoneSearchInput');
     if (searchInput) searchInput.value = '';
@@ -487,6 +725,7 @@ window.closeReliefModal = function () {
 
     const resultBox = document.getElementById('rel_address_results');
     if (resultBox) resultBox.classList.add('hidden');
+    updateManualReliefFloodSyncNotice('');
 };
 
 window.copyAddress = function (isChecked) {
@@ -544,6 +783,13 @@ window.saveReliefData = async function (e) {
             await sbSaveRelief(payload);
         } else {
             throw new Error('Supabase Service ไม่พร้อมทำงาน');
+        }
+
+        // เชื่อมโยงเพิ่มข้อมูลกลุ่ม "ปกติ" ในรายงานข้อมูลน้ำท่วมหากยังไม่มีที่อยู่นี้
+        try {
+            await syncReliefToFloodDataIfNeeded(address, payload.members);
+        } catch (syncErr) {
+            console.warn('⚠️ เชื่อมโยงรายงานน้ำท่วมไม่สำเร็จ:', syncErr);
         }
 
         Swal.fire({

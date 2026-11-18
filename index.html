@@ -1155,13 +1155,14 @@
                                 class="p-4 md:p-5 bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 text-white flex flex-col lg:flex-row justify-between lg:items-center gap-4">
                                 <div class="flex items-center gap-3">
                                     <div
-                                        class="w-10 h-10 rounded-xl bg-blue-600/30 border border-blue-400/30 flex items-center justify-center text-blue-400 text-lg shadow-inner shrink-0">
-                                        <i class="fas fa-layer-group"></i>
+                                        class="w-10 h-10 rounded-xl bg-white/95 border border-blue-300/40 flex items-center justify-center p-1 shadow-inner shrink-0 overflow-hidden">
+                                        <img src="assets/logo.png" alt="โลโก้เทศบาลตำบลตันหยงมัส"
+                                            class="w-full h-full object-contain">
                                     </div>
                                     <div>
                                         <h3
-                                            class="text-base font-black tracking-tight text-white flex items-center gap-2">
-                                            One Map - แผนที่รวมสถานการณ์ภัยพิบัติ
+                                            class="text-base font-black tracking-tight text-white flex items-center gap-2 flex-wrap">
+                                            One Map - แผนที่รวมสถานการณ์อุทกภัย เทศบาลตำบลตันหยงมัส
                                             <span
                                                 class="text-[9px] bg-blue-500/20 text-blue-300 border border-blue-400/30 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">Live
                                                 System</span>
@@ -1170,8 +1171,47 @@
                                     </div>
                                 </div>
 
-                                <!-- ปุ่มสลับฐานแผนที่ (Basemap Selector) + ปุ่มขยายเต็มจอ (Fullscreen) -->
+                                <!-- ปุ่มสลับฐานแผนที่ (Basemap Selector) + แถบควบคุมกล่อง HUD (เฉพาะ Fullscreen) + ปุ่มขยายเต็มจอ -->
                                 <div class="flex items-center gap-2 flex-wrap self-start lg:self-auto shrink-0">
+                                    <!-- แถบเปิด/ปิดกล่อง HUD ในโหมด Fullscreen -->
+                                    <div class="onemap-hud-controls items-center gap-1.5 bg-slate-800/90 p-1 rounded-xl border border-slate-700/70 shadow-inner shrink-0 flex-wrap">
+                                        <button type="button" onclick="toggleOneMapHudWidget('x73')" id="btnHudToggleX73"
+                                            class="px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 bg-sky-600 text-white shadow-sm"
+                                            title="เปิด/ปิด กล่องระดับน้ำสถานี X.73">
+                                            <i class="fas fa-water"></i> X.73
+                                        </button>
+                                        <button type="button" onclick="toggleOneMapHudWidget('shelter')" id="btnHudToggleShelter"
+                                            class="px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 bg-pink-600 text-white shadow-sm"
+                                            title="เปิด/ปิด กล่องจำนวนผู้เข้าพักพิง">
+                                            <i class="fas fa-campground"></i> พักพิง
+                                        </button>
+                                        <button type="button" onclick="toggleOneMapHudWidget('cctv')" id="btnHudToggleCctv"
+                                            class="px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 bg-indigo-600 text-white shadow-sm"
+                                            title="เปิด/ปิด กล้อง CCTV">
+                                            <i class="fas fa-video"></i> CCTV
+                                        </button>
+                                        <button type="button" onclick="toggleOneMapHudWidget('relief')" id="btnHudToggleRelief"
+                                            class="px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 bg-amber-600 text-white shadow-sm"
+                                            title="เปิด/ปิด ภาพรวมการแจกจ่ายถุงยังชีพ">
+                                            <i class="fas fa-box-open"></i> ถุงยังชีพ
+                                        </button>
+                                        <button type="button" onclick="toggleOneMapHudWidget('evac')" id="btnHudToggleEvac"
+                                            class="px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 bg-purple-600 text-white shadow-sm"
+                                            title="เปิด/ปิด ภาพรวมสถานะอพยพ/ปลอดภัย">
+                                            <i class="fas fa-person-running"></i> อพยพ/ปลอดภัย
+                                        </button>
+                                        <button type="button" onclick="toggleOneMapHudTheme()" id="btnHudThemeToggle"
+                                            class="px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 bg-slate-700 text-amber-300 hover:bg-slate-600 border border-slate-600/80"
+                                            title="สลับโหมดสีกล่อง HUD (มืด/สว่าง)">
+                                            <i class="fas fa-moon"></i> มืด
+                                        </button>
+                                        <button type="button" onclick="resetOneMapHudPositions()"
+                                            class="px-2 py-1.5 rounded-lg text-[11px] font-bold transition-all flex items-center gap-1 text-slate-300 hover:text-white hover:bg-slate-700/70"
+                                            title="รีเซ็ตตำแหน่งกล่องทั้งหมด">
+                                            <i class="fas fa-rotate-left"></i>
+                                        </button>
+                                    </div>
+
                                     <div
                                         class="flex items-center bg-slate-800/80 p-1 rounded-xl border border-slate-700/60 shadow-inner shrink-0">
                                         <button type="button" onclick="toggleDashBaseMap('osm')" id="btnBasemapOsm"
@@ -1248,8 +1288,154 @@
                                 </button>
                             </div>
 
-                            <!-- พื้นที่แสดงแผนที่ One Map -->
-                            <div id="dashOneMap" class="w-full h-[450px] md:h-[550px] z-10 relative bg-slate-100"></div>
+                            <!-- พื้นที่แสดงแผนที่ One Map + Floating HUD Layer (Fullscreen) -->
+                            <div id="dashOneMapViewport" class="relative w-full h-[450px] md:h-[550px] bg-slate-100">
+                                <div id="dashOneMap" class="w-full h-full z-10 relative bg-slate-100"></div>
+
+                                <!-- Floating HUD Overlay (แสดงเฉพาะโหมด Fullscreen) -->
+                                <div id="onemapHudLayer" class="onemap-hud-layer">
+                                    <!-- 1. กล่องระดับน้ำสถานี X.73 -->
+                                    <div id="hudWidgetX73" class="onemap-hud-widget" style="top: 16px; right: 16px;">
+                                        <div class="onemap-hud-drag-handle px-3 py-2 bg-slate-800/90 border-b border-slate-700/80 flex items-center justify-between gap-2">
+                                            <div class="flex items-center gap-2 min-w-0">
+                                                <i class="fas fa-grip-vertical text-slate-400 text-[10px]"></i>
+                                                <span class="w-2 h-2 rounded-full bg-sky-400 shrink-0"></span>
+                                                <span class="text-xs font-black text-white truncate">ระดับน้ำสถานี X.73</span>
+                                            </div>
+                                            <div class="flex items-center gap-1 shrink-0">
+                                                <button type="button" onclick="refreshOneMapHudTelemetry(event)"
+                                                    class="w-6 h-6 rounded-lg text-slate-300 hover:text-white hover:bg-slate-700/80 flex items-center justify-center text-[10px] transition"
+                                                    title="รีเฟรชข้อมูล X.73">
+                                                    <i class="fas fa-sync-alt"></i>
+                                                </button>
+                                                <button type="button" id="btnHudCollapseX73" onclick="toggleOneMapHudCollapse('x73', event)"
+                                                    class="w-6 h-6 rounded-lg text-slate-300 hover:text-white hover:bg-slate-700/80 flex items-center justify-center text-[10px] transition"
+                                                    title="ย่อ/ขยายกล่องนี้">
+                                                    <i class="fas fa-chevron-up"></i>
+                                                </button>
+                                                <button type="button" onclick="toggleOneMapHudWidget('x73', false)"
+                                                    class="w-6 h-6 rounded-lg text-slate-400 hover:text-rose-300 hover:bg-rose-500/20 flex items-center justify-center text-xs transition"
+                                                    title="ซ่อนกล่องนี้">
+                                                    <i class="fas fa-times"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div id="hudWidgetX73Body" class="onemap-hud-body p-3 text-xs space-y-2">
+                                            <div class="text-slate-400 text-[11px]">กำลังโหลดข้อมูลสถานี X.73...</div>
+                                        </div>
+                                    </div>
+
+                                    <!-- 2. กล่องจำนวนผู้เข้าพักพิง -->
+                                    <div id="hudWidgetShelter" class="onemap-hud-widget" style="top: 190px; right: 16px;">
+                                        <div class="onemap-hud-drag-handle px-3 py-2 bg-slate-800/90 border-b border-slate-700/80 flex items-center justify-between gap-2">
+                                            <div class="flex items-center gap-2 min-w-0">
+                                                <i class="fas fa-grip-vertical text-slate-400 text-[10px]"></i>
+                                                <span class="w-2 h-2 rounded-full bg-pink-400 shrink-0"></span>
+                                                <span class="text-xs font-black text-white truncate">ผู้เข้าพักพิงในศูนย์</span>
+                                            </div>
+                                            <div class="flex items-center gap-1 shrink-0">
+                                                <button type="button" id="btnHudCollapseShelter" onclick="toggleOneMapHudCollapse('shelter', event)"
+                                                    class="w-6 h-6 rounded-lg text-slate-300 hover:text-white hover:bg-slate-700/80 flex items-center justify-center text-[10px] transition"
+                                                    title="ย่อ/ขยายกล่องนี้">
+                                                    <i class="fas fa-chevron-up"></i>
+                                                </button>
+                                                <button type="button" onclick="toggleOneMapHudWidget('shelter', false)"
+                                                    class="w-6 h-6 rounded-lg text-slate-400 hover:text-rose-300 hover:bg-rose-500/20 flex items-center justify-center text-xs transition shrink-0"
+                                                    title="ซ่อนกล่องนี้">
+                                                    <i class="fas fa-times"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div id="hudWidgetShelterBody" class="onemap-hud-body p-3 text-xs space-y-2 max-h-[240px] overflow-y-auto">
+                                            <div class="text-slate-400 text-[11px]">กำลังคำนวณยอดผู้เข้าพักพิง...</div>
+                                        </div>
+                                    </div>
+
+                                    <!-- 3. กล่องกล้อง CCTV 1 จอ -->
+                                    <div id="hudWidgetCctv" class="onemap-hud-widget" style="bottom: 16px; left: 16px; width: 310px;">
+                                        <div class="onemap-hud-drag-handle px-3 py-2 bg-slate-800/90 border-b border-slate-700/80 flex items-center justify-between gap-2">
+                                            <div class="flex items-center gap-2 min-w-0">
+                                                <i class="fas fa-grip-vertical text-slate-400 text-[10px]"></i>
+                                                <span class="w-2 h-2 rounded-full bg-indigo-400 shrink-0"></span>
+                                                <span class="text-xs font-black text-white truncate">กล้อง CCTV (1 จอ)</span>
+                                            </div>
+                                            <div class="flex items-center gap-1 shrink-0">
+                                                <button type="button" id="btnHudCollapseCctv" onclick="toggleOneMapHudCollapse('cctv', event)"
+                                                    class="w-6 h-6 rounded-lg text-slate-300 hover:text-white hover:bg-slate-700/80 flex items-center justify-center text-[10px] transition"
+                                                    title="ย่อ/ขยายกล่องนี้">
+                                                    <i class="fas fa-chevron-up"></i>
+                                                </button>
+                                                <button type="button" onclick="toggleOneMapHudWidget('cctv', false)"
+                                                    class="w-6 h-6 rounded-lg text-slate-400 hover:text-rose-300 hover:bg-rose-500/20 flex items-center justify-center text-xs transition shrink-0"
+                                                    title="ซ่อนกล่องนี้">
+                                                    <i class="fas fa-times"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="onemap-hud-body p-2.5 space-y-2">
+                                            <select id="hudCctvSelect" onchange="selectOneMapHudCctv(this.value)"
+                                                class="w-full px-2.5 py-1.5 rounded-lg bg-slate-800 border border-slate-600/80 text-white text-[11px] font-bold focus:outline-none focus:border-indigo-400">
+                                                <option value="">-- เลือกกล้อง CCTV --</option>
+                                            </select>
+                                            <div id="hudWidgetCctvBody" class="text-xs">
+                                                <div class="text-slate-400 text-[11px] py-6 text-center">ยังไม่มีข้อมูลกล้อง CCTV</div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- 4. กล่องภาพรวมการแจกจ่ายถุงยังชีพ -->
+                                    <div id="hudWidgetRelief" class="onemap-hud-widget" style="top: 16px; left: 16px;">
+                                        <div class="onemap-hud-drag-handle px-3 py-2 bg-slate-800/90 border-b border-slate-700/80 flex items-center justify-between gap-2">
+                                            <div class="flex items-center gap-2 min-w-0">
+                                                <i class="fas fa-grip-vertical text-slate-400 text-[10px]"></i>
+                                                <span class="w-2 h-2 rounded-full bg-amber-400 shrink-0"></span>
+                                                <span class="text-xs font-black text-white truncate">ภาพรวมแจกจ่ายถุงยังชีพ</span>
+                                            </div>
+                                            <div class="flex items-center gap-1 shrink-0">
+                                                <button type="button" id="btnHudCollapseRelief" onclick="toggleOneMapHudCollapse('relief', event)"
+                                                    class="w-6 h-6 rounded-lg text-slate-300 hover:text-white hover:bg-slate-700/80 flex items-center justify-center text-[10px] transition"
+                                                    title="ย่อ/ขยายกล่องนี้">
+                                                    <i class="fas fa-chevron-up"></i>
+                                                </button>
+                                                <button type="button" onclick="toggleOneMapHudWidget('relief', false)"
+                                                    class="w-6 h-6 rounded-lg text-slate-400 hover:text-rose-300 hover:bg-rose-500/20 flex items-center justify-center text-xs transition shrink-0"
+                                                    title="ซ่อนกล่องนี้">
+                                                    <i class="fas fa-times"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div id="hudWidgetReliefBody" class="onemap-hud-body p-3 text-xs space-y-2">
+                                            <div class="text-slate-400 text-[11px]">กำลังสรุปข้อมูลถุงยังชีพ...</div>
+                                        </div>
+                                    </div>
+
+                                    <!-- 5. กล่องภาพรวมสถานะการอพยพ/ปลอดภัย -->
+                                    <div id="hudWidgetEvac" class="onemap-hud-widget" style="top: 185px; left: 16px;">
+                                        <div class="onemap-hud-drag-handle px-3 py-2 bg-slate-800/90 border-b border-slate-700/80 flex items-center justify-between gap-2">
+                                            <div class="flex items-center gap-2 min-w-0">
+                                                <i class="fas fa-grip-vertical text-slate-400 text-[10px]"></i>
+                                                <span class="w-2 h-2 rounded-full bg-purple-400 shrink-0"></span>
+                                                <span class="text-xs font-black text-white truncate">สถานะอพยพ / ปลอดภัย</span>
+                                            </div>
+                                            <div class="flex items-center gap-1 shrink-0">
+                                                <button type="button" id="btnHudCollapseEvac" onclick="toggleOneMapHudCollapse('evac', event)"
+                                                    class="w-6 h-6 rounded-lg text-slate-300 hover:text-white hover:bg-slate-700/80 flex items-center justify-center text-[10px] transition"
+                                                    title="ย่อ/ขยายกล่องนี้">
+                                                    <i class="fas fa-chevron-up"></i>
+                                                </button>
+                                                <button type="button" onclick="toggleOneMapHudWidget('evac', false)"
+                                                    class="w-6 h-6 rounded-lg text-slate-400 hover:text-rose-300 hover:bg-rose-500/20 flex items-center justify-center text-xs transition shrink-0"
+                                                    title="ซ่อนกล่องนี้">
+                                                    <i class="fas fa-times"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div id="hudWidgetEvacBody" class="onemap-hud-body p-3 text-xs space-y-2">
+                                            <div class="text-slate-400 text-[11px]">กำลังสรุปสถานะอพยพ/ปลอดภัย...</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
 
                             <!-- แถบอธิบายสัญลักษณ์ (Legend Bar) -->
                             <div
@@ -1815,22 +2001,30 @@
 
                             <div id="waterMap" class="w-full h-[400px] md:h-[500px] z-10"></div>
 
-                            <div class="p-4 bg-slate-50 flex flex-wrap gap-4 justify-center border-t border-slate-100">
-                                <div class="flex items-center space-x-2">
-                                    <div class="w-3 h-3 rounded-full bg-green-500 shadow-sm"></div>
-                                    <span class="text-[10px] font-bold text-slate-500">ปกติ (0 ซม.)</span>
+                            <div class="p-4 bg-slate-50 flex flex-wrap gap-3 md:gap-4 justify-center border-t border-slate-100">
+                                <div class="flex items-center space-x-1.5">
+                                    <div class="w-3 h-3 rounded-full bg-emerald-500 shadow-sm"></div>
+                                    <span class="text-[10px] font-bold text-slate-600">แห้ง (&lt; 10 ซม.)</span>
                                 </div>
-                                <div class="flex items-center space-x-2">
-                                    <div class="w-3 h-3 rounded-full bg-yellow-400 shadow-sm"></div>
-                                    <span class="text-[10px] font-bold text-slate-500">เฝ้าระวัง (1-30 ซม.)</span>
+                                <div class="flex items-center space-x-1.5">
+                                    <div class="w-3 h-3 rounded-full bg-sky-500 shadow-sm"></div>
+                                    <span class="text-[10px] font-bold text-slate-600">ข้อเท้า - เข่า (10-49 ซม.)</span>
                                 </div>
-                                <div class="flex items-center space-x-2">
+                                <div class="flex items-center space-x-1.5">
+                                    <div class="w-3 h-3 rounded-full bg-amber-500 shadow-sm"></div>
+                                    <span class="text-[10px] font-bold text-slate-600">เข่า - เอว (50-99 ซม.)</span>
+                                </div>
+                                <div class="flex items-center space-x-1.5">
                                     <div class="w-3 h-3 rounded-full bg-orange-500 shadow-sm"></div>
-                                    <span class="text-[10px] font-bold text-slate-500">เตือนภัย (31-80 ซม.)</span>
+                                    <span class="text-[10px] font-bold text-slate-600">เอว - อก (100-129 ซม.)</span>
                                 </div>
-                                <div class="flex items-center space-x-2">
-                                    <div class="w-3 h-3 rounded-full bg-red-600 shadow-sm"></div>
-                                    <span class="text-[10px] font-bold text-slate-500">วิกฤต (>81 ซม.)</span>
+                                <div class="flex items-center space-x-1.5">
+                                    <div class="w-3 h-3 rounded-full bg-rose-600 shadow-sm"></div>
+                                    <span class="text-[10px] font-bold text-slate-600">อกขึ้นไป (130-180 ซม.)</span>
+                                </div>
+                                <div class="flex items-center space-x-1.5">
+                                    <div class="w-3 h-3 rounded-full bg-purple-600 shadow-sm"></div>
+                                    <span class="text-[10px] font-bold text-slate-600">มิดหัว (&gt; 180 ซม.)</span>
                                 </div>
                             </div>
                         </div>
@@ -2004,11 +2198,69 @@
                                 </div>
                             </div>
 
+                            <!-- ตัวเลือกระดับน้ำแบบเปรียบเทียบ (แห้ง - มิดหัว) เชื่อมกับช่องกรอกตัวเลข -->
+                            <div>
+                                <div class="flex items-center justify-between gap-2 mb-1.5">
+                                    <label class="text-xs font-bold text-slate-500 ml-1">เลือกระดับน้ำ (กดเพื่อกรอกค่ากลางอัตโนมัติ)</label>
+                                    <span id="staff_water_level_badge" class="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">ยังไม่ได้ระบุ</span>
+                                </div>
+                                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2" id="staffWaterLevelGrid">
+                                    <button type="button" data-min="0" data-max="9" data-active-class="border-emerald-500 bg-emerald-50 text-emerald-800 ring-2 ring-emerald-400" onclick="selectStaffWaterLevel(0, this)"
+                                        class="staff-water-level-btn p-2.5 rounded-2xl border border-slate-200 bg-slate-50/80 hover:bg-slate-100 text-slate-700 text-left transition-all active:scale-95">
+                                        <div class="flex items-center justify-between mb-0.5">
+                                            <span class="font-bold text-xs">แห้ง</span>
+                                            <i class="fas fa-sun text-xs text-emerald-500"></i>
+                                        </div>
+                                        <span class="text-[10px] text-slate-500 font-semibold">&lt; 10 ซม.</span>
+                                    </button>
+                                    <button type="button" data-min="10" data-max="49" data-active-class="border-sky-500 bg-sky-50 text-sky-800 ring-2 ring-sky-400" onclick="selectStaffWaterLevel(25, this)"
+                                        class="staff-water-level-btn p-2.5 rounded-2xl border border-slate-200 bg-slate-50/80 hover:bg-slate-100 text-slate-700 text-left transition-all active:scale-95">
+                                        <div class="flex items-center justify-between mb-0.5">
+                                            <span class="font-bold text-xs">ข้อเท้า - เข่า</span>
+                                            <i class="fas fa-shoe-prints text-xs text-sky-500"></i>
+                                        </div>
+                                        <span class="text-[10px] text-slate-500 font-semibold">10–49 ซม.</span>
+                                    </button>
+                                    <button type="button" data-min="50" data-max="99" data-active-class="border-amber-500 bg-amber-50 text-amber-800 ring-2 ring-amber-400" onclick="selectStaffWaterLevel(75, this)"
+                                        class="staff-water-level-btn p-2.5 rounded-2xl border border-slate-200 bg-slate-50/80 hover:bg-slate-100 text-slate-700 text-left transition-all active:scale-95">
+                                        <div class="flex items-center justify-between mb-0.5">
+                                            <span class="font-bold text-xs">เข่า - เอว</span>
+                                            <i class="fas fa-person-walking text-xs text-amber-500"></i>
+                                        </div>
+                                        <span class="text-[10px] text-slate-500 font-semibold">50–99 ซม.</span>
+                                    </button>
+                                    <button type="button" data-min="100" data-max="129" data-active-class="border-orange-500 bg-orange-50 text-orange-800 ring-2 ring-orange-400" onclick="selectStaffWaterLevel(115, this)"
+                                        class="staff-water-level-btn p-2.5 rounded-2xl border border-slate-200 bg-slate-50/80 hover:bg-slate-100 text-slate-700 text-left transition-all active:scale-95">
+                                        <div class="flex items-center justify-between mb-0.5">
+                                            <span class="font-bold text-xs">เอว - อก</span>
+                                            <i class="fas fa-person-swimming text-xs text-orange-500"></i>
+                                        </div>
+                                        <span class="text-[10px] text-slate-500 font-semibold">100–129 ซม.</span>
+                                    </button>
+                                    <button type="button" data-min="130" data-max="180" data-active-class="border-rose-500 bg-rose-50 text-rose-800 ring-2 ring-rose-400" onclick="selectStaffWaterLevel(150, this)"
+                                        class="staff-water-level-btn p-2.5 rounded-2xl border border-slate-200 bg-slate-50/80 hover:bg-slate-100 text-slate-700 text-left transition-all active:scale-95">
+                                        <div class="flex items-center justify-between mb-0.5">
+                                            <span class="font-bold text-xs">อกขึ้นไป</span>
+                                            <i class="fas fa-triangle-exclamation text-xs text-rose-500"></i>
+                                        </div>
+                                        <span class="text-[10px] text-slate-500 font-semibold">130–180 ซม.</span>
+                                    </button>
+                                    <button type="button" data-min="181" data-max="9999" data-active-class="border-purple-600 bg-purple-50 text-purple-900 ring-2 ring-purple-500" onclick="selectStaffWaterLevel(190, this)"
+                                        class="staff-water-level-btn p-2.5 rounded-2xl border border-slate-200 bg-slate-50/80 hover:bg-slate-100 text-slate-700 text-left transition-all active:scale-95">
+                                        <div class="flex items-center justify-between mb-0.5">
+                                            <span class="font-bold text-xs">มิดหัว</span>
+                                            <i class="fas fa-house-crack text-xs text-purple-600"></i>
+                                        </div>
+                                        <span class="text-[10px] text-slate-500 font-semibold">&gt; 180 ซม.</span>
+                                    </button>
+                                </div>
+                            </div>
+
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
-                                    <label class="text-xs font-bold text-slate-500 ml-1">ระดับน้ำ (ซม.)</label>
-                                    <input type="number" id="water_val"
-                                        class="w-full p-3 border border-blue-100 bg-blue-50 rounded-xl font-bold text-blue-600 outline-none"
+                                    <label class="text-xs font-bold text-slate-500 ml-1">ระดับน้ำ (ซม.) *</label>
+                                    <input type="number" id="water_val" min="0" inputmode="numeric" oninput="syncStaffWaterLevelCard(this.value)" placeholder="ระบุความลึกเป็นตัวเลข (ซม.)"
+                                        class="w-full p-3 border border-blue-100 bg-blue-50 rounded-xl font-bold text-blue-600 outline-none focus:ring-2 focus:ring-blue-400"
                                         required>
                                 </div>
                                 <div>
@@ -2880,6 +3132,9 @@
 
                                     <div id="rel_address_results"
                                         class="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl hidden max-h-48 overflow-y-auto z-[100] custom-scrollbar">
+                                    </div>
+                                    <div id="rel_flood_sync_notice"
+                                        class="hidden mt-2 p-2.5 rounded-xl border text-[11px] font-bold flex items-start gap-2">
                                     </div>
                                 </div>
 

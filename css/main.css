@@ -49,10 +49,151 @@ body {
     flex-direction: column !important;
 }
 
+#dashOneMapCard.onemap-fullscreen #dashOneMapViewport {
+    flex: 1 !important;
+    height: 100% !important;
+    min-height: 0 !important;
+}
+
 #dashOneMapCard.onemap-fullscreen #dashOneMap {
     flex: 1 !important;
     height: 100% !important;
     min-height: 0 !important;
+}
+
+/* 🎛️ One Map Fullscreen Floating HUD Widgets */
+.onemap-hud-controls {
+    display: none;
+}
+
+#dashOneMapCard.onemap-fullscreen .onemap-hud-controls {
+    display: flex;
+}
+
+.onemap-hud-layer {
+    display: none;
+    position: absolute;
+    inset: 0;
+    z-index: 1000;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+#dashOneMapCard.onemap-fullscreen .onemap-hud-layer {
+    display: block;
+}
+
+.onemap-hud-widget {
+    position: absolute;
+    pointer-events: auto;
+    width: 280px;
+    max-width: calc(100vw - 24px);
+    background: rgba(15, 23, 42, 0.9);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    border-radius: 1rem;
+    box-shadow: 0 18px 40px -12px rgba(2, 6, 23, 0.65);
+    color: #f8fafc;
+    overflow: hidden;
+    transition: box-shadow 0.2s ease;
+}
+
+.onemap-hud-widget.is-dragging {
+    box-shadow: 0 24px 50px -10px rgba(37, 99, 235, 0.45);
+    border-color: rgba(96, 165, 250, 0.6);
+    user-select: none;
+}
+
+.onemap-hud-drag-handle {
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+}
+
+.onemap-hud-drag-handle:active {
+    cursor: grabbing;
+}
+
+.onemap-hud-widget.is-collapsed .onemap-hud-body {
+    display: none;
+}
+
+/* ☀️ One Map HUD Light Mode */
+#onemapHudLayer.hud-theme-light .onemap-hud-widget {
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(203, 213, 225, 0.95);
+    color: #0f172a;
+    box-shadow: 0 18px 40px -12px rgba(15, 23, 42, 0.22);
+}
+
+#onemapHudLayer.hud-theme-light .onemap-hud-drag-handle {
+    background: rgba(241, 245, 249, 0.96) !important;
+    border-bottom-color: rgba(226, 232, 240, 0.95) !important;
+}
+
+#onemapHudLayer.hud-theme-light .onemap-hud-widget .text-white:not(.hud-keep-white) {
+    color: #0f172a !important;
+}
+
+#onemapHudLayer.hud-theme-light .onemap-hud-widget .text-slate-200,
+#onemapHudLayer.hud-theme-light .onemap-hud-widget .text-slate-300 {
+    color: #334155 !important;
+}
+
+#onemapHudLayer.hud-theme-light .onemap-hud-widget .text-slate-400 {
+    color: #64748b !important;
+}
+
+#onemapHudLayer.hud-theme-light .onemap-hud-widget .bg-slate-800,
+#onemapHudLayer.hud-theme-light .onemap-hud-widget .bg-slate-800\/70,
+#onemapHudLayer.hud-theme-light .onemap-hud-widget .bg-slate-800\/80 {
+    background-color: #f8fafc !important;
+}
+
+#onemapHudLayer.hud-theme-light .onemap-hud-widget .bg-slate-700,
+#onemapHudLayer.hud-theme-light .onemap-hud-widget .bg-slate-700\/80 {
+    background-color: #e2e8f0 !important;
+}
+
+#onemapHudLayer.hud-theme-light .onemap-hud-widget .border-slate-700\/60,
+#onemapHudLayer.hud-theme-light .onemap-hud-widget .border-slate-700\/70,
+#onemapHudLayer.hud-theme-light .onemap-hud-widget .border-slate-700\/80,
+#onemapHudLayer.hud-theme-light .onemap-hud-widget .border-slate-600\/80 {
+    border-color: #cbd5e1 !important;
+}
+
+#onemapHudLayer.hud-theme-light .onemap-hud-widget .text-pink-200,
+#onemapHudLayer.hud-theme-light .onemap-hud-widget .text-pink-300 {
+    color: #be185d !important;
+}
+
+#onemapHudLayer.hud-theme-light .onemap-hud-widget .text-amber-200,
+#onemapHudLayer.hud-theme-light .onemap-hud-widget .text-amber-300:not(.hud-keep-amber) {
+    color: #b45309 !important;
+}
+
+#onemapHudLayer.hud-theme-light .onemap-hud-widget .text-purple-200,
+#onemapHudLayer.hud-theme-light .onemap-hud-widget .text-purple-300,
+#onemapHudLayer.hud-theme-light .onemap-hud-widget .text-purple-200\/80 {
+    color: #7e22ce !important;
+}
+
+#onemapHudLayer.hud-theme-light .onemap-hud-widget .text-rose-200,
+#onemapHudLayer.hud-theme-light .onemap-hud-widget .text-rose-300,
+#onemapHudLayer.hud-theme-light .onemap-hud-widget .text-rose-200\/80 {
+    color: #be123c !important;
+}
+
+#onemapHudLayer.hud-theme-light .onemap-hud-widget .text-emerald-200,
+#onemapHudLayer.hud-theme-light .onemap-hud-widget .text-emerald-300,
+#onemapHudLayer.hud-theme-light .onemap-hud-widget .text-emerald-200\/80 {
+    color: #047857 !important;
+}
+
+#onemapHudLayer.hud-theme-light .onemap-hud-widget .text-sky-300,
+#onemapHudLayer.hud-theme-light .onemap-hud-widget .text-sky-400 {
+    color: #0369a1 !important;
 }
 
 /* Sidebar Desktop Logic */
