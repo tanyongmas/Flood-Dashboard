@@ -950,9 +950,9 @@ function openEvacuationForm(status) {
 }
 
 window.showQRCode = function () {
-    // กำหนด URL ปัจจุบัน: ใช้ https://tanyongmas.github.io/Flood-Dashboard/?mode=report
-    let publicUrl = "https://tanyongmas.github.io/Flood-Dashboard/?mode=report";
-    if (window.location.hostname.includes('github.io')) {
+    // กำหนด URL ปัจจุบันอัตโนมัติ (รองรับทั้ง tanyongmasflood.pages.dev และโดเมนที่ผูกไว้)
+    let publicUrl = "https://tanyongmasflood.pages.dev/?mode=report";
+    if (window.location && window.location.protocol && window.location.protocol.startsWith('http')) {
         let base = window.location.origin + window.location.pathname;
         if (!base.endsWith('/')) base += '/';
         publicUrl = base + "?mode=report";
