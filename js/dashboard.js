@@ -798,6 +798,11 @@ let dashLayerStates = {
                     renderFloodReportDashboard();
                 }
 
+                // อัปเดตกระดิ่งแจ้งเตือนความเคลื่อนไหวล่าสุด
+                if (typeof window.refreshNotificationBell === 'function') {
+                    window.refreshNotificationBell();
+                }
+
                 // อัปเดตเวลาล่าสุด
                 const lastUpdateEl = document.getElementById('lastUpdate');
                 if (lastUpdateEl) lastUpdateEl.innerText = new Date().toLocaleTimeString('th-TH') + " น.";
