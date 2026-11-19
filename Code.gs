@@ -398,10 +398,10 @@ function doPost(e) {
       return ContentService.createTextOutput(JSON.stringify(ocrResult)).setMimeType(ContentService.MimeType.JSON);
     }
     // ==========================================
-    // ฟังก์ชันสกัดข้อมูลจาก HTML (Web Scraping)
+    // 📩 บันทึกข้อความสำหรับตอบกลับ LINE แบบ Reply ฟรี 0 ข้อความ
     // ==========================================
-    if (params.action === 'broadcastLine' || params.action === 'pushLineGroup') {
-      return broadcastLineMessage(params.alertType, params.customTitle, params.customMessage, params.imageUrl, params.imageData, params.imageType);
+    if (params.action === 'saveLineReply' || params.action === 'broadcastLine' || params.action === 'pushLineGroup') {
+      return saveLineReplyDraft(params.alertType, params.customTitle, params.customMessage, params.imageUrl, params.imageData, params.imageType);
     }
     // ==========================================
     // Messaging API logic
@@ -706,79 +706,79 @@ function getRIDWaterLevelFromHTML() {
 // ==========================================
 // Messaging API
 // ==========================================
-function broadcastLineMessage(type, customTitle, customMessage, imageUrl, imageData, imageType) {
-  // 🔑 ดึง Token และ Group ID จาก ScriptProperties (มี Default รองรับ)
-  const channelAccessToken = LINE_CHANNEL_ACCESS_TOKEN;
-  const targetGroupId = getScriptProperty('LINE_TARGET_GROUP_ID', 'C7d6743c9c787948ec097b47b921bd0e3');
-  
-  let title = "", message = "", color = "", icon = "";
-  let finalImageUrl = (imageUrl && typeof imageUrl === 'string') ? imageUrl.trim() : "";
-
-  // 💡 กำหนดข้อความและสีตามระดับภัย/ประเภทข่าวสาร
+function getLineAnnouncementPreset(type) {
   if (type === 'normal') {
-    title = "สถานการณ์ปกติ";
-    message = "ขณะนี้ระดับน้ำคลองตันหยงมัสอยู่ในเกณฑ์ปกติ โปรดติดตามข่าวสารจากทางเทศบาล";
-    color = "#22c55e"; // สีเขียว
-    icon = "✅";
-  } else if (type === 'warning') {
-    title = "เฝ้าระวังระดับน้ำ";
-    message = "ระดับน้ำคลองตันหยงมัสกำลังเพิ่มสูงขึ้น ขอให้ประชาชนในพื้นที่ลุ่มต่ำเฝ้าติดตามข่าวสารอย่างใกล้ชิด";
-    color = "#f59e0b"; // สีส้ม
-    icon = "⚠️";
-  } else if (type === 'danger') {
-    title = "วิกฤต! เตรียมอพยพ";
-    message = "ระดับน้ำล้นตลิ่งและเข้าสู่สภาวะวิกฤต โปรดเคลื่อนย้ายทรัพย์สินขึ้นที่สูงและเตรียมพร้อมอพยพทันที!";
-    color = "#ef4444"; // สีแดง
-    icon = "🚨";
-  } else if (type === 'news') {
-    title = "รายงานสถานการณ์และข่าวสาร";
-    message = "รายงานสถานการณ์น้ำท่วม ภาพถ่ายสดจุดเสี่ยง หรือประชาสัมพันธ์การให้ความช่วยเหลือประชาชน เทศบาลตำบลตันหยงมัส";
-    color = "#0284c7"; // สีฟ้าคราม
-    icon = "📢";
+    return {
+      title: "สถานการณ์ปกติ",
+      message: "ขณะนี้ระดับน้ำคลองตันหยงมัสอยู่ในเกณฑ์ปกติ โปรดติดตามข่าวสารจากทางเทศบาล",
+      color: "#22c55e",
+      icon: "✅"
+    };
   }
+  if (type === 'warning') {
+    return {
+      title: "เฝ้าระวังระดับน้ำ",
+      message: "ระดับน้ำคลองตันหยงมัสกำลังเพิ่มสูงขึ้น ขอให้ประชาชนในพื้นที่ลุ่มต่ำเฝ้าติดตามข่าวสารอย่างใกล้ชิด",
+      color: "#f59e0b",
+      icon: "⚠️"
+    };
+  }
+  if (type === 'danger') {
+    return {
+      title: "วิกฤต! เตรียมอพยพ",
+      message: "ระดับน้ำล้นตลิ่งและเข้าสู่สภาวะวิกฤต โปรดเคลื่อนย้ายทรัพย์สินขึ้นที่สูงและเตรียมพร้อมอพยพทันที!",
+      color: "#ef4444",
+      icon: "🚨"
+    };
+  }
+  return {
+    title: "รายงานสถานการณ์และข่าวสาร",
+    message: "รายงานสถานการณ์น้ำท่วม ภาพถ่ายสดจุดเสี่ยง หรือประชาสัมพันธ์การให้ความช่วยเหลือประชาชน เทศบาลตำบลตันหยงมัส",
+    color: "#0284c7",
+    icon: "📢"
+  };
+}
 
-  // 📝 หากเจ้าหน้าที่มีการแก้ไขหรือกำหนดข้อความเอง ให้ใช้ข้อความที่กำหนดเอง
-  if (customTitle && typeof customTitle === 'string' && customTitle.trim()) {
-    title = customTitle.trim();
+function uploadAnnouncementImageToDrive(imageData, imageType) {
+  if (!imageData || typeof imageData !== 'string' || imageData.indexOf("data:image") !== 0) {
+    return "";
   }
-  if (customMessage && typeof customMessage === 'string' && customMessage.trim()) {
-    message = customMessage.trim();
-  }
-
-  // 📸 หากมีไฟล์รูปภาพ Base64 ส่งมา ให้อัปโหลดลงโฟลเดอร์ Google Drive สำหรับรูปภาพข่าวสารโดยเฉพาะ
-  if (imageData && typeof imageData === 'string' && imageData.indexOf("data:image") === 0) {
+  try {
+    const folderId = getScriptProperty('BROADCAST_IMAGE_FOLDER_ID', '1CKm6kEkmyLn4jHcFs-kdOesp9AK6C6Av');
+    let folder = null;
     try {
-      const folderId = getScriptProperty('BROADCAST_IMAGE_FOLDER_ID', '1CKm6kEkmyLn4jHcFs-kdOesp9AK6C6Av');
-      let folder = null;
-      try {
-        folder = DriveApp.getFolderById(folderId);
-      } catch (fErr) {
-        console.warn("⚠️ ไม่สามารถเข้าถึงโฟลเดอร์ BROADCAST_IMAGE_FOLDER_ID ลองเข้าถึงจาก DRIVE_FOLDER_ID");
-        if (DRIVE_FOLDER_ID) {
-          try { folder = DriveApp.getFolderById(DRIVE_FOLDER_ID); } catch(e2) {}
-        }
+      folder = DriveApp.getFolderById(folderId);
+    } catch (fErr) {
+      console.warn("⚠️ ไม่สามารถเข้าถึงโฟลเดอร์ BROADCAST_IMAGE_FOLDER_ID ลองเข้าถึงจาก DRIVE_FOLDER_ID");
+      if (DRIVE_FOLDER_ID) {
+        try { folder = DriveApp.getFolderById(DRIVE_FOLDER_ID); } catch (e2) { }
       }
-
-      if (folder) {
-        const timestampStr = Utilities.formatDate(new Date(), "GMT+7", "yyyyMMdd_HHmmss");
-        const fileName = "broadcast_news_" + timestampStr + ".jpg";
-        const base64Data = imageData.split(",")[1];
-        const contentType = imageType || "image/jpeg";
-        const blob = Utilities.newBlob(Utilities.base64Decode(base64Data), contentType, fileName);
-
-        const file = folder.createFile(blob);
-        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-
-        finalImageUrl = "https://lh3.googleusercontent.com/d/" + file.getId();
-        console.log("✅ [Drive Upload Success] ภาพข่าวสารบันทึกลง Drive ID:", file.getId(), "CDN URL:", finalImageUrl);
-      }
-    } catch (driveErr) {
-      console.error("⚠️ [Drive Upload Exception]:", driveErr.toString());
     }
-  }
 
-  // สร้างวันที่และเวลาปัจจุบัน (เวลาไทย GMT+7)
-  const dateTimeString = Utilities.formatDate(new Date(), "GMT+7", "dd/MM/yyyy เวลา HH:mm น.");
+    if (folder) {
+      const timestampStr = Utilities.formatDate(new Date(), "GMT+7", "yyyyMMdd_HHmmss");
+      const fileName = "broadcast_news_" + timestampStr + ".jpg";
+      const base64Data = imageData.split(",")[1];
+      const contentType = imageType || "image/jpeg";
+      const blob = Utilities.newBlob(Utilities.base64Decode(base64Data), contentType, fileName);
+
+      const file = folder.createFile(blob);
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+      const url = "https://lh3.googleusercontent.com/d/" + file.getId();
+      console.log("✅ [Drive Upload Success] ภาพข่าวสารบันทึกลง Drive ID:", file.getId(), "CDN URL:", url);
+      return url;
+    }
+  } catch (driveErr) {
+    console.error("⚠️ [Drive Upload Exception]:", driveErr.toString());
+  }
+  return "";
+}
+
+function buildLineAnnouncementFlexMessage(type, title, message, finalImageUrl, dateTimeString) {
+  const preset = getLineAnnouncementPreset(type);
+  const color = preset.color;
+  const icon = preset.icon;
 
   // 🎨 โครงสร้าง Flex Message Bubble
   const bubbleContent = {
@@ -900,13 +900,73 @@ function broadcastLineMessage(type, customTitle, customMessage, imageUrl, imageD
     };
   }
 
+  return {
+    "type": "flex",
+    "altText": icon + " " + title,
+    "contents": bubbleContent
+  };
+}
+
+function saveLineReplyDraft(type, customTitle, customMessage, imageUrl, imageData, imageType) {
+  const safeType = type || 'news';
+  const preset = getLineAnnouncementPreset(safeType);
+  const title = (customTitle && typeof customTitle === 'string' && customTitle.trim()) ? customTitle.trim() : preset.title;
+  const message = (customMessage && typeof customMessage === 'string' && customMessage.trim()) ? customMessage.trim() : preset.message;
+
+  let finalImageUrl = (imageUrl && typeof imageUrl === 'string') ? imageUrl.trim() : "";
+  if (imageData && typeof imageData === 'string' && imageData.indexOf("data:image") === 0) {
+    const uploadedUrl = uploadAnnouncementImageToDrive(imageData, imageType);
+    if (uploadedUrl) finalImageUrl = uploadedUrl;
+  }
+
+  const dateTimeString = Utilities.formatDate(new Date(), "GMT+7", "dd/MM/yyyy เวลา HH:mm น.");
+  const isNews = safeType === 'news';
+  const slotKey = isNews ? 'LINE_SAVED_REPLY_NEWS' : 'LINE_SAVED_REPLY_ALERT';
+  const keyword = isNews ? 'ประกาศข่าวสาร' : 'แจ้งเตือน';
+
+  const draft = {
+    type: safeType,
+    title: title,
+    message: message,
+    imageUrl: finalImageUrl,
+    savedAtStr: dateTimeString
+  };
+
+  try {
+    PropertiesService.getScriptProperties().setProperty(slotKey, JSON.stringify(draft));
+    return createResponse({
+      success: true,
+      mode: 'reply_saved',
+      slotKey: slotKey,
+      keyword: keyword,
+      imageUrl: finalImageUrl,
+      savedAtStr: dateTimeString
+    });
+  } catch (e) {
+    return createResponse({ success: false, error: "ไม่สามารถบันทึกประกาศได้: " + e.toString() });
+  }
+}
+
+function broadcastLineMessage(type, customTitle, customMessage, imageUrl, imageData, imageType) {
+  const channelAccessToken = LINE_CHANNEL_ACCESS_TOKEN;
+  const targetGroupId = getScriptProperty('LINE_TARGET_GROUP_ID', 'C7d6743c9c787948ec097b47b921bd0e3');
+  const safeType = type || 'news';
+  const preset = getLineAnnouncementPreset(safeType);
+  const title = (customTitle && typeof customTitle === 'string' && customTitle.trim()) ? customTitle.trim() : preset.title;
+  const message = (customMessage && typeof customMessage === 'string' && customMessage.trim()) ? customMessage.trim() : preset.message;
+
+  let finalImageUrl = (imageUrl && typeof imageUrl === 'string') ? imageUrl.trim() : "";
+  if (imageData && typeof imageData === 'string' && imageData.indexOf("data:image") === 0) {
+    const uploadedUrl = uploadAnnouncementImageToDrive(imageData, imageType);
+    if (uploadedUrl) finalImageUrl = uploadedUrl;
+  }
+
+  const dateTimeString = Utilities.formatDate(new Date(), "GMT+7", "dd/MM/yyyy เวลา HH:mm น.");
+  const flexMessage = buildLineAnnouncementFlexMessage(safeType, title, message, finalImageUrl, dateTimeString);
+
   const payload = {
     "to": targetGroupId,
-    "messages": [{
-      "type": "flex",
-      "altText": icon + " " + title,
-      "contents": bubbleContent
-    }]
+    "messages": [flexMessage]
   };
 
   const options = {
@@ -920,7 +980,6 @@ function broadcastLineMessage(type, customTitle, customMessage, imageUrl, imageD
   };
 
   try {
-    // 🚀 ส่ง Push Message ตรงเข้ากลุ่มไลน์ เฝ้าระวังอุทกภัย'69
     const response = UrlFetchApp.fetch("https://api.line.me/v2/bot/message/push", options);
     const resCode = response.getResponseCode();
     const resBody = response.getContentText();
@@ -1600,6 +1659,31 @@ function handleLineWebhook(events) {
           }
         };
         sendLineReply(replyToken, overviewQuickReply);
+      }
+
+      // ==========================================
+      // 1.1 คำสั่งตอบกลับประกาศข่าวสาร & แจ้งเตือนภัย (ฟรี 0 ข้อความ ผ่าน Reply API)
+      // ==========================================
+      if (userText === "ประกาศข่าวสาร") {
+        const rawNews = PropertiesService.getScriptProperties().getProperty('LINE_SAVED_REPLY_NEWS');
+        if (!rawNews) {
+          sendLineReply(replyToken, "📢 ยังไม่มีประกาศข่าวสารที่บันทึกไว้\nกรุณาบันทึกข่าวสารจากหน้า Dashboard ก่อนแล้วพิมพ์ \"ประกาศข่าวสาร\" อีกครั้งครับ");
+        } else {
+          const newsDraft = JSON.parse(rawNews);
+          const flexNews = buildLineAnnouncementFlexMessage(newsDraft.type || 'news', newsDraft.title, newsDraft.message, newsDraft.imageUrl || "", newsDraft.savedAtStr || "-");
+          sendLineReply(replyToken, flexNews);
+        }
+      }
+
+      if (userText === "แจ้งเตือน") {
+        const rawAlert = PropertiesService.getScriptProperties().getProperty('LINE_SAVED_REPLY_ALERT');
+        if (!rawAlert) {
+          sendLineReply(replyToken, "⚠️ ยังไม่มีประกาศแจ้งเตือนภัยที่บันทึกไว้\nกรุณาเลือกระดับแจ้งเตือนจากหน้า Dashboard ก่อนแล้วพิมพ์ \"แจ้งเตือน\" อีกครั้งครับ");
+        } else {
+          const alertDraft = JSON.parse(rawAlert);
+          const flexAlert = buildLineAnnouncementFlexMessage(alertDraft.type || 'normal', alertDraft.title, alertDraft.message, alertDraft.imageUrl || "", alertDraft.savedAtStr || "-");
+          sendLineReply(replyToken, flexAlert);
+        }
       }
       
       // ==========================================

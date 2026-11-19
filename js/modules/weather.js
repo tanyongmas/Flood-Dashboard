@@ -230,6 +230,8 @@ async function sendMessagingAPI(type, prefilledData = null) {
     const setup = config[type];
     if (!setup) return;
 
+    const targetKeyword = type === 'news' ? 'ประกาศข่าวสาร' : 'แจ้งเตือน';
+
     if (typeof checkAdminReadOnlyAction === 'function' && checkAdminReadOnlyAction()) return;
 
     const escapeHtmlAttr = (str) => String(str || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -310,8 +312,8 @@ async function sendMessagingAPI(type, prefilledData = null) {
 
             <!-- ข้อมูลแจ้งเตือนปลายทาง -->
             <div class="p-2.5 bg-emerald-50/70 border border-emerald-200/60 rounded-xl flex items-center gap-2 text-[10px] text-emerald-800">
-                <i class="fas fa-info-circle text-xs text-emerald-600 shrink-0"></i>
-                <span>ข้อความนี้จะส่งตรงเข้ากลุ่มไลน์ <b>เฝ้าระวังอุทกภัย'69 ทต.ตันหยงมัส</b> ในรูปแบบ Flex Card (ไม่สิ้นเปลืองโควต้าบรอดแคสต์)</span>
+                <i class="fas fa-bolt text-xs text-emerald-600 shrink-0"></i>
+                <span>ระบบจะบันทึกข้อความนี้ไว้ (ฟรี 0 ข้อความ) และส่งเป็น Flex Card เข้ากลุ่ม <b>เฝ้าระวังอุทกภัย'69</b> ทันทีเมื่อมีคนพิมพ์คำว่า <b>"${targetKeyword}"</b> ในกลุ่มไลน์</span>
             </div>
         </div>
     `;
@@ -322,7 +324,7 @@ async function sendMessagingAPI(type, prefilledData = null) {
         showCancelButton: true,
         confirmButtonColor: setup.color,
         cancelButtonColor: '#94a3b8',
-        confirmButtonText: `<i class="fas fa-paper-plane mr-1.5"></i> ${setup.btnConfirmText}`,
+        confirmButtonText: `<i class="fas fa-save mr-1.5"></i> บันทึกสำหรับ "${targetKeyword}"`,
         cancelButtonText: 'ยกเลิก',
         reverseButtons: true,
         width: '460px',
@@ -405,10 +407,10 @@ async function sendMessagingAPI(type, prefilledData = null) {
         const { customTitle, customMessage, imageData, imageType, imageUrl } = result.value;
 
         Swal.fire({
-            title: 'กำลังส่งประกาศเข้ากลุ่มไลน์...',
-            text: imageData ? 'กำลังอัปโหลดรูปภาพลง Google Drive และส่งเข้ากลุ่มไลน์...' : 'กลุ่ม: เฝ้าระวังอุทกภัย\'69 ทต.ตันหยงมัส',
+            title: 'กำลังบันทึกประกาศสำหรับ Reply...',
+            text: imageData ? `กำลังอัปโหลดรูปภาพลง Google Drive และบันทึกสำหรับคำสั่ง "${targetKeyword}"...` : `กำลังบันทึกข้อมูลสำหรับคำสั่ง "${targetKeyword}" (ฟรี 0 ข้อความ)...`,
             allowOutsideClick: false,
-            width: '320px',
+            width: '340px',
             borderRadius: '1.25rem',
             didOpen: () => { Swal.showLoading(); }
         });
@@ -417,7 +419,7 @@ async function sendMessagingAPI(type, prefilledData = null) {
             const res = await fetch(API_URL, {
                 method: 'POST',
                 body: JSON.stringify({
-                    action: 'broadcastLine',
+                    action: 'saveLineReply',
                     alertType: type,
                     customTitle: customTitle,
                     customMessage: customMessage,
@@ -429,22 +431,44 @@ async function sendMessagingAPI(type, prefilledData = null) {
             const data = await res.json();
 
             if (data.success) {
-                Swal.fire({
+                const kw = data.keyword || targetKeyword;
+                const copyRes = await Swal.fire({
                     icon: 'success',
-                    title: 'ส่งประกาศสำเร็จ',
-                    html: `<p class="text-xs text-slate-500 mt-1">ส่งประกาศเข้ากลุ่มไลน์ <b class="text-slate-700">เฝ้าระวังอุทกภัย'69</b> เรียบร้อยแล้ว</p>`,
-                    timer: 2500,
-                    showConfirmButton: false,
-                    width: '320px',
+                    title: 'บันทึกสำเร็จ (พร้อม Reply)',
+                    html: `
+                        <p class="text-xs text-slate-600 mt-1">ระบบจำค่าเรียบร้อยแล้ว (ไม่เสียโควต้า Push)</p>
+                        <div class="mt-3 p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-800">
+                            พิมพ์คำว่า <b class="text-sm font-black text-emerald-900 select-all">${kw}</b> ในกลุ่มไลน์เพื่อส่งการ์ดลงกลุ่มทันที
+                        </div>
+                    `,
+                    showCancelButton: true,
+                    confirmButtonText: `<i class="fas fa-copy mr-1"></i> คัดลอกคำสั่ง "${kw}"`,
+                    cancelButtonText: 'ปิด',
+                    confirmButtonColor: '#10b981',
+                    cancelButtonColor: '#94a3b8',
+                    width: '360px',
                     customClass: { popup: 'rounded-[1.25rem]' }
                 });
+                if (copyRes.isConfirmed && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                    try {
+                        await navigator.clipboard.writeText(kw);
+                        Swal.fire({
+                            toast: true,
+                            position: 'top-end',
+                            icon: 'success',
+                            title: `คัดลอก "${kw}" แล้ว`,
+                            showConfirmButton: false,
+                            timer: 1800
+                        });
+                    } catch (_) { }
+                }
             } else {
-                throw new Error(data.error || 'ไม่สามารถส่งข้อความได้');
+                throw new Error(data.error || 'ไม่สามารถบันทึกข้อความได้');
             }
         } catch (e) {
             Swal.fire({
                 icon: 'error',
-                title: 'ส่งประกาศล้มเหลว',
+                title: 'บันทึกประกาศล้มเหลว',
                 text: e.message,
                 width: '320px',
                 customClass: { popup: 'rounded-[1.25rem]' }
