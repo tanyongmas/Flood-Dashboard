@@ -432,6 +432,14 @@ async function sendMessagingAPI(type, prefilledData = null) {
 
             if (data.success) {
                 const kw = data.keyword || targetKeyword;
+                window._lineReplyStatusCache = window._lineReplyStatusCache || { alert: null, news: null };
+                if (data.draft) {
+                    if (type === 'news') window._lineReplyStatusCache.news = data.draft;
+                    else window._lineReplyStatusCache.alert = data.draft;
+                    renderLineReplyStatusBadges(window._lineReplyStatusCache);
+                } else {
+                    fetchLineReplyStatus(false);
+                }
                 const copyRes = await Swal.fire({
                     icon: 'success',
                     title: 'บันทึกสำเร็จ (พร้อม Reply)',
@@ -476,6 +484,127 @@ async function sendMessagingAPI(type, prefilledData = null) {
         }
     }
 }
+
+// ==========================================
+// 📌 แสดงสถานะและตัวเลขแจ้งเตือนการบันทึกประกาศ LINE (รอส่ง / ส่งแล้ว)
+// ==========================================
+window._lineReplyStatusCache = { alert: null, news: null };
+
+function buildLineReplyButtonBadgeHtml(draft) {
+    if (!draft) return '';
+    const sentCount = Number(draft.sentCount) || 0;
+    if (sentCount === 0) {
+        return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-500 text-white text-[9px] font-black shadow-sm border border-white/60">
+            <span class="w-1.5 h-1.5 rounded-full bg-white animate-ping"></span>รอส่ง
+        </span>`;
+    }
+    return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-600 text-white text-[9px] font-black shadow-sm border border-white/60">
+        <i class="fas fa-check text-[8px]"></i> ${sentCount}
+    </span>`;
+}
+
+function renderLineReplyStatusBadges(statusData) {
+    const safeData = statusData || {};
+    const alertDraft = safeData.alert || null;
+    const newsDraft = safeData.news || null;
+
+    ['normal', 'warning', 'danger'].forEach(lvl => {
+        const badgeEl = document.getElementById(`lineBadge_${lvl}`);
+        if (!badgeEl) return;
+        if (alertDraft && alertDraft.type === lvl) {
+            badgeEl.innerHTML = buildLineReplyButtonBadgeHtml(alertDraft);
+            badgeEl.classList.remove('hidden');
+        } else {
+            badgeEl.innerHTML = '';
+            badgeEl.classList.add('hidden');
+        }
+    });
+
+    const newsBadgeEl = document.getElementById('lineBadge_news');
+    if (newsBadgeEl) {
+        if (newsDraft) {
+            newsBadgeEl.innerHTML = buildLineReplyButtonBadgeHtml(newsDraft);
+            newsBadgeEl.classList.remove('hidden');
+        } else {
+            newsBadgeEl.innerHTML = '';
+            newsBadgeEl.classList.add('hidden');
+        }
+    }
+
+    const summaryEl = document.getElementById('lineReplyStatusSummary');
+    if (!summaryEl) return;
+
+    const escapeTxt = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const levelLabelMap = { normal: 'ปกติ', warning: 'เฝ้าระวัง', danger: 'วิกฤต' };
+
+    const renderSlotCard = (slotLabel, keyword, draft, iconCls, accentCls) => {
+        if (!draft) {
+            return `
+                <div class="px-2.5 py-2 rounded-xl bg-slate-50 border border-slate-200/80 text-[10px] text-slate-400 flex items-center justify-between gap-2">
+                    <span class="truncate"><i class="${iconCls} mr-1"></i><b>${slotLabel}:</b> ยังไม่ได้บันทึก</span>
+                    <span class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-400 font-bold shrink-0">ว่าง</span>
+                </div>
+            `;
+        }
+        const sentCount = Number(draft.sentCount) || 0;
+        const isPending = sentCount === 0;
+        const levelTag = (keyword === 'แจ้งเตือน' && draft.type) ? `[${levelLabelMap[draft.type] || draft.type}] ` : '';
+        const statusPill = isPending
+            ? `<span class="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 font-black shrink-0"><i class="fas fa-clock mr-0.5"></i>รอพิมพ์ "${keyword}"</span>`
+            : `<span class="px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 font-black shrink-0"><i class="fas fa-check-circle mr-0.5"></i>ส่งแล้ว ${sentCount} ครั้ง</span>`;
+
+        return `
+            <div class="px-2.5 py-2 rounded-xl bg-white border ${isPending ? 'border-amber-300/80' : 'border-emerald-200/80'} text-[10px] space-y-1 shadow-xs">
+                <div class="flex items-center justify-between gap-1.5">
+                    <span class="font-black ${accentCls} truncate"><i class="${iconCls} mr-1"></i>${slotLabel} ${levelTag}</span>
+                    ${statusPill}
+                </div>
+                <div class="text-slate-600 font-bold truncate" title="${escapeTxt(draft.title)}">"${escapeTxt(draft.title)}"</div>
+                <div class="text-[9px] text-slate-400 flex items-center justify-between gap-2">
+                    <span>บันทึก: ${escapeTxt(draft.savedAtStr || '-')}</span>
+                    ${draft.lastRepliedAtStr ? `<span class="text-emerald-600 font-bold">ตอบกลุ่ม: ${escapeTxt(draft.lastRepliedAtStr)}</span>` : ''}
+                </div>
+            </div>
+        `;
+    };
+
+    summaryEl.innerHTML =
+        renderSlotCard('แจ้งเตือน', 'แจ้งเตือน', alertDraft, 'fas fa-bell', 'text-amber-600') +
+        renderSlotCard('ประกาศข่าวสาร', 'ประกาศข่าวสาร', newsDraft, 'fas fa-bullhorn', 'text-sky-600');
+}
+
+window.fetchLineReplyStatus = async function (showToast = false) {
+    if (typeof API_URL === 'undefined' || !API_URL) return;
+    try {
+        const res = await fetch(API_URL, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'getLineReplyStatus' })
+        });
+        const data = await res.json();
+        if (data && data.success) {
+            window._lineReplyStatusCache = { alert: data.alert || null, news: data.news || null };
+            renderLineReplyStatusBadges(window._lineReplyStatusCache);
+            if (showToast && typeof Swal !== 'undefined') {
+                Swal.fire({
+                    toast: true,
+                    position: 'top-end',
+                    icon: 'success',
+                    title: 'อัปเดตสถานะประกาศ LINE แล้ว',
+                    showConfirmButton: false,
+                    timer: 1500
+                });
+            }
+        }
+    } catch (e) {
+        console.warn('fetchLineReplyStatus error:', e);
+    }
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    if (document.getElementById('dashLineAlertButtons') || document.getElementById('dashLineNewsBtnWrap')) {
+        setTimeout(() => { window.fetchLineReplyStatus(false); }, 800);
+    }
+});
 
 async function captureHeroCardPng(orientation = 'landscape') {
     const heroEl = document.getElementById('x73_hero_card');

@@ -403,6 +403,9 @@ function doPost(e) {
     if (params.action === 'saveLineReply' || params.action === 'broadcastLine' || params.action === 'pushLineGroup') {
       return saveLineReplyDraft(params.alertType, params.customTitle, params.customMessage, params.imageUrl, params.imageData, params.imageType);
     }
+    if (params.action === 'getLineReplyStatus') {
+      return getLineReplyStatus();
+    }
     // ==========================================
     // Messaging API logic
     // ==========================================
@@ -929,7 +932,9 @@ function saveLineReplyDraft(type, customTitle, customMessage, imageUrl, imageDat
     title: title,
     message: message,
     imageUrl: finalImageUrl,
-    savedAtStr: dateTimeString
+    savedAtStr: dateTimeString,
+    sentCount: 0,
+    lastRepliedAtStr: ""
   };
 
   try {
@@ -940,10 +945,30 @@ function saveLineReplyDraft(type, customTitle, customMessage, imageUrl, imageDat
       slotKey: slotKey,
       keyword: keyword,
       imageUrl: finalImageUrl,
-      savedAtStr: dateTimeString
+      savedAtStr: dateTimeString,
+      draft: draft
     });
   } catch (e) {
     return createResponse({ success: false, error: "ไม่สามารถบันทึกประกาศได้: " + e.toString() });
+  }
+}
+
+function getLineReplyStatus() {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const rawNews = props.getProperty('LINE_SAVED_REPLY_NEWS');
+    const rawAlert = props.getProperty('LINE_SAVED_REPLY_ALERT');
+    let news = null;
+    let alert = null;
+    try { if (rawNews) news = JSON.parse(rawNews); } catch (_) { }
+    try { if (rawAlert) alert = JSON.parse(rawAlert); } catch (_) { }
+    return createResponse({
+      success: true,
+      news: news,
+      alert: alert
+    });
+  } catch (e) {
+    return createResponse({ success: false, error: e.toString() });
   }
 }
 
@@ -1665,24 +1690,36 @@ function handleLineWebhook(events) {
       // 1.1 คำสั่งตอบกลับประกาศข่าวสาร & แจ้งเตือนภัย (ฟรี 0 ข้อความ ผ่าน Reply API)
       // ==========================================
       if (userText === "ประกาศข่าวสาร") {
-        const rawNews = PropertiesService.getScriptProperties().getProperty('LINE_SAVED_REPLY_NEWS');
+        const props = PropertiesService.getScriptProperties();
+        const rawNews = props.getProperty('LINE_SAVED_REPLY_NEWS');
         if (!rawNews) {
           sendLineReply(replyToken, "📢 ยังไม่มีประกาศข่าวสารที่บันทึกไว้\nกรุณาบันทึกข่าวสารจากหน้า Dashboard ก่อนแล้วพิมพ์ \"ประกาศข่าวสาร\" อีกครั้งครับ");
         } else {
           const newsDraft = JSON.parse(rawNews);
           const flexNews = buildLineAnnouncementFlexMessage(newsDraft.type || 'news', newsDraft.title, newsDraft.message, newsDraft.imageUrl || "", newsDraft.savedAtStr || "-");
-          sendLineReply(replyToken, flexNews);
+          const ok = sendLineReply(replyToken, flexNews);
+          if (ok !== false) {
+            newsDraft.sentCount = (Number(newsDraft.sentCount) || 0) + 1;
+            newsDraft.lastRepliedAtStr = Utilities.formatDate(new Date(), "GMT+7", "dd/MM/yyyy เวลา HH:mm น.");
+            props.setProperty('LINE_SAVED_REPLY_NEWS', JSON.stringify(newsDraft));
+          }
         }
       }
 
       if (userText === "แจ้งเตือน") {
-        const rawAlert = PropertiesService.getScriptProperties().getProperty('LINE_SAVED_REPLY_ALERT');
+        const props = PropertiesService.getScriptProperties();
+        const rawAlert = props.getProperty('LINE_SAVED_REPLY_ALERT');
         if (!rawAlert) {
           sendLineReply(replyToken, "⚠️ ยังไม่มีประกาศแจ้งเตือนภัยที่บันทึกไว้\nกรุณาเลือกระดับแจ้งเตือนจากหน้า Dashboard ก่อนแล้วพิมพ์ \"แจ้งเตือน\" อีกครั้งครับ");
         } else {
           const alertDraft = JSON.parse(rawAlert);
           const flexAlert = buildLineAnnouncementFlexMessage(alertDraft.type || 'normal', alertDraft.title, alertDraft.message, alertDraft.imageUrl || "", alertDraft.savedAtStr || "-");
-          sendLineReply(replyToken, flexAlert);
+          const ok = sendLineReply(replyToken, flexAlert);
+          if (ok !== false) {
+            alertDraft.sentCount = (Number(alertDraft.sentCount) || 0) + 1;
+            alertDraft.lastRepliedAtStr = Utilities.formatDate(new Date(), "GMT+7", "dd/MM/yyyy เวลา HH:mm น.");
+            props.setProperty('LINE_SAVED_REPLY_ALERT', JSON.stringify(alertDraft));
+          }
         }
       }
       
@@ -1733,15 +1770,33 @@ function handleLineWebhook(events) {
       }
 
       // ==========================================
-      // 2. เมนูระดับน้ำ (Quick Reply หลัก) -> ตอบกลับทันทีโดยไม่ต้องรอ API ภายนอก (< 50ms)
+      // 2. เมนูระดับน้ำและปริมาณน้ำฝน (Quick Reply หลัก) -> ตอบกลับทันทีโดยไม่ต้องรอ API ภายนอก (< 50ms)
       // ป้ายกำกับ (Label) ทุกปุ่มยาวไม่เกิน 20 ตัวอักษรตามมาตรฐาน LINE Messaging API 100%
       // ==========================================
-      else if (userText === "ระดับน้ำ" || userText === "เช็คระดับน้ำ" || userText === "ดูระดับน้ำ" || userText === "สถานการณ์น้ำ" || userText === "เมนูระดับน้ำ" || userText === "น้ำ") {
+      else if (
+        userText === "💧 ระดับน้ำและปริมาณน้ำฝน" ||
+        userText === "ระดับน้ำและปริมาณน้ำฝน" ||
+        userText.includes("ระดับน้ำและปริมาณน้ำฝน") ||
+        userText === "ระดับน้ำ" ||
+        userText === "เช็คระดับน้ำ" ||
+        userText === "ดูระดับน้ำ" ||
+        userText === "สถานการณ์น้ำ" ||
+        userText === "เมนูระดับน้ำ" ||
+        userText === "น้ำ"
+      ) {
         const waterQuickReply = {
           type: "text",
-          text: "💧 รายงานระดับน้ำคลองตันหยงมัส เรียลไทม์\nกรุณาเลือกสถานีที่ต้องการตรวจสอบด้านล่างนี้ได้เลยครับ 👇",
+          text: "💧 ระดับน้ำและปริมาณน้ำฝน\nกรุณาเลือกข้อมูลหรือสถานีที่ต้องการตรวจสอบด้านล่างนี้ได้เลยครับ 👇",
           quickReply: {
             items: [
+              {
+                type: "action",
+                action: {
+                  type: "message",
+                  label: "🌧️ ปริมาณน้ำฝน",
+                  text: "ปริมาณน้ำฝน"
+                }
+              },
               {
                 type: "action",
                 action: {
@@ -1770,6 +1825,25 @@ function handleLineWebhook(events) {
           }
         };
         sendLineReply(replyToken, waterQuickReply);
+      }
+
+      // ==========================================
+      // 2.0.1 ปริมาณน้ำฝน ต.ตันหยงมัส (Reply ฟรี 0 ข้อความ)
+      // ==========================================
+      else if (
+        userText === "🌧️ ปริมาณน้ำฝน" ||
+        userText === "ปริมาณน้ำฝน" ||
+        userText === "น้ำฝน" ||
+        userText === "ฝนวันนี้" ||
+        userText === "ดูปริมาณน้ำฝน"
+      ) {
+        try {
+          const flexRain = getRainfallFlexMessage();
+          sendLineReply(replyToken, flexRain);
+        } catch (err) {
+          console.error("🚨 Rainfall Flex error: " + err.toString());
+          sendLineReply(replyToken, "⚠️ ขออภัย ไม่สามารถดึงข้อมูลปริมาณน้ำฝนได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง");
+        }
       }
 
       // ==========================================
@@ -1888,11 +1962,38 @@ function handleLineWebhook(events) {
                   label: "📊 สรุปทุกสถานี",
                   text: "สรุปทุกสถานี"
                 }
+              },
+              {
+                type: "action",
+                action: {
+                  type: "message",
+                  label: "🌧️ ปริมาณน้ำฝน",
+                  text: "ปริมาณน้ำฝน"
+                }
               }
             ]
           }
         };
         sendLineReply(replyToken, waterQuickReply);
+      }
+
+      // ==========================================
+      // 2.0.1 ปริมาณน้ำฝน ต.ตันหยงมัส (Reply ฟรี 0 ข้อความ)
+      // ==========================================
+      else if (
+        userText === "🌧️ ปริมาณน้ำฝน" ||
+        userText === "ปริมาณน้ำฝน" ||
+        userText === "น้ำฝน" ||
+        userText === "ฝนวันนี้" ||
+        userText === "ดูปริมาณน้ำฝน"
+      ) {
+        try {
+          const flexRain = getRainfallFlexMessage();
+          sendLineReply(replyToken, flexRain);
+        } catch (err) {
+          console.error("🚨 Rainfall Flex error: " + err.toString());
+          sendLineReply(replyToken, "⚠️ ขออภัย ไม่สามารถดึงข้อมูลปริมาณน้ำฝนได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง");
+        }
       }
 
       // ==========================================
@@ -4430,4 +4531,288 @@ function setupScriptProperties(customProps) {
   } else {
     Logger.log("ℹ️ ไม่มีการเปลี่ยนแปลงค่า Script Properties");
   }
+}
+
+// ==========================================
+// 🌧️ ข้อมูลและ Flex Message ปริมาณน้ำฝน สถานี ทต.ตันหยงมัส (สำหรับ LINE OA Reply)
+// ==========================================
+function getRainfallSummaryForLine() {
+  const cache = CacheService.getScriptCache();
+  const cacheKey = 'LINE_RAINFALL_SUMMARY_V2';
+  try {
+    const cachedStr = cache.get(cacheKey);
+    if (cachedStr) return JSON.parse(cachedStr);
+  } catch (_) { }
+
+  const gasRainUrl = getScriptProperty('GAS_RAINFALL_API_URL', 'https://script.google.com/macros/s/AKfycbzLh2A9w0TyOJfUc1IVsTKrV661Yt2KmHtyBp0LyHbL8Q8LdS3lIHHt6-O0-hVRAI6W/exec');
+  const openMeteoUrl = "https://api.open-meteo.com/v1/forecast?latitude=6.29445&longitude=101.72362&daily=precipitation_sum,precipitation_probability_max&past_days=7&forecast_days=2&timezone=Asia%2FBangkok";
+
+  let gasJson = null;
+  let meteoJson = null;
+  try {
+    const gasRes = UrlFetchApp.fetch(gasRainUrl, { muteHttpExceptions: true });
+    if (gasRes.getResponseCode() === 200) gasJson = JSON.parse(gasRes.getContentText());
+  } catch (e1) { console.warn("GAS Rainfall fetch warning:", e1); }
+
+  try {
+    const meteoRes = UrlFetchApp.fetch(openMeteoUrl, { muteHttpExceptions: true });
+    if (meteoRes.getResponseCode() === 200) meteoJson = JSON.parse(meteoRes.getContentText());
+  } catch (e2) { console.warn("Open-Meteo Rainfall fetch warning:", e2); }
+
+  const now = new Date();
+  const todayIso = Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
+  let rainLatest = 0;
+  let latestDateLabel = "ล่าสุด";
+  let rain3Days = 0;
+  let rain7Days = 0;
+  let rainMonth = 0;
+  let dataSource = "ThaiWater (สถานีวัดจริง)";
+
+  if (gasJson && gasJson.dailyDataCurrent && Array.isArray(gasJson.dailyDataCurrent.data)) {
+    const prevArr = (gasJson.dailyDataPrev && Array.isArray(gasJson.dailyDataPrev.data)) ? gasJson.dailyDataPrev.data : [];
+    const currArr = gasJson.dailyDataCurrent.data;
+    const parseDateNum = function (str) {
+      return String(str || '').split(/[T ]/)[0];
+    };
+    const allValid = prevArr.concat(currArr).filter(function (it) {
+      return it && it.rainfall_datetime && it.rainfall_value !== null && it.rainfall_value !== undefined && !isNaN(Number(it.rainfall_value));
+    }).sort(function (a, b) {
+      return parseDateNum(a.rainfall_datetime).localeCompare(parseDateNum(b.rainfall_datetime));
+    });
+
+    currArr.forEach(function (it) {
+      if (it && it.rainfall_value !== null && it.rainfall_value !== undefined && !isNaN(Number(it.rainfall_value))) {
+        rainMonth += Number(it.rainfall_value);
+      }
+    });
+    rainMonth = Number(rainMonth.toFixed(1));
+
+    if (allValid.length > 0) {
+      const latestItem = allValid[allValid.length - 1];
+      rainLatest = Number(Number(latestItem.rainfall_value).toFixed(1));
+      latestDateLabel = parseDateNum(latestItem.rainfall_datetime);
+
+      const sumLastN = function (n) {
+        let s = 0;
+        for (let i = Math.max(0, allValid.length - n); i < allValid.length; i++) {
+          s += Number(allValid[i].rainfall_value) || 0;
+        }
+        return Number(s.toFixed(1));
+      };
+      rain3Days = sumLastN(3);
+      rain7Days = sumLastN(7);
+    }
+  } else if (meteoJson && meteoJson.daily) {
+    dataSource = "Open-Meteo (สำรอง)";
+    const dailyTimes = meteoJson.daily.time || [];
+    const dailySums = meteoJson.daily.precipitation_sum || [];
+    let todayIdx = dailyTimes.indexOf(todayIso);
+    if (todayIdx < 0) todayIdx = Math.max(0, dailyTimes.length - 2);
+    const sumSlice = function (start, end) {
+      let total = 0;
+      for (let i = Math.max(0, start); i <= Math.min(dailySums.length - 1, end); i++) {
+        total += Number(dailySums[i]) || 0;
+      }
+      return Number(total.toFixed(1));
+    };
+    rainLatest = Number((Number(dailySums[todayIdx]) || 0).toFixed(1));
+    latestDateLabel = todayIso;
+    rain3Days = sumSlice(todayIdx - 2, todayIdx);
+    rain7Days = sumSlice(todayIdx - 6, todayIdx);
+    rainMonth = rain7Days;
+  } else {
+    throw new Error("ไม่สามารถดึงข้อมูลปริมาณน้ำฝนได้");
+  }
+
+  let tomorrowProb = 0;
+  let tomorrowMm = 0;
+  if (meteoJson && meteoJson.daily) {
+    const dailyTimes = meteoJson.daily.time || [];
+    const dailySums = meteoJson.daily.precipitation_sum || [];
+    const dailyProbs = meteoJson.daily.precipitation_probability_max || [];
+    let todayIdx = dailyTimes.indexOf(todayIso);
+    if (todayIdx < 0) todayIdx = Math.max(0, dailyTimes.length - 2);
+    if (todayIdx + 1 < dailyProbs.length) tomorrowProb = Math.round(Number(dailyProbs[todayIdx + 1]) || 0);
+    if (todayIdx + 1 < dailySums.length) tomorrowMm = Number((Number(dailySums[todayIdx + 1]) || 0).toFixed(1));
+  }
+
+  const summary = {
+    rainLatest: rainLatest,
+    latestDateLabel: latestDateLabel,
+    rain3Days: rain3Days,
+    rain7Days: rain7Days,
+    rainMonth: rainMonth,
+    tomorrowProb: tomorrowProb,
+    tomorrowMm: tomorrowMm,
+    dataSource: dataSource,
+    updatedAtStr: Utilities.formatDate(now, "GMT+7", "dd/MM/yyyy เวลา HH:mm น.")
+  };
+
+  try { cache.put(cacheKey, JSON.stringify(summary), 600); } catch (_) { }
+  return summary;
+}
+
+function getRainfallFlexMessage() {
+  const d = getRainfallSummaryForLine();
+  const val = d.rainLatest;
+
+  let statusLabel = "ไม่มีฝน / ฝนเล็กน้อย";
+  let headerColor = "#10b981";
+  let statusIcon = "🟢";
+  let advice = "สถานการณ์ฝนอยู่ในเกณฑ์ปกติ";
+
+  if (val > 90) {
+    statusLabel = "ฝนตกหนักมาก";
+    headerColor = "#e11d48";
+    statusIcon = "🔴";
+    advice = "เสี่ยงน้ำท่วมฉับพลัน/น้ำป่า เตรียมยกของขึ้นที่สูง";
+  } else if (val > 35) {
+    statusLabel = "ฝนตกหนัก";
+    headerColor = "#f97316";
+    statusIcon = "🟠";
+    advice = "เฝ้าระวังน้ำท่วมขังในพื้นที่ลุ่มต่ำ";
+  } else if (val > 10) {
+    statusLabel = "ฝนปานกลาง";
+    headerColor = "#f59e0b";
+    statusIcon = "🟡";
+    advice = "อาจมีน้ำขังบางจุด ระมัดระวังการเดินทาง";
+  }
+
+  return {
+    "type": "flex",
+    "altText": "🌧️ ปริมาณน้ำฝน สถานี ทต.ตันหยงมัส (" + d.rainLatest.toFixed(1) + " มม.)",
+    "contents": {
+      "type": "bubble",
+      "size": "mega",
+      "header": {
+        "type": "box",
+        "layout": "vertical",
+        "backgroundColor": headerColor,
+        "paddingAll": "16px",
+        "contents": [
+          {
+            "type": "text",
+            "text": "🌧️ ปริมาณน้ำฝน สถานี ทต.ตันหยงมัส",
+            "color": "#ffffff",
+            "weight": "bold",
+            "size": "md"
+          },
+          {
+            "type": "text",
+            "text": statusIcon + " เกณฑ์: " + statusLabel,
+            "color": "#ffffff",
+            "size": "xs",
+            "margin": "xs"
+          }
+        ]
+      },
+      "body": {
+        "type": "box",
+        "layout": "vertical",
+        "paddingAll": "16px",
+        "spacing": "md",
+        "contents": [
+          {
+            "type": "box",
+            "layout": "vertical",
+            "backgroundColor": "#f8fafc",
+            "cornerRadius": "12px",
+            "paddingAll": "12px",
+            "contents": [
+              { "type": "text", "text": "ปริมาณน้ำฝนรายวันล่าสุด (" + d.latestDateLabel + ")", "size": "xs", "color": "#64748b", "weight": "bold" },
+              { "type": "text", "text": d.rainLatest.toFixed(1) + " มม.", "size": "xxl", "weight": "bold", "color": headerColor, "margin": "xs" },
+              { "type": "text", "text": advice, "size": "xxs", "color": "#475569", "wrap": true, "margin": "xs" }
+            ]
+          },
+          {
+            "type": "box",
+            "layout": "horizontal",
+            "spacing": "sm",
+            "contents": [
+              {
+                "type": "box",
+                "layout": "vertical",
+                "flex": 1,
+                "backgroundColor": "#f0f9ff",
+                "cornerRadius": "10px",
+                "paddingAll": "8px",
+                "contents": [
+                  { "type": "text", "text": "สะสม 3 วัน", "size": "xxs", "color": "#0369a1", "align": "center" },
+                  { "type": "text", "text": d.rain3Days.toFixed(1) + " มม.", "size": "sm", "weight": "bold", "color": "#0f172a", "align": "center", "margin": "xs" }
+                ]
+              },
+              {
+                "type": "box",
+                "layout": "vertical",
+                "flex": 1,
+                "backgroundColor": "#eef2ff",
+                "cornerRadius": "10px",
+                "paddingAll": "8px",
+                "contents": [
+                  { "type": "text", "text": "สะสม 7 วัน", "size": "xxs", "color": "#4338ca", "align": "center" },
+                  { "type": "text", "text": d.rain7Days.toFixed(1) + " มม.", "size": "sm", "weight": "bold", "color": "#0f172a", "align": "center", "margin": "xs" }
+                ]
+              },
+              {
+                "type": "box",
+                "layout": "vertical",
+                "flex": 1,
+                "backgroundColor": "#faf5ff",
+                "cornerRadius": "10px",
+                "paddingAll": "8px",
+                "contents": [
+                  { "type": "text", "text": "สะสมเดือนนี้", "size": "xxs", "color": "#7e22ce", "align": "center" },
+                  { "type": "text", "text": d.rainMonth.toFixed(1) + " มม.", "size": "sm", "weight": "bold", "color": "#0f172a", "align": "center", "margin": "xs" }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "box",
+            "layout": "horizontal",
+            "contents": [
+              { "type": "text", "text": "พยากรณ์พรุ่งนี้:", "size": "xs", "color": "#64748b", "flex": 4 },
+              { "type": "text", "text": d.tomorrowMm.toFixed(1) + " มม. (โอกาสตก " + d.tomorrowProb + "%)", "size": "xs", "weight": "bold", "color": "#0284c7", "flex": 6, "align": "end" }
+            ]
+          },
+          {
+            "type": "text",
+            "text": "แหล่งข้อมูล: " + d.dataSource + " • " + d.updatedAtStr,
+            "size": "xxs",
+            "color": "#94a3b8",
+            "wrap": true
+          }
+        ]
+      },
+      "footer": {
+        "type": "box",
+        "layout": "vertical",
+        "paddingAll": "14px",
+        "contents": [
+          {
+            "type": "box",
+            "layout": "vertical",
+            "backgroundColor": "#0284c7",
+            "cornerRadius": "99px",
+            "paddingAll": "12px",
+            "action": {
+              "type": "uri",
+              "label": "เข้าสู่เฝ้าน้ำหยงมัส",
+              "uri": "https://tanyongmasflood.pages.dev/?mode=public"
+            },
+            "contents": [
+              {
+                "type": "text",
+                "text": "🌊 เข้าสู่เฝ้าน้ำหยงมัส",
+                "color": "#ffffff",
+                "weight": "bold",
+                "size": "sm",
+                "align": "center"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  };
 }

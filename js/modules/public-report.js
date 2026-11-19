@@ -1245,6 +1245,21 @@ window.renderPublicPortal = async function () {
         <!-- 🌊 การ์ดระดับน้ำ X.73 พร้อมคลื่นน้ำและเกจวัดระดับน้ำ 2D (แสดงบนสุดในโหมดประชาชน) -->
         ${typeof window.getHeroWaterGaugeHtml === 'function' ? window.getHeroWaterGaugeHtml() : ''}
 
+        <!-- 🌧️ การ์ดปริมาณน้ำฝน ต.ตันหยงมัส (เข้าใจง่ายสำหรับประชาชน) -->
+        <section id="public_rainfall_section" class="bg-white rounded-[2.5rem] p-5 md:p-6 shadow-sm border border-slate-100 space-y-4">
+            <div class="flex items-center justify-between gap-3">
+                <div class="flex items-center gap-3">
+                    <div class="w-11 h-11 rounded-2xl bg-sky-50 text-sky-600 flex items-center justify-center text-lg shrink-0">
+                        <i class="fas fa-cloud-rain"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-slate-800 text-base">ปริมาณน้ำฝน สถานี ทต.ตันหยงมัส</h3>
+                        <p class="text-[11px] text-slate-400">กำลังโหลดข้อมูลฝน 24 ชม. และฝนสะสม 3–7 วัน...</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <!-- 🗺️ แผนที่พิกัดน้ำท่วมและศูนย์พักพิง (Interactive Map) ย้ายมาแสดงต่อจากการ์ดระดับน้ำ -->
         <section id="public_map_section" class="bg-white rounded-[2.5rem] p-6 shadow-sm border border-slate-100 space-y-4">
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-2">
@@ -1750,6 +1765,9 @@ window.renderPublicPortal = async function () {
     }
     if (typeof window.checkAndApplyHeroRainEffect === 'function') {
         window.checkAndApplyHeroRainEffect();
+    }
+    if (typeof renderPublicRainfallCard === 'function') {
+        renderPublicRainfallCard();
     }
 
     // 3. เริ่มต้นแผนที่ Mini Map หลังสร้าง DOM เสร็จ
@@ -3100,3 +3118,263 @@ window.publicCctvAutoRefreshInterval = setInterval(() => {
         }
     });
 }, 10000);
+
+// ==========================================
+// 🌧️ การ์ดปริมาณน้ำฝน ต.ตันหยงมัส สำหรับประชาชน (?mode=public)
+// ==========================================
+function getPublicRainfallSeverityMeta(mm24h) {
+    const val = Number(mm24h) || 0;
+    if (val > 90) {
+        return {
+            label: 'ฝนตกหนักมาก',
+            advice: 'เสี่ยงน้ำท่วมฉับพลันและน้ำป่า เตรียมยกของขึ้นที่สูงและติดตามประกาศใกล้ชิด',
+            badgeCls: 'bg-rose-50 text-rose-700 border-rose-200',
+            dotCls: 'bg-rose-500',
+            accentText: 'text-rose-600',
+            barColor: 'bg-rose-500'
+        };
+    }
+    if (val > 35) {
+        return {
+            label: 'ฝนตกหนัก',
+            advice: 'เฝ้าระวังน้ำท่วมขังในพื้นที่ลุ่มต่ำและทางระบายน้ำ',
+            badgeCls: 'bg-orange-50 text-orange-700 border-orange-200',
+            dotCls: 'bg-orange-500',
+            accentText: 'text-orange-600',
+            barColor: 'bg-orange-500'
+        };
+    }
+    if (val > 10) {
+        return {
+            label: 'ฝนปานกลาง',
+            advice: 'อาจมีน้ำขังบางจุด ระมัดระวังการเดินทาง',
+            badgeCls: 'bg-amber-50 text-amber-700 border-amber-200',
+            dotCls: 'bg-amber-500',
+            accentText: 'text-amber-600',
+            barColor: 'bg-amber-500'
+        };
+    }
+    return {
+        label: val > 0.2 ? 'ฝนเล็กน้อย' : 'ไม่มีฝน / ปกติ',
+        advice: 'สถานการณ์ฝนอยู่ในเกณฑ์ปกติ',
+        badgeCls: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+        dotCls: 'bg-emerald-500',
+        accentText: 'text-emerald-600',
+        barColor: 'bg-emerald-500'
+    };
+}
+
+async function fetchPublicRainfallSummary() {
+    const cacheKey = 'public_rainfall_summary_v2';
+    if (typeof window.getAppCache === 'function') {
+        const cached = window.getAppCache(cacheKey);
+        if (cached && typeof cached.rainLatest === 'number') return cached;
+    }
+
+    const nowBkk = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
+    const pad = (n) => String(n).padStart(2, '0');
+    const updatedAt = `${pad(nowBkk.getHours())}:${pad(nowBkk.getMinutes())} น.`;
+
+    const gasUrl = (typeof GAS_API_URL !== 'undefined' && GAS_API_URL) ? GAS_API_URL : '';
+    const openMeteoUrl = 'https://api.open-meteo.com/v1/forecast?latitude=6.29445&longitude=101.72362&hourly=precipitation&daily=precipitation_sum,precipitation_probability_max&past_days=7&forecast_days=3&timezone=Asia%2FBangkok';
+
+    const [gasSettled, meteoSettled] = await Promise.allSettled([
+        gasUrl ? fetch(gasUrl).then(r => r.ok ? r.json() : null) : Promise.resolve(null),
+        fetch(openMeteoUrl).then(r => r.ok ? r.json() : null)
+    ]);
+
+    const gasJson = (gasSettled.status === 'fulfilled') ? gasSettled.value : null;
+    const meteoJson = (meteoSettled.status === 'fulfilled') ? meteoSettled.value : null;
+
+    let rainLatest = 0;
+    let latestDateLabel = 'วันนี้';
+    let rain3Days = 0;
+    let rain7Days = 0;
+    let rainMonth = 0;
+    let dataSource = 'ThaiWater (สถานีวัดจริง)';
+
+    const parseGasDate = (str) => {
+        if (!str) return new Date(NaN);
+        const part = String(str).split(/[T ]/)[0];
+        const p = part.split('-').map(Number);
+        if (p.length === 3 && !p.some(isNaN)) return new Date(p[0], p[1] - 1, p[2]);
+        return new Date(str);
+    };
+
+    if (gasJson && gasJson.dailyDataCurrent && Array.isArray(gasJson.dailyDataCurrent.data)) {
+        const prevArr = (gasJson.dailyDataPrev && Array.isArray(gasJson.dailyDataPrev.data)) ? gasJson.dailyDataPrev.data : [];
+        const currArr = gasJson.dailyDataCurrent.data;
+        const allValid = [...prevArr, ...currArr]
+            .filter(it => it && it.rainfall_datetime && it.rainfall_value !== null && it.rainfall_value !== undefined && !isNaN(Number(it.rainfall_value)))
+            .sort((a, b) => parseGasDate(a.rainfall_datetime) - parseGasDate(b.rainfall_datetime));
+
+        currArr.forEach(it => {
+            if (it && it.rainfall_value !== null && it.rainfall_value !== undefined && !isNaN(Number(it.rainfall_value))) {
+                rainMonth += Number(it.rainfall_value);
+            }
+        });
+        rainMonth = Number(rainMonth.toFixed(1));
+
+        if (allValid.length > 0) {
+            const latestItem = allValid[allValid.length - 1];
+            rainLatest = Number(Number(latestItem.rainfall_value).toFixed(1));
+            const dt = parseGasDate(latestItem.rainfall_datetime);
+            if (!isNaN(dt.getTime())) {
+                latestDateLabel = dt.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
+            }
+            const sumLastN = (n) => {
+                let s = 0;
+                for (let i = Math.max(0, allValid.length - n); i < allValid.length; i++) {
+                    s += Number(allValid[i].rainfall_value) || 0;
+                }
+                return Number(s.toFixed(1));
+            };
+            rain3Days = sumLastN(3);
+            rain7Days = sumLastN(7);
+        }
+    } else if (meteoJson && meteoJson.daily) {
+        dataSource = 'Open-Meteo (สำรอง)';
+        const dailyTimes = meteoJson.daily.time || [];
+        const dailySums = meteoJson.daily.precipitation_sum || [];
+        const todayIso = `${nowBkk.getFullYear()}-${pad(nowBkk.getMonth() + 1)}-${pad(nowBkk.getDate())}`;
+        let todayIdx = dailyTimes.indexOf(todayIso);
+        if (todayIdx < 0) todayIdx = Math.max(0, dailyTimes.length - 3);
+
+        const sumSlice = (start, end) => {
+            let total = 0;
+            for (let i = Math.max(0, start); i <= Math.min(dailySums.length - 1, end); i++) {
+                total += Number(dailySums[i]) || 0;
+            }
+            return Number(total.toFixed(1));
+        };
+        rainLatest = Number((Number(dailySums[todayIdx]) || 0).toFixed(1));
+        rain3Days = sumSlice(todayIdx - 2, todayIdx);
+        rain7Days = sumSlice(todayIdx - 6, todayIdx);
+        rainMonth = rain7Days;
+    } else {
+        throw new Error('ไม่สามารถดึงข้อมูลปริมาณน้ำฝนได้');
+    }
+
+    const forecastDays = [];
+    if (meteoJson && meteoJson.daily) {
+        const dailyTimes = meteoJson.daily.time || [];
+        const dailySums = meteoJson.daily.precipitation_sum || [];
+        const dailyProbs = meteoJson.daily.precipitation_probability_max || [];
+        const todayIso = `${nowBkk.getFullYear()}-${pad(nowBkk.getMonth() + 1)}-${pad(nowBkk.getDate())}`;
+        let todayIdx = dailyTimes.indexOf(todayIso);
+        if (todayIdx < 0) todayIdx = Math.max(0, dailyTimes.length - 3);
+        const dayLabels = ['วันนี้', 'พรุ่งนี้', 'มะรืน'];
+        for (let offset = 0; offset < 3; offset++) {
+            const idx = todayIdx + offset;
+            if (idx < dailyTimes.length) {
+                forecastDays.push({
+                    label: dayLabels[offset] || dailyTimes[idx],
+                    mm: Number((Number(dailySums[idx]) || 0).toFixed(1)),
+                    prob: Math.round(Number(dailyProbs[idx]) || 0)
+                });
+            }
+        }
+    }
+
+    const summary = {
+        rainLatest,
+        latestDateLabel,
+        rain3Days,
+        rain7Days,
+        rainMonth,
+        forecastDays,
+        dataSource,
+        updatedAt
+    };
+
+    if (typeof window.setAppCache === 'function') {
+        window.setAppCache(cacheKey, summary, 15);
+    }
+    return summary;
+}
+
+window.renderPublicRainfallCard = async function () {
+    const section = document.getElementById('public_rainfall_section');
+    if (!section) return;
+
+    try {
+        const d = await fetchPublicRainfallSummary();
+        const meta = getPublicRainfallSeverityMeta(d.rainLatest);
+        const pct = Math.min(100, Math.max(4, Math.round((d.rainLatest / 100) * 100)));
+
+        const forecastHtml = (d.forecastDays || []).map(f => `
+            <div class="flex-1 bg-slate-50 border border-slate-200/80 rounded-2xl p-2.5 text-center">
+                <div class="text-[11px] font-bold text-slate-600">${f.label}</div>
+                <div class="text-sm font-black text-sky-600 mt-0.5">${f.mm.toFixed(1)} <span class="text-[10px] font-normal text-slate-400">มม.</span></div>
+                <div class="text-[10px] font-bold text-slate-500 mt-0.5"><i class="fas fa-umbrella text-sky-400 mr-1"></i>โอกาสตก ${f.prob}%</div>
+            </div>
+        `).join('');
+
+        section.innerHTML = `
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div class="flex items-center gap-3">
+                    <div class="w-11 h-11 rounded-2xl bg-sky-50 text-sky-600 flex items-center justify-center text-lg shrink-0">
+                        <i class="fas fa-cloud-rain"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-slate-800 text-base">ปริมาณน้ำฝน สถานี ทต.ตันหยงมัส</h3>
+                        <p class="text-[11px] text-slate-400">${d.dataSource} • อัปเดต ${d.updatedAt}</p>
+                    </div>
+                </div>
+                <span class="self-start sm:self-auto inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black border ${meta.badgeCls}">
+                    <span class="w-2 h-2 rounded-full ${meta.dotCls}"></span>
+                    ${meta.label}
+                </span>
+            </div>
+
+            <!-- ตัวเลขฝนวันล่าสุด + คำแนะนำ -->
+            <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2.5">
+                <div>
+                    <div class="text-xs font-bold text-slate-500">ปริมาณน้ำฝนรายวันล่าสุด (${d.latestDateLabel})</div>
+                    <div class="flex items-baseline gap-1.5 mt-0.5">
+                        <span class="text-3xl font-black ${meta.accentText} tracking-tight">${d.rainLatest.toFixed(1)}</span>
+                        <span class="text-xs font-bold text-slate-400">มิลลิเมตร (มม.)</span>
+                    </div>
+                </div>
+                <div class="w-full h-2 rounded-full bg-slate-200 overflow-hidden">
+                    <div class="h-full ${meta.barColor} rounded-full transition-all duration-700" style="width: ${pct}%"></div>
+                </div>
+                <p class="text-xs text-slate-600 font-medium"><i class="fas fa-circle-info ${meta.accentText} mr-1.5"></i>${meta.advice}</p>
+            </div>
+
+            <!-- 3 กล่อง: สะสม 3 วัน / สะสม 7 วัน / สะสมเดือนนี้ -->
+            <div class="grid grid-cols-3 gap-2.5 text-center">
+                <div class="p-3 rounded-2xl bg-sky-50/80 border border-sky-200/70">
+                    <div class="text-[10px] font-bold text-sky-700">สะสม 3 วัน</div>
+                    <div class="text-lg sm:text-xl font-black text-slate-800 mt-0.5">${d.rain3Days.toFixed(1)}</div>
+                    <div class="text-[10px] text-slate-400">มม.</div>
+                </div>
+                <div class="p-3 rounded-2xl bg-indigo-50/80 border border-indigo-200/70">
+                    <div class="text-[10px] font-bold text-indigo-700">สะสม 7 วัน</div>
+                    <div class="text-lg sm:text-xl font-black text-slate-800 mt-0.5">${d.rain7Days.toFixed(1)}</div>
+                    <div class="text-[10px] text-slate-400">มม.</div>
+                </div>
+                <div class="p-3 rounded-2xl bg-purple-50/80 border border-purple-200/70">
+                    <div class="text-[10px] font-bold text-purple-700">สะสมเดือนนี้</div>
+                    <div class="text-lg sm:text-xl font-black text-slate-800 mt-0.5">${d.rainMonth.toFixed(1)}</div>
+                    <div class="text-[10px] text-slate-400">มม.</div>
+                </div>
+            </div>
+
+            ${forecastHtml ? `
+            <!-- พยากรณ์ฝน 3 วัน -->
+            <div class="space-y-1.5">
+                <div class="text-[11px] font-bold text-slate-500"><i class="fas fa-calendar-days text-sky-500 mr-1"></i>แนวโน้มฝน 3 วันข้างหน้า (Open-Meteo)</div>
+                <div class="flex gap-2">${forecastHtml}</div>
+            </div>` : ''}
+        `;
+    } catch (err) {
+        console.warn('renderPublicRainfallCard error:', err);
+        section.innerHTML = `
+            <div class="flex items-center justify-between gap-2 text-xs text-slate-500">
+                <span><i class="fas fa-cloud-rain text-sky-500 mr-1.5"></i>ไม่สามารถโหลดข้อมูลปริมาณน้ำฝนได้ชั่วคราว</span>
+                <button type="button" onclick="renderPublicRainfallCard()" class="px-3 py-1 rounded-lg bg-sky-50 text-sky-700 font-bold border border-sky-200">ลองใหม่</button>
+            </div>
+        `;
+    }
+};

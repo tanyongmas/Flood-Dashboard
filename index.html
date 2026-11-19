@@ -940,6 +940,7 @@
                                 <!-- ปุ่มปกติ (Outline เขียว) -->
                                 <button onclick="sendMessagingAPI('normal')"
                                     class="group flex flex-col items-center justify-center gap-2 py-3 border-2 border-green-500 text-green-600 rounded-2xl transition-all duration-300 hover:bg-green-500 hover:text-white hover:shadow-[0_0_15px_rgba(34,197,94,0.3)] active:scale-95 bg-transparent overflow-hidden relative">
+                                    <span id="lineBadge_normal" class="hidden absolute top-1.5 right-1.5 z-20"></span>
                                     <div
                                         class="absolute inset-0 bg-green-500/5 group-hover:bg-transparent transition-colors">
                                     </div>
@@ -952,6 +953,7 @@
                                 <!-- ปุ่มเฝ้าระวัง (Outline ส้ม) -->
                                 <button onclick="sendMessagingAPI('warning')"
                                     class="group flex flex-col items-center justify-center gap-2 py-3 border-2 border-amber-500 text-amber-600 rounded-2xl transition-all duration-300 hover:bg-amber-500 hover:text-white hover:shadow-[0_0_15px_rgba(245,158,11,0.3)] active:scale-95 bg-transparent overflow-hidden relative">
+                                    <span id="lineBadge_warning" class="hidden absolute top-1.5 right-1.5 z-20"></span>
                                     <div
                                         class="absolute inset-0 bg-amber-500/5 group-hover:bg-transparent transition-colors">
                                     </div>
@@ -964,6 +966,7 @@
                                 <!-- ปุ่มวิกฤต (Outline แดง) -->
                                 <button onclick="sendMessagingAPI('danger')"
                                     class="group flex flex-col items-center justify-center gap-2 py-3 border-2 border-red-600 text-red-600 rounded-2xl transition-all duration-300 hover:bg-red-600 hover:text-white hover:shadow-[0_0_20px_rgba(220,38,38,0.4)] active:scale-95 bg-transparent overflow-hidden relative">
+                                    <span id="lineBadge_danger" class="hidden absolute top-1.5 right-1.5 z-20"></span>
                                     <div
                                         class="absolute inset-0 bg-red-600/5 group-hover:bg-transparent transition-colors">
                                     </div>
@@ -988,6 +991,7 @@
                                         </div>
                                     </div>
                                     <div class="flex items-center gap-2 relative z-10 shrink-0">
+                                        <span id="lineBadge_news" class="hidden"></span>
                                         <span class="hidden sm:inline-flex text-[9px] font-bold px-2 py-0.5 rounded-full bg-sky-100 text-sky-700 group-hover:bg-white/20 group-hover:text-white transition-colors">
                                             <i class="fab fa-google-drive mr-1"></i>เก็บบน Drive
                                         </span>
@@ -1000,8 +1004,12 @@
                                 <span class="flex items-center gap-1.5 font-black">
                                     <code class="px-2 py-0.5 rounded bg-white border border-emerald-200 text-emerald-700">แจ้งเตือน</code>
                                     <code class="px-2 py-0.5 rounded bg-white border border-sky-200 text-sky-700">ประกาศข่าวสาร</code>
+                                    <button type="button" onclick="fetchLineReplyStatus(true)" class="px-1.5 py-0.5 rounded bg-white border border-slate-200 text-slate-600 hover:text-blue-600 transition" title="รีเฟรชสถานะล่าสุด">
+                                        <i class="fas fa-sync-alt text-[9px]"></i>
+                                    </button>
                                 </span>
                             </div>
+                            <div id="lineReplyStatusSummary" class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 relative z-10"></div>
                         </div>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
 
