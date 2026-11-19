@@ -127,35 +127,75 @@ async function sbLogin(username, password) {
 }
 
 // ==========================================
-// 2. โหลดข้อมูลเริ่มต้น (Initial Data - 100% Supabase)
 // ==========================================
+// 2. โหลดข้อมูลเริ่มต้น (Initial Data - 100% Supabase + Batch & Deduplication)
+// ==========================================
+const _inFlightInitialDataMap = {};
+const _waterPhotoCache = {};
+
+function unwrapSettledQuery(settled, label) {
+    if (!settled || settled.status !== 'fulfilled') {
+        console.warn(`⚠️ [Supabase] ${label} query rejected:`, settled && settled.reason);
+        return { data: [], error: settled && settled.reason };
+    }
+    const val = settled.value || {};
+    if (val.error) {
+        console.warn(`⚠️ [Supabase] ${label} error:`, val.error.message || val.error);
+        return { data: [], error: val.error };
+    }
+    return { data: val.data || [], error: null };
+}
+
 async function sbFetchInitialData(targetPeriod = '2569') {
     if (!isSupabaseReady()) {
         console.error("❌ [Supabase] Client ไม่พร้อมใช้งาน");
         return null;
     }
 
-    try {
-        const period = targetPeriod || '2569';
-        const startTime = performance.now();
+    const period = targetPeriod || '2569';
+    if (_inFlightInitialDataMap[period]) {
+        return _inFlightInitialDataMap[period];
+    }
 
-        // ดึงข้อมูลพร้อมกันทุกตารางด้วย Promise.all (รวมถึง Address และ address_evacuation)
-        const [
-            wpRes, wlRes, evacRes, addrEvacRes, addrTableRes, relRes, stockRes, polyRes, repRes, userRes
-        ] = await Promise.all([
-            sbClient.from('water_points').select('*'),
-            sbClient.from('water_levels').select('*').eq('period', period).order('recorded_at', { ascending: false }),
-            sbClient.from('evacuees').select('*').eq('period', period).order('registered_at', { ascending: false }),
-            sbClient.from('address_evacuation').select('*'),
-            sbClient.from('Address').select('*'),
-            sbClient.from('relief_distribution').select('*').eq('period', period).order('distributed_at', { ascending: false }),
-            sbClient.from('relief_stock').select('*').eq('period', period).order('logged_at', { ascending: false }),
-            sbClient.from('flood_polygons').select('*').or(`period.eq.${period},period.eq.all`).order('created_at', { ascending: false }),
-            sbClient.from('evacuation_reports').select('*').eq('period', period).order('reported_at', { ascending: false }),
-            sbClient.from('users').select('username, role')
-        ]);
+    const runFetch = (async () => {
+        try {
+            const startTime = performance.now();
 
-        const durationMs = (performance.now() - startTime).toFixed(1);
+            // กลุ่มที่ 1 (ข้อมูลหลัก): ไม่ดึง file_url (Base64) ของ water_levels ตอนโหลดหน้าแรก และจำกัด 500 แถวล่าสุด
+            const batch1 = await Promise.allSettled([
+                sbClient.from('water_points').select('*'),
+                sbClient.from('water_levels')
+                    .select('id, recorded_at, location, level, reporter, trend, coords, note, period')
+                    .eq('period', period)
+                    .order('recorded_at', { ascending: false })
+                    .limit(500),
+                sbClient.from('evacuees').select('*').eq('period', period).order('registered_at', { ascending: false }),
+                sbClient.from('address_evacuation').select('*'),
+                sbClient.from('Address').select('*')
+            ]);
+
+            const wpRes = unwrapSettledQuery(batch1[0], 'water_points');
+            const wlRes = unwrapSettledQuery(batch1[1], 'water_levels');
+            const evacRes = unwrapSettledQuery(batch1[2], 'evacuees');
+            const addrEvacRes = unwrapSettledQuery(batch1[3], 'address_evacuation');
+            const addrTableRes = unwrapSettledQuery(batch1[4], 'Address');
+
+            // กลุ่มที่ 2 (ข้อมูลรอง): โหลดต่อจากกลุ่มแรกเพื่อลด Connection Spike ตอนล็อกอินพร้อมกัน
+            const batch2 = await Promise.allSettled([
+                sbClient.from('relief_distribution').select('*').eq('period', period).order('distributed_at', { ascending: false }),
+                sbClient.from('relief_stock').select('*').eq('period', period).order('logged_at', { ascending: false }),
+                sbClient.from('flood_polygons').select('*').or(`period.eq.${period},period.eq.all`).order('created_at', { ascending: false }),
+                sbClient.from('evacuation_reports').select('*').eq('period', period).order('reported_at', { ascending: false }),
+                sbClient.from('users').select('username, role')
+            ]);
+
+            const relRes = unwrapSettledQuery(batch2[0], 'relief_distribution');
+            const stockRes = unwrapSettledQuery(batch2[1], 'relief_stock');
+            const polyRes = unwrapSettledQuery(batch2[2], 'flood_polygons');
+            const repRes = unwrapSettledQuery(batch2[3], 'evacuation_reports');
+            const userRes = unwrapSettledQuery(batch2[4], 'users');
+
+            const durationMs = (performance.now() - startTime).toFixed(1);
 
         // 1. ดึงพิกัดที่อยู่พร้อมแผนที่จากตาราง address_evacuation
         const rawAddrEvac = (addrEvacRes && addrEvacRes.data) ? addrEvacRes.data : [];
@@ -280,8 +320,9 @@ async function sbFetchInitialData(targetPeriod = '2569') {
                 r.reporter,
                 r.trend,
                 r.coords,
-                r.file_url,
-                r.note
+                '', // โหลดรูปภาพแบบ On-Demand ผ่าน sbFetchWaterLevelPhoto(id) เพื่อไม่ให้ Base64 ถ่วงตอนล็อกอิน
+                r.note,
+                r.id
             ]),
             evacuees: (evacRes.data || []).map(r => [
                 r.registered_at,     // 0
@@ -387,11 +428,79 @@ async function sbFetchInitialData(targetPeriod = '2569') {
             riskMapImageUrl: fallbackRiskMap
         };
     }
+    })();
+
+    _inFlightInitialDataMap[period] = runFetch;
+    try {
+        return await runFetch;
+    } finally {
+        delete _inFlightInitialDataMap[period];
+    }
 }
+
+window.sbFetchWaterLevelPhoto = async function (rowId) {
+    if (!rowId || !isSupabaseReady()) return '';
+    if (_waterPhotoCache[rowId] !== undefined) return _waterPhotoCache[rowId];
+
+    try {
+        const { data, error } = await sbClient
+            .from('water_levels')
+            .select('file_url')
+            .eq('id', rowId)
+            .maybeSingle();
+
+        if (error) {
+            console.warn("⚠️ [Supabase] sbFetchWaterLevelPhoto error:", error.message);
+            return '';
+        }
+        const url = (data && data.file_url) ? String(data.file_url).trim() : '';
+        _waterPhotoCache[rowId] = url;
+        return url;
+    } catch (e) {
+        console.warn("⚠️ [Supabase] sbFetchWaterLevelPhoto exception:", e);
+        return '';
+    }
+};
 
 // ==========================================
 // 3. ฟังก์ชันบันทึกข้อมูลเข้า Supabase 100%
 // ==========================================
+
+async function sbUploadWaterPhotoToStorage(base64Data, period = '2569') {
+    if (!isSupabaseReady() || !base64Data || typeof base64Data !== 'string' || !base64Data.startsWith('data:image/')) {
+        return '';
+    }
+    try {
+        const match = base64Data.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+        if (!match) return '';
+
+        const mimeType = match[1];
+        const rawBase64 = match[2];
+        const ext = mimeType.includes('png') ? 'png' : 'jpg';
+        const byteChars = atob(rawBase64);
+        const byteNumbers = new Array(byteChars.length);
+        for (let i = 0; i < byteChars.length; i++) {
+            byteNumbers[i] = byteChars.charCodeAt(i);
+        }
+        const blob = new Blob([new Uint8Array(byteNumbers)], { type: mimeType });
+        const filePath = `water_levels/${period}/${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+
+        const { error: uploadErr } = await sbClient.storage
+            .from('flood-waterlevel')
+            .upload(filePath, blob, { contentType: mimeType, upsert: false });
+
+        if (uploadErr) {
+            console.warn("⚠️ [Supabase Storage] อัปโหลดรูปไม่สำเร็จ (ใช้ Fallback):", uploadErr.message);
+            return '';
+        }
+
+        const { data: pubData } = sbClient.storage.from('flood-waterlevel').getPublicUrl(filePath);
+        return (pubData && pubData.publicUrl) ? pubData.publicUrl : '';
+    } catch (e) {
+        console.warn("⚠️ [Supabase Storage] Exception:", e);
+        return '';
+    }
+}
 
 async function sbSaveWater(payload) {
     if (!isSupabaseReady()) throw new Error('Supabase ไม่พร้อมใช้งาน');
@@ -408,6 +517,12 @@ async function sbSaveWater(payload) {
         }
     }
 
+    let finalFileUrl = payload.fileUrl || '';
+    if (!finalFileUrl && payload.imageData) {
+        const uploadedUrl = await sbUploadWaterPhotoToStorage(payload.imageData, payload.period || '2569');
+        finalFileUrl = uploadedUrl || payload.imageData;
+    }
+
     const { error } = await sbClient.from('water_levels').insert([{
         recorded_at: new Date().toISOString(),
         location: payload.location,
@@ -415,7 +530,7 @@ async function sbSaveWater(payload) {
         reporter: payload.reporter,
         trend: payload.trend,
         coords: coords,
-        file_url: payload.imageData || payload.fileUrl || '',
+        file_url: finalFileUrl,
         note: payload.note || '',
         period: payload.period || '2569'
     }]);
