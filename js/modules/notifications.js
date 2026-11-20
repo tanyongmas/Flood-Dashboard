@@ -183,9 +183,27 @@
             });
         }
 
+        // 6. แจ้งเตือนเคสฉุกเฉินจากระบบ TMCare (ขอความช่วยเหลือ / ต้องการอพยพ) — PDPA-safe
+        if (window.tmcareState && Array.isArray(window.tmcareState.emergencyCases)) {
+            window.tmcareState.emergencyCases.forEach((em) => {
+                const ts = parseTimestampMs(em.statusUpdatedAt) || parseTimestampMs(window.tmcareState.updatedAt) || Date.now();
+                const isHelp = em.evacStatus === 'need_help';
+                items.push({
+                    ts,
+                    category: 'evacuation',
+                    targetPage: 'looker',
+                    icon: isHelp ? 'fa-triangle-exclamation' : 'fa-person-running',
+                    badgeBg: isHelp ? 'bg-rose-600 text-white' : 'bg-orange-500 text-white',
+                    title: isHelp ? '🏥 TMCare: ขอความช่วยเหลือฉุกเฉิน' : '🏥 TMCare: ต้องการอพยพ',
+                    detail: `${em.riskGroup} • ${em.address || 'ไม่ระบุที่อยู่'}${em.needsDetail ? ` (${em.needsDetail})` : ''}`,
+                    actor: 'ระบบ TMCare EMS'
+                });
+            });
+        }
+
         const roleKey = getCurrentRoleKey();
         const allowedCategories = ROLE_NOTIF_CATEGORIES[roleKey] || ['dashboard'];
-        const filtered = items.filter(item => allowedCategories.includes(item.targetPage));
+        const filtered = items.filter(item => allowedCategories.includes(item.category || item.targetPage));
         filtered.sort((a, b) => b.ts - a.ts);
         return filtered.slice(0, 20);
     }

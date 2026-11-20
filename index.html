@@ -2083,20 +2083,41 @@
                                 </p>
                             </div>
 
-                            <div class="flex gap-2">
+                            <div class="grid grid-cols-2 sm:flex gap-2 w-full md:w-auto">
                                 <!-- 🌟 เพิ่มปุ่ม QR Code ตรงนี้ -->
                                 <button onclick="showQRCode()"
-                                    class="w-full md:w-auto justify-center bg-indigo-50 hover:bg-indigo-100 text-indigo-600 px-4 py-2.5 rounded-xl text-xs font-bold shadow-sm transition-all active:scale-95 flex items-center border border-indigo-100">
-                                    <i class="fas fa-qrcode mr-2 text-sm"></i> QR Code รับแจ้ง
+                                    class="w-full sm:w-auto justify-center bg-indigo-50 hover:bg-indigo-100 text-indigo-600 px-3 sm:px-4 py-2.5 rounded-xl text-xs font-bold shadow-sm transition-all active:scale-95 flex items-center border border-indigo-100">
+                                    <i class="fas fa-qrcode mr-1.5 sm:mr-2 text-sm"></i> QR Code รับแจ้ง
                                 </button>
 
                                 <button onclick="promptSafetyCheck()"
-                                    class="w-full md:w-auto justify-center bg-orange-500 hover:bg-orange-600 text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-md shadow-orange-200 transition-all active:scale-95 flex items-center">
-                                    <i class="fas fa-bullhorn mr-2"></i> รายงานสถานะ
+                                    class="w-full sm:w-auto justify-center bg-orange-500 hover:bg-orange-600 text-white px-3 sm:px-5 py-2.5 rounded-xl text-xs font-bold shadow-md shadow-orange-200 transition-all active:scale-95 flex items-center">
+                                    <i class="fas fa-bullhorn mr-1.5 sm:mr-2"></i> รายงานสถานะ
                                 </button>
                             </div>
                         </div>
 
+                        <!-- แถบแท็บสลับ: รายงานสถานะทั่วไป (แผนที่รวม) vs อัปเดตสถานะ TMCare -->
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 bg-slate-50 p-1.5 rounded-2xl border border-slate-200/80">
+                            <div class="grid grid-cols-2 sm:flex items-center gap-1.5 w-full sm:w-auto">
+                                <button type="button" id="btnEvacTabGeneral" onclick="switchEvacuationTab('general')"
+                                    class="px-3 sm:px-4 py-2.5 rounded-xl text-[11px] sm:text-xs font-black transition-all flex items-center justify-center gap-1.5 bg-blue-600 text-white shadow-sm">
+                                    <i class="fas fa-map-location-dot"></i> <span class="truncate">แผนที่รายงานสถานะ</span>
+                                </button>
+                                <button type="button" id="btnEvacTabTMCare" onclick="switchEvacuationTab('tmcare')"
+                                    class="px-3 sm:px-4 py-2.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all flex items-center justify-center gap-1.5 text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200">
+                                    <i class="fas fa-kit-medical"></i> <span class="truncate">กลุ่มเปราะบาง (TMCare)</span>
+                                    <span id="evacTMCareTabBadge" class="hidden px-1.5 py-0.5 rounded-full bg-rose-600 text-white text-[9px] font-black shrink-0">0</span>
+                                </button>
+                            </div>
+                            <button type="button" onclick="syncTMCareDataManual()"
+                                class="w-full sm:w-auto justify-center px-3 py-2 rounded-xl bg-white hover:bg-rose-50 text-rose-700 border border-slate-200 text-[11px] font-bold transition flex items-center gap-1.5 shrink-0">
+                                <i class="fas fa-arrows-rotate"></i> ซิงก์ TMCare
+                            </button>
+                        </div>
+
+                        <!-- แท็บ 1: รายงานสถานะทั่วไป + แผนที่รวม (แสดงหมุด TMCare ด้วย) -->
+                        <div id="evacTabGeneralPanel">
                         <!-- 🌟 แผงแดชบอร์ดสรุปสถานการณ์อพยพ (ดีไซน์ใหม่) -->
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
 
@@ -2193,6 +2214,158 @@
                         <!-- 🌟 แก้ไข 2: นำ !h- ออก แล้วใช้ lg:h-[700px] พร้อมเติม shrink-0 เพื่อป้องกันไม่ให้แผนที่โดนบีบ -->
                         <div id="evacMap"
                             class="w-full h-[400px] md:h-[500px] lg:h-[600px] shrink-0 rounded-2xl z-10 border-2 border-slate-100 bg-slate-50 relative overflow-hidden">
+                        </div>
+                        </div>
+
+                        <!-- แท็บ 2: อัปเดตสถานะผู้พิการ / กลุ่มเปราะบาง (ซิงก์ 2 ทางกับ TMCare) -->
+                        <div id="evacTabTMCarePanel" class="hidden space-y-5">
+                            <!-- ฟอร์มเลือกชื่อและอัปเดตสถานะกลับไป TMCare -->
+                            <form onsubmit="submitEvacTMCareStatusUpdate(event)" class="p-4 md:p-5 rounded-3xl bg-slate-50 border border-slate-200/80 space-y-4">
+                                <div class="flex flex-wrap items-center justify-between gap-2">
+                                    <div>
+                                        <h4 class="text-sm font-black text-rose-700 flex items-center gap-1.5">
+                                            <i class="fas fa-kit-medical"></i> อัปเดตสถานะกลุ่มเปราะบาง / ผู้พิการ (TMCare)
+                                        </h4>
+                                        <p class="text-[11px] text-slate-500">เลือกชื่อจากฐานข้อมูล TMCare (ใช้ที่อยู่และพิกัดเดิมอัตโนมัติ) เมื่อบันทึกจะอัปเดตกลับไป TMCare และปักหมุดบนแผนที่ทันที</p>
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    <div>
+                                        <label class="block text-[11px] font-bold text-slate-600 mb-1">ค้นหาชื่อ / ที่อยู่</label>
+                                        <input type="text" id="evacTMCareSearch" oninput="renderEvacTMCareTab()"
+                                            class="w-full p-2.5 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 outline-none focus:border-rose-400"
+                                            placeholder="พิมพ์ชื่อ หรือ บ้านเลขที่...">
+                                    </div>
+                                    <div class="md:col-span-2">
+                                        <label class="block text-[11px] font-bold text-slate-600 mb-1">เลือกรายชื่อจาก TMCare *</label>
+                                        <select id="evacTMCareSelect" onchange="onSelectEvacTMCareBeneficiary(this.value)" required
+                                            class="w-full p-2.5 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-800 outline-none focus:border-rose-400">
+                                            <option value="">-- กำลังโหลดรายชื่อจาก TMCare --</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <!-- กล่องแสดงที่อยู่และพิกัดอัตโนมัติของชื่อที่เลือก -->
+                                <div id="evacTMCareSelectedInfo" class="hidden p-3.5 rounded-2xl bg-white border border-rose-200/80 shadow-xs"></div>
+
+                                <!-- ปุ่มเลือกสถานะการช่วยเหลือ / อพยพ 4 สถานะ (แทน Dropdown) -->
+                                <div class="space-y-2">
+                                    <label class="block text-[11px] font-bold text-slate-600">สถานะการช่วยเหลือ / อพยพ *</label>
+                                    <input type="hidden" id="evacTMCareStatusSelect" value="safe_at_home">
+                                    <div id="evacTMCareStatusBtnGrid" class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                        <button type="button" data-tmcare-status="safe_at_home" onclick="selectEvacTMCareStatus('safe_at_home')"
+                                            class="tmcare-status-btn p-3 rounded-2xl border-2 border-emerald-500 bg-emerald-50 text-emerald-700 text-xs font-black transition-all flex flex-col items-center justify-center gap-1 shadow-xs active:scale-95">
+                                            <i class="fas fa-check-circle text-base"></i>
+                                            <span>ปลอดภัยที่บ้าน</span>
+                                        </button>
+                                        <button type="button" data-tmcare-status="need_help" onclick="selectEvacTMCareStatus('need_help')"
+                                            class="tmcare-status-btn p-3 rounded-2xl border-2 border-slate-200 bg-white text-slate-600 hover:border-rose-300 text-xs font-bold transition-all flex flex-col items-center justify-center gap-1 active:scale-95">
+                                            <i class="fas fa-triangle-exclamation text-base text-rose-500"></i>
+                                            <span>ขอความช่วยเหลือ</span>
+                                        </button>
+                                        <button type="button" data-tmcare-status="need_evacuation" onclick="selectEvacTMCareStatus('need_evacuation')"
+                                            class="tmcare-status-btn p-3 rounded-2xl border-2 border-slate-200 bg-white text-slate-600 hover:border-orange-300 text-xs font-bold transition-all flex flex-col items-center justify-center gap-1 active:scale-95">
+                                            <i class="fas fa-person-running text-base text-orange-500"></i>
+                                            <span>ต้องการอพยพ</span>
+                                        </button>
+                                        <button type="button" data-tmcare-status="evacuated" onclick="selectEvacTMCareStatus('evacuated')"
+                                            class="tmcare-status-btn p-3 rounded-2xl border-2 border-slate-200 bg-white text-slate-600 hover:border-blue-300 text-xs font-bold transition-all flex flex-col items-center justify-center gap-1 active:scale-95">
+                                            <i class="fas fa-campground text-base text-blue-500"></i>
+                                            <span>อพยพแล้ว</span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- กล่องเลือกศูนย์พักพิง / ที่อื่นหรือบ้านญาติ (แสดงเมื่อเลือก "อพยพแล้ว") -->
+                                <div id="evacTMCareDestinationBox" class="hidden p-3.5 rounded-2xl bg-blue-50/70 border border-blue-200/80 space-y-3">
+                                    <label class="block text-[11px] font-black text-blue-800">
+                                        <i class="fas fa-campground mr-1"></i> เลือกสถานที่อพยพ *
+                                    </label>
+                                    <input type="hidden" id="evacTMCareShelterInput" value="">
+                                    <div id="evacTMCareDestBtnGrid" class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        <button type="button" data-tmcare-dest="ศูนย์เทศบาลตำบลตันหยงมัส" onclick="selectEvacTMCareDestination('ศูนย์เทศบาลตำบลตันหยงมัส')"
+                                            class="tmcare-dest-btn p-2.5 rounded-xl border-2 border-slate-200 bg-white text-slate-700 text-xs font-bold text-left flex items-center gap-2 transition active:scale-98">
+                                            <i class="fas fa-campground text-pink-500 shrink-0"></i>
+                                            <span>ศูนย์เทศบาลตำบลตันหยงมัส</span>
+                                        </button>
+                                        <button type="button" data-tmcare-dest="ศูนย์มัสยิดตันหยงมัส" onclick="selectEvacTMCareDestination('ศูนย์มัสยิดตันหยงมัส')"
+                                            class="tmcare-dest-btn p-2.5 rounded-xl border-2 border-slate-200 bg-white text-slate-700 text-xs font-bold text-left flex items-center gap-2 transition active:scale-98">
+                                            <i class="fas fa-campground text-pink-500 shrink-0"></i>
+                                            <span>ศูนย์มัสยิดตันหยงมัส</span>
+                                        </button>
+                                        <button type="button" data-tmcare-dest="ศูนย์โรงเรียนบ้านเขาพระ" onclick="selectEvacTMCareDestination('ศูนย์โรงเรียนบ้านเขาพระ')"
+                                            class="tmcare-dest-btn p-2.5 rounded-xl border-2 border-slate-200 bg-white text-slate-700 text-xs font-bold text-left flex items-center gap-2 transition active:scale-98">
+                                            <i class="fas fa-campground text-pink-500 shrink-0"></i>
+                                            <span>ศูนย์โรงเรียนบ้านเขาพระ</span>
+                                        </button>
+                                        <button type="button" data-tmcare-dest="other" onclick="selectEvacTMCareDestination('other')"
+                                            class="tmcare-dest-btn p-2.5 rounded-xl border-2 border-slate-200 bg-white text-slate-700 text-xs font-bold text-left flex items-center gap-2 transition active:scale-98">
+                                            <i class="fas fa-house-user text-purple-500 shrink-0"></i>
+                                            <span>ที่อื่น / บ้านญาติ (ปักพิกัดแผนที่)</span>
+                                        </button>
+                                    </div>
+
+                                    <!-- Minimap ปักพิกัดกรณีเลือก "ที่อื่น / บ้านญาติ" -->
+                                    <div id="evacTMCareOtherMapBox" class="hidden pt-2 border-t border-blue-200/70 space-y-2.5">
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                            <div>
+                                                <label class="block text-[10px] font-bold text-slate-600 mb-1">ระบุชื่อบ้านญาติ / สถานที่ปลายทาง</label>
+                                                <input type="text" id="evacTMCareOtherPlaceInput"
+                                                    class="w-full p-2.5 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-800 outline-none focus:border-purple-400"
+                                                    placeholder="เช่น บ้านญาติ ซอยเทศบาล 12">
+                                            </div>
+                                            <div>
+                                                <label class="block text-[10px] font-bold text-slate-600 mb-1">พิกัดที่ปักบนแผนที่ (คลิกหรือลากหมุด)</label>
+                                                <div class="flex gap-1.5">
+                                                    <input type="text" id="evacTMCareOtherCoords" readonly
+                                                        class="flex-1 p-2.5 rounded-xl bg-white border border-slate-200 text-[11px] font-mono text-slate-700 outline-none"
+                                                        placeholder="คลิกบนแผนที่เพื่อปักหมุด">
+                                                    <button type="button" onclick="useCurrentGpsForTMCareMiniMap()"
+                                                        class="px-3 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-bold shrink-0 flex items-center gap-1 transition active:scale-95"
+                                                        title="ใช้พิกัด GPS ปัจจุบัน">
+                                                        <i class="fas fa-crosshairs"></i> GPS
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div id="evacTMCareMiniMap" class="w-full h-56 rounded-2xl border-2 border-purple-200 bg-slate-100 relative z-10 overflow-hidden"></div>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label class="block text-[11px] font-bold text-slate-600 mb-1">หมายเหตุ / ความต้องการเพิ่มเติม</label>
+                                    <input type="text" id="evacTMCareNeedsInput"
+                                        class="w-full p-2.5 rounded-xl bg-white border border-slate-200 text-xs text-slate-800 outline-none focus:border-blue-400"
+                                        placeholder="เช่น ต้องการรถรับ-ส่ง / ออกซิเจน">
+                                </div>
+
+                                <div class="flex justify-end">
+                                    <button type="submit" id="btnEvacTMCareSubmit" disabled
+                                        class="w-full sm:w-auto justify-center px-5 py-3 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-xs font-black shadow-md transition active:scale-95 flex items-center gap-1.5">
+                                        <i class="fas fa-paper-plane"></i> บันทึกและอัปเดตกลับไป TMCare
+                                    </button>
+                                </div>
+                            </form>
+
+                            <!-- รายการผู้พิการ/กลุ่มเปราะบาง TMCare พร้อมตัวกรองสถานะ -->
+                            <div class="space-y-3">
+                                <div class="flex flex-wrap items-center justify-between gap-2">
+                                    <div class="flex items-center gap-2">
+                                        <h4 class="text-sm font-black text-slate-800">รายชื่อกลุ่มเปราะบางจาก TMCare</h4>
+                                        <span id="evacTMCareListCount" class="px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-black">0 รายชื่อ</span>
+                                    </div>
+                                    <select id="evacTMCareStatusFilter" onchange="renderEvacTMCareTab()"
+                                        class="px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700">
+                                        <option value="all">ทุกสถานะ</option>
+                                        <option value="need_help">🚨 ขอความช่วยเหลือ</option>
+                                        <option value="need_evacuation">🏃 ต้องการอพยพ</option>
+                                        <option value="evacuated">🏕️ อพยพแล้ว</option>
+                                        <option value="safe_at_home">✅ ปลอดภัยที่บ้าน</option>
+                                    </select>
+                                </div>
+                                <div id="evacTMCareListBody" class="space-y-2 max-h-[420px] overflow-y-auto pr-1"></div>
+                            </div>
                         </div>
 
                     </div>
@@ -3369,19 +3542,28 @@
                                     <h4 class="text-xs font-black text-slate-800 uppercase tracking-wide">ข้อมูลที่อยู่ตามภูมิลำเนา</h4>
                                 </div>
 
-                                <div>
-                                    <label class="text-[11px] font-bold text-slate-500 ml-1 block mb-1">ตัวช่วยเลือกชุมชน/บ้านในระบบ (เลือกเพื่อเติมอัตโนมัติ)</label>
-                                    <select id="regis_address_select" onchange="onSelectQuickAddress(this.value)"
-                                        class="w-full p-3 border border-slate-200 bg-white rounded-xl outline-none focus:ring-2 focus:ring-indigo-400 text-sm font-semibold text-slate-700">
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label class="text-[11px] font-bold text-slate-600 ml-1 block mb-1">บ้านเลขที่ / หมู่ / ซอย / ถนน <span class="text-rose-500">*</span></label>
-                                    <input type="text" id="regis_address_detail"
-                                        class="w-full p-3 border border-slate-200 bg-white rounded-xl outline-none focus:ring-2 focus:ring-indigo-400 text-sm font-semibold"
-                                        placeholder="เช่น 1 ถนนระแงะมรรคา ตันหยงมัส หรือ 123/4 หมู่ 1" required>
-                                    <p class="text-[10px] text-slate-400 mt-1 ml-1">* หากเลือกจากชุมชนด้านบน ระบบจะคงรูปแบบที่อยู่เทศบาลไว้ปักหมุดพิกัดแผนที่ และตัดตำบลซ้ำออกให้อัตโนมัติตอน Export จังหวัด</p>
+                                <div id="regisAddressWrapper" class="relative">
+                                    <label class="text-[11px] font-bold text-slate-600 ml-1 block mb-1">
+                                        บ้านเลขที่ / หมู่ / ซอย / ถนน <span class="text-rose-500">*</span>
+                                        <span class="text-[10px] font-normal text-indigo-600 ml-1">(พิมพ์เพื่อค้นหาหรือกรอกใหม่)</span>
+                                    </label>
+                                    <div class="relative">
+                                        <i class="fas fa-search text-slate-400 text-xs absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                                        <input type="text" id="regis_address_detail" autocomplete="off"
+                                            oninput="filterRegisAddressAutocomplete(this.value)"
+                                            onfocus="filterRegisAddressAutocomplete(this.value)"
+                                            class="w-full pl-9 pr-9 py-3 border border-slate-200 bg-white rounded-xl outline-none focus:ring-2 focus:ring-indigo-400 text-sm font-semibold"
+                                            placeholder="พิมพ์เลขที่บ้าน หรือชื่อถนน เช่น 12 ประชาสามัคคี..." required>
+                                        <button type="button" id="btnClearRegisAddr" onclick="clearRegisAddressAutocomplete()"
+                                            class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center text-xs transition"
+                                            title="ล้างที่อยู่">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                    <div id="regis_address_results"
+                                        class="hidden absolute left-0 right-0 mt-1 z-30 bg-white border border-slate-200 rounded-xl shadow-xl max-h-56 overflow-y-auto divide-y divide-slate-100">
+                                    </div>
+                                    <p class="text-[10px] text-slate-400 mt-1 ml-1">* เลือกจากรายการแนะนำเพื่อปักหมุดพิกัดแผนที่ได้ตรงจุด (หรือพิมพ์ที่อยู่ใหม่ได้ทันที)</p>
                                 </div>
 
                                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -3819,6 +4001,15 @@
                                 class="px-4 py-3 border border-slate-200 rounded-2xl text-xs font-bold transition-all flex items-center justify-center gap-2 active:scale-95 shrink-0 bg-slate-50 text-slate-600 hover:bg-slate-100">
                                 <i class="fas fa-house-circle-exclamation"></i> เฉพาะบ้านไม่มีเลขที่
                             </button>
+                            <!-- ซิงก์ข้อมูลผู้พิการ/กลุ่มเปราะบางจาก TMCare -->
+                            <div class="flex items-center gap-1.5 shrink-0">
+                                <span id="tmcareSyncStatusBadge" class="hidden px-2.5 py-1.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-[10px] font-bold whitespace-nowrap"></span>
+                                <button type="button" onclick="syncTMCareDataManual()"
+                                    class="px-3.5 py-3 rounded-2xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-bold transition shadow-xs active:scale-95 flex items-center gap-1.5 whitespace-nowrap"
+                                    title="ซิงก์ข้อมูลผู้พิการและกลุ่มเปราะบางล่าสุดจาก TMCare">
+                                    <i class="fas fa-arrows-rotate"></i> ซิงก์ TMCare
+                                </button>
+                            </div>
                         </div>
 
                         <!-- แผนที่ Leaflet -->
@@ -4713,6 +4904,7 @@
     <script src="js/modules/public-report.js?v=2569.2" defer></script>
     <script src="js/modules/relief.js?v=2569.2" defer></script>
     <script src="js/modules/user-mgmt.js?v=2569.2" defer></script>
+    <script src="js/modules/tmcare-bridge.js?v=2569.2" defer></script>
     <script src="js/modules/admin-dashboard.js?v=2569.2" defer></script>
     <script src="js/modules/notifications.js?v=2569.2" defer></script>
 

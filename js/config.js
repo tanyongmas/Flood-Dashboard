@@ -18,6 +18,10 @@ const LOOKER_URL = "https://lookerstudio.google.com/embed/reporting/e87384f5-54c
 // Google Apps Script API Web App URL สำหรับระบบปริมาณน้ำฝน (Rainfall Dashboard)
 const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzLh2A9w0TyOJfUc1IVsTKrV661Yt2KmHtyBp0LyHbL8Q8LdS3lIHHt6-O0-hVRAI6W/exec";
 
+// 🏥 TMCare Integration (Google Apps Script Web App URL - เชื่อมข้อมูลผู้พิการ/กลุ่มเปราะบางและสถานะ EMS)
+const TMCARE_GAS_API_URL = "https://script.google.com/macros/s/AKfycbz_f3zk6ikMC2fisQixdA1wA9AVDLHfjGeHE_MG7ZNWTRkag-06eeLN8_h-qqCQHPzSHg/exec";
+const ENABLE_TMCARE_SYNC = true;
+
 // กฎการจัดโซนพื้นที่ในเทศบาลตำบลตันหยงมัส
 window.ZONE_RULES = {
     zone1: ['ถนนประชาสามัคคี', 'ถนนระแงะมรรคา', 'ถนนระแงะมรรคา 1', 'ถนนระแงะมรรคา 2', 'ถนนระแงะมรรคา 3', 'ถนนระแงะมรรคา 4', 'ถนนระแงะมรรคา 5', 'ถนนระแงะมรรคา 6', 'ถนนมะรือโบ-บ่อทอง', 'ถนนลานไทร ซอย 1'],

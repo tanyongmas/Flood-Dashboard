@@ -750,14 +750,8 @@ let dashLayerStates = {
                     if (dashChartLocEl) dashChartLocEl.innerHTML = filterHtml;
                 }
 
-                // 2. จัดการ Dropdown ที่อยู่ในหน้าลงทะเบียนใหม่
+                // 2. เตรียมข้อมูลที่อยู่สำหรับ Autocomplete หน้าลงทะเบียนและถุงยังชีพ
                 if (store.addresses) {
-                    const addrOpts = '<option value="" disabled selected>เลือกที่อยู่/ชุมชน</option>' +
-                        store.addresses.map(a => `<option value="${a}">${a}</option>`).join('') +
-                        '<option value="other">อื่น ๆ (ระบุเอง)</option>';
-                    const regisAddrEl = document.getElementById('regis_address_select');
-                    if (regisAddrEl) regisAddrEl.innerHTML = addrOpts;
-
                     if (typeof initReliefForm === 'function') initReliefForm();
                 }
 
@@ -801,6 +795,11 @@ let dashLayerStates = {
                 // อัปเดตกระดิ่งแจ้งเตือนความเคลื่อนไหวล่าสุด
                 if (typeof window.refreshNotificationBell === 'function') {
                     window.refreshNotificationBell();
+                }
+
+                // 🏥 ซิงก์ข้อมูลผู้พิการ/กลุ่มเปราะบางและสถานะ EMS จาก TMCare แบบ Non-blocking
+                if (typeof window.fetchTMCareDisasterData === 'function') {
+                    window.fetchTMCareDisasterData(false);
                 }
 
                 // อัปเดตเวลาล่าสุด
@@ -1858,6 +1857,91 @@ let dashLayerStates = {
                 }
             });
 
+            // 3. เพิ่มหมุดกลุ่มผู้พิการและกลุ่มเปราะบางจากระบบ TMCare ลงบนแผนที่รายงานสถานะ (#evacMap) และนับรวมยอดอพยพ
+            if (window.tmcareState && window.tmcareState.loaded && Array.isArray(window.tmcareState.beneficiaries)) {
+                window.tmcareState.beneficiaries.forEach(b => {
+                    const meta = window.tmcareState.rowMetaMap[String(b.id || '').trim()];
+                    if (!meta) return;
+
+                    // นับรวมยอดผู้อพยพหากกลุ่มเปราะบางมีการอพยพ (ไปศูนย์ หรือ ไปบ้านญาติ/ที่อื่น)
+                    if (meta.evacStatus === 'evacuated') {
+                        evacHouseholds++;
+                        evacPeople++;
+                        if (meta.statusMeta && meta.statusMeta.destType === 'shelter') {
+                            centerPeople++;
+                        } else {
+                            otherPeople++;
+                        }
+                    }
+
+                    if (!evacMap || !evacMarkerLayer || isNaN(meta.lat) || isNaN(meta.lng) || (meta.lat === 0 && meta.lng === 0)) return;
+
+                    const bgCls = (meta.statusMeta && meta.statusMeta.pinBg) ? meta.statusMeta.pinBg : 'bg-emerald-600';
+                    let ringHtml = '';
+                    let iconCls = 'fa-kit-medical';
+                    let cornerBadgeHtml = '';
+                    let bottomLabelHtml = '';
+
+                    if (meta.evacStatus === 'need_help') {
+                        ringHtml = '<span class="absolute w-11 h-11 rounded-full bg-rose-500 opacity-60 animate-ping"></span>';
+                        iconCls = 'fa-triangle-exclamation';
+                        cornerBadgeHtml = '<span class="absolute -top-1.5 -right-2 px-1 py-0.5 rounded-full bg-red-700 text-white border border-white text-[8px] font-black shadow-md leading-none">SOS</span>';
+                        bottomLabelHtml = '<span class="mt-0.5 px-1.5 py-0.5 rounded-full bg-rose-700 text-white text-[8px] font-black shadow-md whitespace-nowrap border border-white/70">ขอความช่วยเหลือ</span>';
+                    } else if (meta.evacStatus === 'need_evacuation') {
+                        ringHtml = '<span class="absolute w-11 h-11 rounded-full bg-orange-400 opacity-60 animate-ping"></span>';
+                        iconCls = 'fa-person-running';
+                        cornerBadgeHtml = '<span class="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-amber-600 text-white border border-white text-[8px] font-black shadow-md flex items-center justify-center"><i class="fas fa-person-running"></i></span>';
+                        bottomLabelHtml = '<span class="mt-0.5 px-1.5 py-0.5 rounded-full bg-orange-600 text-white text-[8px] font-black shadow-md whitespace-nowrap border border-white/70">ต้องการอพยพ</span>';
+                    } else if (meta.evacStatus === 'evacuated') {
+                        iconCls = (meta.statusMeta && meta.statusMeta.destType === 'shelter') ? 'fa-campground' : 'fa-house-user';
+                    }
+
+                    const tmIcon = L.divIcon({
+                        className: 'custom-evac-tmcare-marker bg-transparent border-0',
+                        html: `
+                            <div class="relative flex flex-col items-center">
+                                <div class="relative flex items-center justify-center">
+                                    ${ringHtml}
+                                    <div class="relative ${bgCls} text-white w-8 h-8 rounded-full border-2 border-white shadow-lg flex items-center justify-center text-xs font-black">
+                                        <i class="fas ${iconCls}"></i>
+                                    </div>
+                                    ${cornerBadgeHtml}
+                                </div>
+                                ${bottomLabelHtml}
+                            </div>
+                        `,
+                        iconSize: [48, 48],
+                        iconAnchor: [24, 20],
+                        popupAnchor: [0, -20]
+                    });
+
+                    const compactAddr = (typeof window.formatCompactThaiAddress === 'function')
+                        ? window.formatCompactThaiAddress(meta.address)
+                        : (meta.address || '-');
+
+                    const tmPopup = `
+                        <div class="font-sans p-2.5 min-w-[235px]">
+                            <div class="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5 mb-1.5">
+                                <span class="text-[10px] font-black text-rose-700"><i class="fas fa-kit-medical mr-1"></i>TMCare</span>
+                                <span class="text-[9px] font-black px-2 py-0.5 rounded-full ${meta.statusMeta.badgeClass}">${meta.statusMeta.label}</span>
+                            </div>
+                            <p class="text-xs font-black text-slate-800">${meta.fullName}</p>
+                            <p class="text-[11px] text-slate-600 mt-0.5"><i class="fas fa-map-marker-alt text-rose-500 mr-1"></i>${compactAddr}</p>
+                            <p class="text-[10px] text-slate-500 mt-0.5">${meta.riskGroup}${meta.needsDetail ? ` • ${meta.needsDetail}` : ''}</p>
+                            <div class="flex gap-1.5 mt-2.5 pt-2 border-t border-slate-100">
+                                <button onclick="openTMCareEmsCardModal('${meta.beneficiaryId}', false)" class="flex-1 py-1.5 px-2 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 text-[10px] font-bold">
+                                    <i class="fas fa-kit-medical mr-1"></i>EMS (PDPA)
+                                </button>
+                                <button onclick="openEvacTMCareForBeneficiary('${meta.beneficiaryId}')" class="flex-1 py-1.5 px-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold">
+                                    <i class="fas fa-arrows-rotate mr-1"></i>อัปเดตสถานะ
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    evacMarkerLayer.addLayer(L.marker([meta.lat, meta.lng], { icon: tmIcon }).bindPopup(tmPopup));
+                });
+            }
+
             // --- 🌟 อัปเดตตัวเลขเข้าสู่การ์ดสรุปสถานะการอพยพ (ทั้งหน้ารายงานสถานะ และ หน้าหลัก ภาพรวม) ---
             if (document.getElementById('sumEvacTotal')) document.getElementById('sumEvacTotal').innerText = evacPeople.toLocaleString();
             if (document.getElementById('sumEvacHousehold')) document.getElementById('sumEvacHousehold').innerText = evacHouseholds.toLocaleString();
@@ -2623,6 +2707,23 @@ let dashLayerStates = {
                 }
             });
 
+            // รวมกลุ่มผู้พิการ/เปราะบางจาก TMCare ที่อพยพแล้ว หรือขอความช่วยเหลือ (SOS)
+            if (window.tmcareState && window.tmcareState.loaded && Array.isArray(window.tmcareState.beneficiaries)) {
+                window.tmcareState.beneficiaries.forEach(b => {
+                    const meta = window.tmcareState.rowMetaMap[String(b.id || '').trim()];
+                    if (!meta) return;
+                    if (meta.evacStatus === 'evacuated') {
+                        evacHouseholds++;
+                        evacPeople++;
+                        if (meta.statusMeta && meta.statusMeta.destType === 'shelter') centerPeople++;
+                        else otherPeople++;
+                    } else if (meta.evacStatus === 'need_help') {
+                        sosHouseholds++;
+                        sosPeople++;
+                    }
+                });
+            }
+
             const totalHouseholds = evacHouseholds + safeHouseholds + sosHouseholds;
 
             body.innerHTML = `
@@ -3378,9 +3479,83 @@ let dashLayerStates = {
                 }
             });
 
-            // 5. เลเยอร์บ้านเรือนน้ำท่วม (Flood Data) - ปรับสีหมุดทั่วไปเป็นสีเขียวอ่อน (bg-emerald-500) และคงสีส้ม (เปราะบาง) สีเหลือง (พิการ/สูงอายุ)
-            if (store.floodData && store.floodData.length > 1) {
-                store.floodData.slice(1).forEach(row => {
+            // 4.3 หมุดกลุ่มเปราะบาง TMCare บน One Map (แสดงเมื่อ ขอความช่วยเหลือ, ต้องการอพยพ, หรือ อพยพแล้ว; ไม่แสดงสถานะปลอดภัย)
+            if (window.tmcareState && window.tmcareState.loaded && Array.isArray(window.tmcareState.beneficiaries)) {
+                window.tmcareState.beneficiaries.forEach(b => {
+                    const meta = window.tmcareState.rowMetaMap[String(b.id || '').trim()];
+                    if (!meta || meta.evacStatus === 'safe_at_home') return;
+                    if (isNaN(meta.lat) || isNaN(meta.lng) || (meta.lat === 0 && meta.lng === 0)) return;
+
+                    const pinBg = (meta.statusMeta && meta.statusMeta.pinBg) ? meta.statusMeta.pinBg : 'bg-blue-600';
+                    let ringHtml = '';
+                    let iconCls = 'fa-kit-medical';
+                    let cornerBadgeHtml = '';
+                    let bottomLabelHtml = '';
+
+                    if (meta.evacStatus === 'need_help') {
+                        ringHtml = '<span class="absolute w-10 h-10 rounded-full bg-rose-500 opacity-60 animate-ping"></span>';
+                        iconCls = 'fa-triangle-exclamation';
+                        cornerBadgeHtml = '<span class="absolute -top-1.5 -right-2 px-1 py-0.5 rounded-full bg-red-700 text-white border border-white text-[8px] font-black shadow-md leading-none">SOS</span>';
+                        bottomLabelHtml = '<span class="mt-0.5 px-1.5 py-0.5 rounded-full bg-rose-700 text-white text-[8px] font-black shadow-md whitespace-nowrap border border-white/70">ขอความช่วยเหลือ</span>';
+                    } else if (meta.evacStatus === 'need_evacuation') {
+                        ringHtml = '<span class="absolute w-10 h-10 rounded-full bg-orange-400 opacity-60 animate-ping"></span>';
+                        iconCls = 'fa-person-running';
+                        cornerBadgeHtml = '<span class="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-amber-600 text-white border border-white text-[8px] font-black shadow-md flex items-center justify-center"><i class="fas fa-person-running"></i></span>';
+                        bottomLabelHtml = '<span class="mt-0.5 px-1.5 py-0.5 rounded-full bg-orange-600 text-white text-[8px] font-black shadow-md whitespace-nowrap border border-white/70">ต้องการอพยพ</span>';
+                    } else if (meta.evacStatus === 'evacuated') {
+                        iconCls = (meta.statusMeta && meta.statusMeta.destType === 'shelter') ? 'fa-campground' : 'fa-house-user';
+                    }
+
+                    const icon = L.divIcon({
+                        className: 'custom-tmcare-onemap-marker bg-transparent border-0',
+                        html: `
+                            <div class="relative flex flex-col items-center">
+                                <div class="relative flex items-center justify-center">
+                                    ${ringHtml}
+                                    <div class="relative ${pinBg} text-white w-8 h-8 rounded-full border-2 border-white shadow-xl flex items-center justify-center text-xs font-black">
+                                        <i class="fas ${iconCls}"></i>
+                                    </div>
+                                    ${cornerBadgeHtml}
+                                </div>
+                                ${bottomLabelHtml}
+                            </div>
+                        `,
+                        iconSize: [48, 48],
+                        iconAnchor: [24, 20],
+                        popupAnchor: [0, -20]
+                    });
+                    const compactAddr = (typeof window.formatCompactThaiAddress === 'function')
+                        ? window.formatCompactThaiAddress(meta.address)
+                        : (meta.address || '-');
+                    const popup = `
+                        <div class="font-sans p-2 min-w-[230px]">
+                            <div class="flex items-center justify-between gap-2 border-b pb-1.5 mb-1.5">
+                                <span class="text-[10px] font-black text-rose-700"><i class="fas fa-kit-medical mr-1"></i>TMCare EMS</span>
+                                <span class="text-[9px] font-black px-2 py-0.5 rounded-full ${meta.statusMeta.badgeClass}">${meta.statusMeta.label}</span>
+                            </div>
+                            <p class="text-xs font-black text-slate-800">${meta.fullName}</p>
+                            <p class="text-[11px] text-slate-600 mt-0.5"><i class="fas fa-map-marker-alt text-rose-500 mr-1"></i>${compactAddr}</p>
+                            <p class="text-[10px] text-slate-500 mt-0.5">${meta.riskGroup}${meta.needsDetail ? ` • ${meta.needsDetail}` : ''}</p>
+                            <div class="flex gap-1.5 mt-2 pt-2 border-t border-slate-100">
+                                <button onclick="openTMCareEmsCardModal('${meta.beneficiaryId}', false)" class="flex-1 py-1.5 px-2 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 text-[10px] font-bold">
+                                    <i class="fas fa-kit-medical mr-1"></i>EMS (PDPA)
+                                </button>
+                                <button onclick="openEvacTMCareForBeneficiary('${meta.beneficiaryId}')" class="flex-1 py-1.5 px-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold">
+                                    <i class="fas fa-arrows-rotate mr-1"></i>อัปเดตสถานะ
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    dashLayers.evac.addLayer(L.marker([meta.lat, meta.lng], { icon }).bindPopup(popup));
+                });
+            }
+
+            // 5. เลเยอร์บ้านเรือนน้ำท่วม (Flood Data + TMCare) - ปรับสีหมุดทั่วไปเป็นสีเขียวอ่อน (bg-emerald-500) และคงสีส้ม (เปราะบาง) สีเหลือง (พิการ/สูงอายุ)
+            const oneMapFloodData = (typeof window.buildMergedFloodDataWithTMCare === 'function')
+                ? window.buildMergedFloodDataWithTMCare(store.floodData)
+                : store.floodData;
+            if (oneMapFloodData && oneMapFloodData.length > 1) {
+                oneMapFloodData.slice(1).forEach(row => {
                     const houseId = row[0] || '';
                     const road = row[1] || '';
                     const address = row[2] || '';
@@ -5231,6 +5406,80 @@ let dashLayerStates = {
             });
         };
 
+        window.filterRegisAddressAutocomplete = function (query) {
+            const inputEl = document.getElementById('regis_address_detail');
+            const resBox = document.getElementById('regis_address_results');
+            const clearBtn = document.getElementById('btnClearRegisAddr');
+            const rawQ = String(query !== undefined ? query : (inputEl ? inputEl.value : '')).trim();
+
+            if (clearBtn) clearBtn.classList.toggle('hidden', rawQ.length === 0);
+            if (!resBox) return;
+
+            let addressPool = [];
+            if (typeof store !== 'undefined' && store) {
+                if (Array.isArray(store.addresses) && store.addresses.length > 0) {
+                    addressPool = store.addresses;
+                } else if (Array.isArray(store.addressEvac) && store.addressEvac.length > 0) {
+                    addressPool = [...new Set(store.addressEvac.map(r => r[0]).filter(Boolean))];
+                }
+            }
+
+            if (addressPool.length === 0) {
+                resBox.classList.add('hidden');
+                return;
+            }
+
+            const norm = (s) => String(s || '').toLowerCase().replace(/ถนน/g, 'ถ.').replace(/\s+/g, ' ').trim();
+            const qNorm = norm(rawQ);
+
+            const filtered = qNorm
+                ? addressPool.filter(a => norm(a).includes(qNorm) || String(a).toLowerCase().includes(rawQ.toLowerCase())).slice(0, 25)
+                : addressPool.slice(0, 25);
+
+            if (filtered.length > 0) {
+                resBox.innerHTML = filtered.map(addr => {
+                    const safeAttr = String(addr).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                    const safeText = String(addr).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    return `<button type="button" onclick="selectRegisAddressAutocomplete('${safeAttr}')" class="w-full text-left px-3.5 py-2.5 hover:bg-indigo-50 text-xs sm:text-sm font-semibold text-slate-700 flex items-center justify-between gap-2 transition-colors">
+                        <span class="truncate"><i class="fas fa-map-marker-alt text-indigo-400 mr-2 text-[11px]"></i>${safeText}</span>
+                        <i class="fas fa-chevron-right text-[10px] text-indigo-300 shrink-0"></i>
+                    </button>`;
+                }).join('');
+            } else {
+                resBox.innerHTML = `<div class="px-3.5 py-2.5 text-xs text-indigo-600 font-bold bg-indigo-50/70 flex items-center gap-2">
+                    <i class="fas fa-info-circle shrink-0"></i>
+                    <span>ไม่พบที่อยู่นี้ในระบบ (สามารถพิมพ์ต่อเพื่อบันทึกเป็นที่อยู่ใหม่ได้)</span>
+                </div>`;
+            }
+            resBox.classList.remove('hidden');
+        };
+
+        window.selectRegisAddressAutocomplete = function (addr) {
+            const inputEl = document.getElementById('regis_address_detail');
+            const resBox = document.getElementById('regis_address_results');
+            const clearBtn = document.getElementById('btnClearRegisAddr');
+            if (inputEl) inputEl.value = addr || '';
+            if (clearBtn) clearBtn.classList.toggle('hidden', !(addr && String(addr).trim()));
+            if (resBox) resBox.classList.add('hidden');
+        };
+
+        window.clearRegisAddressAutocomplete = function () {
+            const inputEl = document.getElementById('regis_address_detail');
+            if (inputEl) {
+                inputEl.value = '';
+                inputEl.focus();
+                window.filterRegisAddressAutocomplete('');
+            }
+        };
+
+        document.addEventListener('click', (e) => {
+            const wrapper = document.getElementById('regisAddressWrapper');
+            const resBox = document.getElementById('regis_address_results');
+            if (wrapper && resBox && !wrapper.contains(e.target)) {
+                resBox.classList.add('hidden');
+            }
+        });
+
         window.onSelectQuickAddress = function (val) {
             const detailEl = document.getElementById('regis_address_detail');
             if (!detailEl) return;
@@ -5246,6 +5495,10 @@ let dashLayerStates = {
         function resetRegisFormDefaults() {
             const form = document.getElementById('regisForm');
             if (form) form.reset();
+            const resBox = document.getElementById('regis_address_results');
+            const clearBtn = document.getElementById('btnClearRegisAddr');
+            if (resBox) resBox.classList.add('hidden');
+            if (clearBtn) clearBtn.classList.add('hidden');
             const prov = document.getElementById('regis_province');
             const dist = document.getElementById('regis_district');
             const sub = document.getElementById('regis_subdistrict');

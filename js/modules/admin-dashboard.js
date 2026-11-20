@@ -413,7 +413,10 @@ window.filterFloodMap = function () {
     const riskFilter = document.getElementById('floodRiskFilter');
     const riskVal = riskFilter ? riskFilter.value : 'all';
 
-    const floodData = (store.floodData && store.floodData.length > 0) ? store.floodData : [];
+    const rawFloodData = (store.floodData && store.floodData.length > 0) ? store.floodData : [];
+    const floodData = (typeof window.buildMergedFloodDataWithTMCare === 'function')
+        ? window.buildMergedFloodDataWithTMCare(rawFloodData)
+        : rawFloodData;
     const headers = floodData[0] || [];
     const findColIdx = (kws, exactOnly = false) => findFloodColIdx(headers, kws, exactOnly);
 
@@ -541,8 +544,19 @@ window.filterFloodMap = function () {
             const encodedRow = encodeURIComponent(JSON.stringify(rowItem));
             const safeName = name.replace(/'/g, "\\'");
             const safeAddr = address.replace(/'/g, "\\'");
+            const isTMCareRow = String(rowId || '').startsWith('tmcare:');
+            const tmMeta = (isTMCareRow && window.tmcareState && window.tmcareState.rowMetaMap) ? window.tmcareState.rowMetaMap[rowId] : null;
 
-            const superadminPopupFooter = isSuperadmin ? `
+            const tmcarePopupFooter = isTMCareRow ? `
+                <div class="flex gap-2 pt-2.5 border-t border-slate-100">
+                    <button onclick="openTMCareEmsCardModal('${rowId}', false)"
+                        class="w-full py-1.5 px-2 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-[10px] font-bold flex items-center justify-center gap-1 transition">
+                        <i class="fas fa-kit-medical"></i> ดูข้อมูลเต็ม / การ์ด EMS (PDPA)
+                    </button>
+                </div>
+            ` : '';
+
+            const superadminPopupFooter = (!isTMCareRow && isSuperadmin) ? `
                 <div class="flex gap-2 pt-2.5 border-t border-slate-100">
                     <button onclick="openEditFloodDataModal('${rowId}', '${encodedRow}')" 
                         class="flex-1 py-1.5 px-2 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-xl text-[10px] font-bold flex items-center justify-center gap-1 transition">
@@ -559,13 +573,18 @@ window.filterFloodMap = function () {
                 <div class="font-sans text-slate-700 min-w-[240px] rounded-2xl overflow-hidden shadow-lg border border-slate-100 bg-white">
                     <div class="px-4 py-2.5 flex justify-between items-center bg-gradient-to-r ${cat.headerBg} ${cat.headerText}">
                         <span class="text-[10px] font-extrabold uppercase tracking-widest flex items-center gap-1.5">
-                            <i class="fas ${cat.icon}"></i> ข้อมูลครัวเรือน
+                            <i class="fas ${cat.icon}"></i> ${isTMCareRow ? 'TMCare EMS' : 'ข้อมูลครัวเรือน'}
                         </span>
                         <span class="text-[9px] font-black px-2.5 py-0.5 rounded-full ${cat.badgeBg} shadow-sm border border-white/10">
                             ${cat.label}
                         </span>
                     </div>
                     <div class="p-4 space-y-3">
+                        ${tmMeta ? `
+                        <div class="flex items-center justify-between gap-2 pb-2 border-b border-slate-100">
+                            <span class="text-[9px] font-black px-2 py-0.5 rounded-full bg-rose-100 text-rose-700">เชื่อมข้อมูล TMCare</span>
+                            <span class="text-[9px] font-black px-2 py-0.5 rounded-full ${tmMeta.statusMeta.badgeClass}">${tmMeta.statusMeta.label}</span>
+                        </div>` : ''}
                         <div>
                             <span class="text-[9px] font-black text-slate-400 uppercase tracking-wider block">ชื่อ-สกุลผู้ประสบภัย</span>
                             <span class="text-xs font-bold text-slate-800 flex items-center gap-1.5 mt-0.5">
@@ -600,7 +619,7 @@ window.filterFloodMap = function () {
                                 </span>
                             </div>
                         </div>
-                        ${superadminPopupFooter}
+                        ${tmcarePopupFooter}${superadminPopupFooter}
                     </div>
                 </div>
             `;
@@ -612,10 +631,20 @@ window.filterFloodMap = function () {
         }
     });
 
+    const hasAnyTMCareRow = filteredRows.some(r => String(r.id || '').startsWith('tmcare:'));
+    const showActionCol = isSuperadmin || hasAnyTMCareRow;
+    if (thActions) {
+        if (showActionCol) thActions.classList.remove('hidden');
+        else thActions.classList.add('hidden');
+    }
+
     let tableHtml = '';
     filteredRows.forEach(row => {
         const cleanRoad = row.road ? row.road.replace(/^ถนน\s*/i, '').trim() : '';
         const fullAddress = `${row.address}${cleanRoad ? ' ถ.' + cleanRoad : ''}`;
+        const compactAddress = (typeof window.formatCompactThaiAddress === 'function')
+            ? window.formatCompactThaiAddress(fullAddress)
+            : fullAddress;
         const markerData = window.floodMarkersMap ? window.floodMarkersMap[row.name] : null;
         const clickAttr = markerData ? `onclick="zoomToFloodMarker('${row.name.replace(/'/g, "\\'")}', ${markerData.lat}, ${markerData.lng})"` : '';
         const cursorClass = markerData ? 'cursor-pointer hover:text-blue-600 transition-colors' : '';
@@ -623,8 +652,20 @@ window.filterFloodMap = function () {
         const encodedRow = encodeURIComponent(JSON.stringify(row));
         const safeName = row.name.replace(/'/g, "\\'");
         const safeAddr = row.address.replace(/'/g, "\\'");
+        const isTMCareRow = String(row.id || '').startsWith('tmcare:');
+        const tmMeta = (isTMCareRow && window.tmcareState && window.tmcareState.rowMetaMap) ? window.tmcareState.rowMetaMap[row.id] : null;
 
-        const superadminCell = isSuperadmin ? `
+        const superadminCell = showActionCol ? (isTMCareRow ? `
+            <td class="p-3 whitespace-nowrap text-center">
+                <div class="inline-flex items-center gap-1.5">
+                    <button onclick="openTMCareEmsCardModal('${row.id}', false)"
+                        class="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-xl text-[11px] font-bold transition-all shadow-sm active:scale-95 flex items-center gap-1" title="ดูข้อมูลเต็ม / การ์ด EMS (ยืนยันรหัส PDPA)">
+                        <i class="fas fa-kit-medical"></i>
+                        <span>EMS</span>
+                    </button>
+                </div>
+            </td>
+        ` : (isSuperadmin ? `
             <td class="p-3 whitespace-nowrap text-center">
                 <div class="inline-flex items-center gap-1.5">
                     <button onclick="openEditFloodDataModal('${row.id || ''}', '${encodedRow}')" 
@@ -639,18 +680,39 @@ window.filterFloodMap = function () {
                     </button>
                 </div>
             </td>
-        ` : '';
+        ` : `<td class="p-3 whitespace-nowrap text-center text-slate-300 text-xs">-</td>`)) : '';
+
+        let tmStatusDotHtml = '';
+        if (tmMeta) {
+            const stMeta = tmMeta.statusMeta || {};
+            const stLabel = stMeta.label || 'ปลอดภัยที่บ้าน';
+            const dotCls = stMeta.dotClass || 'bg-emerald-500 border-emerald-200';
+            const pingCls = stMeta.pingClass || '';
+            tmStatusDotHtml = `
+                <span class="relative inline-flex items-center justify-center w-3 h-3 shrink-0" title="สถานะ TMCare: ${stLabel}">
+                    ${pingCls ? `<span class="animate-ping absolute inline-flex h-full w-full rounded-full ${pingCls} opacity-75"></span>` : ''}
+                    <span class="relative inline-flex rounded-full w-2.5 h-2.5 ${dotCls} border shadow-xs"></span>
+                </span>
+            `;
+        }
+
+        const tmNameBadge = isTMCareRow
+            ? `<span class="ml-1.5 px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 text-[9px] font-black align-middle">TMCare</span>`
+            : '';
 
         tableHtml += `
             <tr class="hover:bg-slate-50 transition-colors">
                 <td class="p-4 whitespace-nowrap font-bold text-slate-800 ${cursorClass}" ${clickAttr}>
-                    ${markerData ? `<i class="fas fa-search-location text-[10px] mr-1.5 text-blue-500"></i>` : ''}${row.name}
+                    ${markerData ? `<i class="fas fa-search-location text-[10px] mr-1.5 text-blue-500"></i>` : ''}${row.name}${tmNameBadge}
                 </td>
-                <td class="p-4 whitespace-nowrap text-slate-700">${fullAddress}</td>
+                <td class="p-4 text-slate-700 max-w-[190px] truncate" title="${fullAddress.replace(/"/g, '&quot;')}">${compactAddress}</td>
                 <td class="p-4 whitespace-nowrap text-center">
-                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black ${row.cat.badgeClass}">
-                        <i class="fas ${row.cat.icon} text-[9px]"></i> ${row.cat.label}
-                    </span>
+                    <div class="inline-flex items-center justify-center gap-1.5 whitespace-nowrap">
+                        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black ${row.cat.badgeClass}">
+                            <i class="fas ${row.cat.icon} text-[9px]"></i> ${row.cat.label}
+                        </span>
+                        ${tmStatusDotHtml}
+                    </div>
                 </td>
                 <td class="p-4 whitespace-nowrap text-center font-sans font-bold text-slate-600">${row.residents} คน</td>
                 ${superadminCell}
@@ -658,7 +720,7 @@ window.filterFloodMap = function () {
         `;
     });
 
-    const colSpanCount = isSuperadmin ? 5 : 4;
+    const colSpanCount = showActionCol ? 5 : 4;
     const tableBody = document.getElementById('floodTableBody');
     if (tableBody) {
         tableBody.innerHTML = tableHtml || `
@@ -683,7 +745,10 @@ window.renderFloodReportDashboard = function () {
     let totalPregnant = 0;
     let totalDialysis = 0;
 
-    const floodData = (store.floodData && store.floodData.length > 0) ? store.floodData : [];
+    const rawFloodData = (store.floodData && store.floodData.length > 0) ? store.floodData : [];
+    const floodData = (typeof window.buildMergedFloodDataWithTMCare === 'function')
+        ? window.buildMergedFloodDataWithTMCare(rawFloodData)
+        : rawFloodData;
     const headers = floodData[0] || [];
     const findColIdx = (kws) => {
         return headers.findIndex(h => {
