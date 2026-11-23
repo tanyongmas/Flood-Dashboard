@@ -3165,7 +3165,7 @@ function getPublicRainfallSeverityMeta(mm24h) {
 }
 
 async function fetchPublicRainfallSummary() {
-    const cacheKey = 'public_rainfall_summary_v2';
+    const cacheKey = 'public_rainfall_summary_v4';
     if (typeof window.getAppCache === 'function') {
         const cached = window.getAppCache(cacheKey);
         if (cached && typeof cached.rainLatest === 'number') return cached;
@@ -3175,84 +3175,150 @@ async function fetchPublicRainfallSummary() {
     const pad = (n) => String(n).padStart(2, '0');
     const updatedAt = `${pad(nowBkk.getHours())}:${pad(nowBkk.getMinutes())} น.`;
 
+    const dualUrl = (typeof API_URL !== 'undefined' && API_URL) ? API_URL : '';
     const gasUrl = (typeof GAS_API_URL !== 'undefined' && GAS_API_URL) ? GAS_API_URL : '';
+    const twProvUrl = 'https://api-v3.thaiwater.net/api/v1/thaiwater30/public/rain_24h?province_code=96';
     const openMeteoUrl = 'https://api.open-meteo.com/v1/forecast?latitude=6.29445&longitude=101.72362&hourly=precipitation&daily=precipitation_sum,precipitation_probability_max&past_days=7&forecast_days=3&timezone=Asia%2FBangkok';
 
-    const [gasSettled, meteoSettled] = await Promise.allSettled([
-        gasUrl ? fetch(gasUrl).then(r => r.ok ? r.json() : null) : Promise.resolve(null),
+    const [dualSettled, twSettled, meteoSettled] = await Promise.allSettled([
+        dualUrl ? fetch(dualUrl, {
+            method: 'POST',
+            body: JSON.stringify({ action: 'getDualRainfall' })
+        }).then(r => r.ok ? r.json() : null) : Promise.resolve(null),
+        fetch(twProvUrl).then(r => r.ok ? r.json() : null),
         fetch(openMeteoUrl).then(r => r.ok ? r.json() : null)
     ]);
 
-    const gasJson = (gasSettled.status === 'fulfilled') ? gasSettled.value : null;
+    const dualJson = (dualSettled.status === 'fulfilled') ? dualSettled.value : null;
+    const twJson = (twSettled.status === 'fulfilled') ? twSettled.value : null;
     const meteoJson = (meteoSettled.status === 'fulfilled') ? meteoSettled.value : null;
 
+    const twList = (twJson && Array.isArray(twJson.data)) ? twJson.data : [];
+    const findTwStation = (targetId, targetCode) => twList.find(item => {
+        const st = item.station || {};
+        const sid = String(st.id || item.station_id || '');
+        const scode = String(st.tele_station_oldcode || st.station_code || '');
+        return sid === String(targetId) || scode.indexOf(targetCode) >= 0;
+    });
+    const tw9006 = findTwStation(1123990, 'STN2153');
+    const tw23069 = findTwStation(920, 'STH005');
+
+    let stationTitle = 'บ้านตันหยงมัส (G09006-STN2153)';
     let rainLatest = 0;
     let latestDateLabel = 'วันนี้';
+    let latestTitleLabel = 'ปริมาณน้ำฝนรายวันล่าสุด';
     let rain3Days = 0;
     let rain7Days = 0;
     let rainMonth = 0;
+    let compareSTH005 = null;
+    let isAnomaly = false;
     let dataSource = 'ThaiWater (สถานีวัดจริง)';
 
     const parseGasDate = (str) => {
         if (!str) return new Date(NaN);
         const part = String(str).split(/[T ]/)[0];
         const p = part.split('-').map(Number);
-        if (p.length === 3 && !p.some(isNaN)) return new Date(p[0], p[1] - 1, p[2]);
+        if (p.length === 3 && !partsInvalid(p)) return new Date(p[0], p[1] - 1, p[2]);
         return new Date(str);
     };
+    const partsInvalid = (p) => p.some(isNaN);
 
-    if (gasJson && gasJson.dailyDataCurrent && Array.isArray(gasJson.dailyDataCurrent.data)) {
-        const prevArr = (gasJson.dailyDataPrev && Array.isArray(gasJson.dailyDataPrev.data)) ? gasJson.dailyDataPrev.data : [];
-        const currArr = gasJson.dailyDataCurrent.data;
-        const allValid = [...prevArr, ...currArr]
-            .filter(it => it && it.rainfall_datetime && it.rainfall_value !== null && it.rainfall_value !== undefined && !isNaN(Number(it.rainfall_value)))
-            .sort((a, b) => parseGasDate(a.rainfall_datetime) - parseGasDate(b.rainfall_datetime));
-
-        currArr.forEach(it => {
-            if (it && it.rainfall_value !== null && it.rainfall_value !== undefined && !isNaN(Number(it.rainfall_value))) {
-                rainMonth += Number(it.rainfall_value);
-            }
-        });
-        rainMonth = Number(rainMonth.toFixed(1));
-
-        if (allValid.length > 0) {
-            const latestItem = allValid[allValid.length - 1];
-            rainLatest = Number(Number(latestItem.rainfall_value).toFixed(1));
-            const dt = parseGasDate(latestItem.rainfall_datetime);
-            if (!isNaN(dt.getTime())) {
-                latestDateLabel = dt.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
-            }
-            const sumLastN = (n) => {
-                let s = 0;
-                for (let i = Math.max(0, allValid.length - n); i < allValid.length; i++) {
-                    s += Number(allValid[i].rainfall_value) || 0;
-                }
-                return Number(s.toFixed(1));
-            };
-            rain3Days = sumLastN(3);
-            rain7Days = sumLastN(7);
-        }
-    } else if (meteoJson && meteoJson.daily) {
-        dataSource = 'Open-Meteo (สำรอง)';
-        const dailyTimes = meteoJson.daily.time || [];
-        const dailySums = meteoJson.daily.precipitation_sum || [];
-        const todayIso = `${nowBkk.getFullYear()}-${pad(nowBkk.getMonth() + 1)}-${pad(nowBkk.getDate())}`;
-        let todayIdx = dailyTimes.indexOf(todayIso);
-        if (todayIdx < 0) todayIdx = Math.max(0, dailyTimes.length - 3);
-
-        const sumSlice = (start, end) => {
-            let total = 0;
-            for (let i = Math.max(0, start); i <= Math.min(dailySums.length - 1, end); i++) {
-                total += Number(dailySums[i]) || 0;
-            }
-            return Number(total.toFixed(1));
-        };
-        rainLatest = Number((Number(dailySums[todayIdx]) || 0).toFixed(1));
-        rain3Days = sumSlice(todayIdx - 2, todayIdx);
-        rain7Days = sumSlice(todayIdx - 6, todayIdx);
-        rainMonth = rain7Days;
+    if (dualJson && dualJson.success && dualJson.primary && (dualJson.primary.rainLatest !== null || tw9006)) {
+        const pri = dualJson.primary;
+        const stn23069 = dualJson.stations ? dualJson.stations['23069'] : null;
+        stationTitle = pri.stationName || stationTitle;
+        const twPriRain = (pri.stationCode === 'STH005' ? tw23069 : tw9006);
+        const twVal = (twPriRain && twPriRain.rain_24h !== null && twPriRain.rain_24h !== undefined) ? Number(twPriRain.rain_24h) : null;
+        const apiRain24 = (pri.rain24h !== null && pri.rain24h !== undefined) ? Number(pri.rain24h) : null;
+        const resolvedRain24 = twVal !== null ? twVal : apiRain24;
+        const hasRain24h = resolvedRain24 !== null;
+        rainLatest = hasRain24h ? resolvedRain24 : Number(pri.rainLatest || 0);
+        latestTitleLabel = hasRain24h ? 'ปริมาณฝนสะสม 24 ชั่วโมงล่าสุด' : 'ปริมาณน้ำฝนรายวันล่าสุด';
+        rain3Days = Number(pri.rain3Days || 0);
+        rain7Days = Number(pri.rain7Days || 0);
+        rainMonth = Number(pri.rainMonth || 0);
+        const tw23069Val = (tw23069 && tw23069.rain_24h !== null && tw23069.rain_24h !== undefined) ? Number(tw23069.rain_24h) : null;
+        compareSTH005 = tw23069Val !== null ? tw23069Val : ((stn23069 && stn23069.rainLatest !== null) ? Number(stn23069.rainLatest) : null);
+        isAnomaly = !!dualJson.isAnomaly;
+        const rawDate = (twPriRain && twPriRain.rainfall_datetime) ? twPriRain.rainfall_datetime : pri.latestDateLabel;
+        const dt = parseGasDate(rawDate);
+        latestDateLabel = !isNaN(dt.getTime())
+            ? dt.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' })
+            : (pri.latestDateLabel || 'ล่าสุด');
+    } else if (tw9006 && tw9006.rain_24h !== null && tw9006.rain_24h !== undefined) {
+        stationTitle = 'บ้านตันหยงมัส (G09006-STN2153)';
+        rainLatest = Number(tw9006.rain_24h);
+        latestTitleLabel = 'ปริมาณฝนสะสม 24 ชั่วโมงล่าสุด';
+        compareSTH005 = (tw23069 && tw23069.rain_24h !== null && tw23069.rain_24h !== undefined) ? Number(tw23069.rain_24h) : null;
+        const dt = parseGasDate(tw9006.rainfall_datetime);
+        latestDateLabel = !isNaN(dt.getTime())
+            ? dt.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' })
+            : 'วันนี้';
     } else {
-        throw new Error('ไม่สามารถดึงข้อมูลปริมาณน้ำฝนได้');
+        // Fallback ไป GAS_API_URL เดิม (STH005) หรือ Open-Meteo
+        let gasJson = null;
+        if (gasUrl) {
+            try {
+                const gRes = await fetch(gasUrl);
+                if (gRes.ok) gasJson = await gRes.json();
+            } catch (_) { }
+        }
+
+        if (gasJson && gasJson.dailyDataCurrent && Array.isArray(gasJson.dailyDataCurrent.data)) {
+            stationTitle = 'ทต.ตันหยงมัส (G23069-STH005)';
+            const prevArr = (gasJson.dailyDataPrev && Array.isArray(gasJson.dailyDataPrev.data)) ? gasJson.dailyDataPrev.data : [];
+            const currArr = gasJson.dailyDataCurrent.data;
+            const allValid = [...prevArr, ...currArr]
+                .filter(it => it && it.rainfall_datetime && it.rainfall_value !== null && it.rainfall_value !== undefined && !isNaN(Number(it.rainfall_value)))
+                .sort((a, b) => parseGasDate(a.rainfall_datetime) - parseGasDate(b.rainfall_datetime));
+
+            currArr.forEach(it => {
+                if (it && it.rainfall_value !== null && it.rainfall_value !== undefined && !isNaN(Number(it.rainfall_value))) {
+                    rainMonth += Number(it.rainfall_value);
+                }
+            });
+            rainMonth = Number(rainMonth.toFixed(1));
+
+            if (allValid.length > 0) {
+                const latestItem = allValid[allValid.length - 1];
+                rainLatest = Number(Number(latestItem.rainfall_value).toFixed(1));
+                const dt = parseGasDate(latestItem.rainfall_datetime);
+                if (!isNaN(dt.getTime())) {
+                    latestDateLabel = dt.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: '2-digit' });
+                }
+                const sumLastN = (n) => {
+                    let s = 0;
+                    for (let i = Math.max(0, allValid.length - n); i < allValid.length; i++) {
+                        s += Number(allValid[i].rainfall_value) || 0;
+                    }
+                    return Number(s.toFixed(1));
+                };
+                rain3Days = sumLastN(3);
+                rain7Days = sumLastN(7);
+            }
+        } else if (meteoJson && meteoJson.daily) {
+            stationTitle = 'พื้นที่ ต.ตันหยงมัส';
+            dataSource = 'Open-Meteo (สำรอง)';
+            const dailyTimes = meteoJson.daily.time || [];
+            const dailySums = meteoJson.daily.precipitation_sum || [];
+            const todayIso = `${nowBkk.getFullYear()}-${pad(nowBkk.getMonth() + 1)}-${pad(nowBkk.getDate())}`;
+            let todayIdx = dailyTimes.indexOf(todayIso);
+            if (todayIdx < 0) todayIdx = Math.max(0, dailyTimes.length - 3);
+
+            const sumSlice = (start, end) => {
+                let total = 0;
+                for (let i = Math.max(0, start); i <= Math.min(dailySums.length - 1, end); i++) {
+                    total += Number(dailySums[i]) || 0;
+                }
+                return Number(total.toFixed(1));
+            };
+            rainLatest = Number((Number(dailySums[todayIdx]) || 0).toFixed(1));
+            rain3Days = sumSlice(todayIdx - 2, todayIdx);
+            rain7Days = sumSlice(todayIdx - 6, todayIdx);
+            rainMonth = rain7Days;
+        } else {
+            throw new Error('ไม่สามารถดึงข้อมูลปริมาณน้ำฝนได้');
+        }
     }
 
     const forecastDays = [];
@@ -3277,11 +3343,15 @@ async function fetchPublicRainfallSummary() {
     }
 
     const summary = {
+        stationTitle,
         rainLatest,
         latestDateLabel,
+        latestTitleLabel,
         rain3Days,
         rain7Days,
         rainMonth,
+        compareSTH005,
+        isAnomaly,
         forecastDays,
         dataSource,
         updatedAt
@@ -3310,6 +3380,13 @@ window.renderPublicRainfallCard = async function () {
             </div>
         `).join('');
 
+        const compareNote = d.compareSTH005 !== null
+            ? `<div class="text-[11px] ${d.isAnomaly ? 'text-rose-600 font-bold' : 'text-slate-500'} flex items-center justify-between pt-1 border-t border-slate-200/60">
+                <span>สถานีข้างเคียง ทต.ตันหยงมัส (STH005):</span>
+                <span>${d.compareSTH005.toFixed(1)} มม. ${d.isAnomaly ? '⚠️ ค่าต่างผิดปกติ' : ''}</span>
+               </div>`
+            : '';
+
         section.innerHTML = `
             <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div class="flex items-center gap-3">
@@ -3317,7 +3394,7 @@ window.renderPublicRainfallCard = async function () {
                         <i class="fas fa-cloud-rain"></i>
                     </div>
                     <div>
-                        <h3 class="font-bold text-slate-800 text-base">ปริมาณน้ำฝน สถานี ทต.ตันหยงมัส</h3>
+                        <h3 class="font-bold text-slate-800 text-base">ปริมาณน้ำฝน สถานี${d.stationTitle}</h3>
                         <p class="text-[11px] text-slate-400">${d.dataSource} • อัปเดต ${d.updatedAt}</p>
                     </div>
                 </div>
@@ -3330,7 +3407,7 @@ window.renderPublicRainfallCard = async function () {
             <!-- ตัวเลขฝนวันล่าสุด + คำแนะนำ -->
             <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2.5">
                 <div>
-                    <div class="text-xs font-bold text-slate-500">ปริมาณน้ำฝนรายวันล่าสุด (${d.latestDateLabel})</div>
+                    <div class="text-xs font-bold text-slate-500">${d.latestTitleLabel || 'ปริมาณฝนสะสม 24 ชั่วโมงล่าสุด'} (${d.latestDateLabel})</div>
                     <div class="flex items-baseline gap-1.5 mt-0.5">
                         <span class="text-3xl font-black ${meta.accentText} tracking-tight">${d.rainLatest.toFixed(1)}</span>
                         <span class="text-xs font-bold text-slate-400">มิลลิเมตร (มม.)</span>
@@ -3340,6 +3417,7 @@ window.renderPublicRainfallCard = async function () {
                     <div class="h-full ${meta.barColor} rounded-full transition-all duration-700" style="width: ${pct}%"></div>
                 </div>
                 <p class="text-xs text-slate-600 font-medium"><i class="fas fa-circle-info ${meta.accentText} mr-1.5"></i>${meta.advice}</p>
+                ${compareNote}
             </div>
 
             <!-- 3 กล่อง: สะสม 3 วัน / สะสม 7 วัน / สะสมเดือนนี้ -->

@@ -61,18 +61,214 @@ function setApiStatus(status) {
   }
 }
 
+let globalDualRainfallData = null;
+let currentRainfallStationMode = 'compare';
+
 async function fetchData() {
   try {
-    const response = await fetch(GAS_API_URL);
-    if (!response.ok) throw new Error("HTTP Status " + response.status);
-    const result = await response.json();
+    // โหลดข้อมูลหลักของ Rainfall Dashboard ก่อนทันที ไม่ให้การ์ดเปรียบเทียบ 2 สถานีมาบล็อกหน้าจอค้าง
+    const gasRes = await fetch(GAS_API_URL);
+    if (!gasRes.ok) throw new Error("HTTP Status " + gasRes.status);
+    const result = await gasRes.json();
     processData(result);
+
+    // โหลดข้อมูลเปรียบเทียบ 2 สถานีแบบ Background (ไม่บล็อกหน้าเว็บ)
+    loadDualRainfallComparison();
   } catch (error) {
     setApiStatus('error');
     document.getElementById('loading').classList.add('hidden');
     document.getElementById('error-message').classList.remove('hidden');
     document.getElementById('error-detail').innerText = error.message;
   }
+}
+
+async function fetchDirectThaiWaterRain24h() {
+  try {
+    const r = await fetch('https://api-v3.thaiwater.net/api/v1/thaiwater30/public/rain_24h?province_code=96');
+    if (!r.ok) return null;
+    const json = await r.json();
+    const list = (json && Array.isArray(json.data)) ? json.data : [];
+    const pick = (targetId, targetCode, targetName) => {
+      const match = list.find(item => {
+        const st = item.station || {};
+        const sid = String(st.id || item.station_id || '');
+        const scode = String(st.tele_station_oldcode || st.station_code || '');
+        return sid === String(targetId) || scode.indexOf(targetCode) >= 0;
+      });
+      const v24 = (match && match.rain_24h !== undefined && match.rain_24h !== null) ? Number(match.rain_24h) : null;
+      const dt = match && match.rainfall_datetime ? String(match.rainfall_datetime).split(/[T ]/)[0] : '-';
+      return {
+        stationId: String(targetId),
+        stationCode: targetCode,
+        stationName: targetName,
+        rain24h: (v24 !== null && !isNaN(v24)) ? Number(v24.toFixed(1)) : null,
+        rainLatest: (v24 !== null && !isNaN(v24)) ? Number(v24.toFixed(1)) : null,
+        latestDateLabel: dt,
+        ok: (v24 !== null && !isNaN(v24))
+      };
+    };
+    const stn9006 = pick(1123990, 'STN2153', 'บ้านตันหยงมัส (G09006-STN2153)');
+    const stn23069 = pick(920, 'STH005', 'ทต.ตันหยงมัส (G23069-STH005)');
+    let isAnomaly = false;
+    let anomalyReason = '';
+    if (stn9006.rain24h !== null && stn23069.rain24h !== null) {
+      const diff = Math.abs(stn9006.rain24h - stn23069.rain24h);
+      const maxV = Math.max(stn9006.rain24h, stn23069.rain24h);
+      const minV = Math.min(stn9006.rain24h, stn23069.rain24h);
+      if ((minV === 0 && maxV >= 10) || (diff > 25 && minV > 0 && (maxV / minV) >= 3)) {
+        isAnomaly = true;
+        anomalyReason = `ค่าสถานี ทต.ตันหยงมัส (${stn23069.rain24h.toFixed(1)} มม.) ต่างจาก บ้านตันหยงมัส (${stn9006.rain24h.toFixed(1)} มม.) มากผิดปกติ แนะนำอ้างอิงสถานีบ้านตันหยงมัส`;
+      }
+    }
+    return {
+      success: stn9006.ok || stn23069.ok,
+      primaryKey: stn9006.ok ? '9006' : '23069',
+      stations: { '9006': stn9006, '23069': stn23069 },
+      isAnomaly,
+      anomalyReason
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
+async function loadDualRainfallComparison() {
+  let dualRes = null;
+  if (typeof API_URL !== 'undefined' && API_URL) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    try {
+      const r = await fetch(API_URL, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'getDualRainfall' }),
+        signal: controller.signal
+      });
+      if (r.ok) dualRes = await r.json();
+    } catch (_) {
+      dualRes = null;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  if (!dualRes || !dualRes.success) {
+    dualRes = await fetchDirectThaiWaterRain24h();
+  } else if (dualRes.stations && dualRes.stations['9006'] && dualRes.stations['9006'].rain24h === null) {
+    const direct = await fetchDirectThaiWaterRain24h();
+    if (direct && direct.success && direct.stations) {
+      ['9006', '23069'].forEach(k => {
+        if (direct.stations[k] && direct.stations[k].rain24h !== null && dualRes.stations[k]) {
+          dualRes.stations[k].rain24h = direct.stations[k].rain24h;
+          dualRes.stations[k].rainLatest = direct.stations[k].rain24h;
+          dualRes.stations[k].latestDateLabel = direct.stations[k].latestDateLabel;
+        }
+      });
+      dualRes.isAnomaly = direct.isAnomaly;
+      dualRes.anomalyReason = direct.anomalyReason;
+    }
+  }
+  if (dualRes && dualRes.success) {
+    globalDualRainfallData = dualRes;
+    renderDualStationComparison(dualRes);
+  } else {
+    const card = document.getElementById('dual-station-comparison-card');
+    if (card) card.classList.add('hidden');
+  }
+}
+
+window.switchRainfallStationMode = function (mode) {
+  currentRainfallStationMode = mode || 'compare';
+  document.querySelectorAll('.rain-mode-btn').forEach(btn => {
+    const active = btn.getAttribute('data-rain-mode') === currentRainfallStationMode;
+    btn.className = active
+      ? 'rain-mode-btn whitespace-nowrap px-3.5 py-2 rounded-xl text-xs font-bold bg-blue-600 text-white shadow-sm transition'
+      : 'rain-mode-btn whitespace-nowrap px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-white transition';
+  });
+  if (globalDualRainfallData) {
+    renderDualStationComparison(globalDualRainfallData);
+  }
+};
+
+function renderDualStationComparison(dual) {
+  if (!dual || !dual.stations) return;
+  const card = document.getElementById('dual-station-comparison-card');
+  if (card) card.classList.remove('hidden');
+
+  const s9006 = dual.stations['9006'] || {};
+  const s23069 = dual.stations['23069'] || {};
+
+  const alertBox = document.getElementById('dual-anomaly-alert');
+  const alertText = document.getElementById('dual-anomaly-text');
+  if (alertBox && alertText) {
+    if (dual.isAnomaly && dual.anomalyReason) {
+      alertText.innerText = dual.anomalyReason;
+      alertBox.classList.remove('hidden');
+    } else {
+      alertBox.classList.add('hidden');
+    }
+  }
+
+  const renderBox = (elId, st, isRecommended) => {
+    const el = document.getElementById(elId);
+    if (!el) return;
+    const latestVal = (st.rainLatest !== null && st.rainLatest !== undefined) ? Number(st.rainLatest).toFixed(1) : '-';
+    const val24 = (st.rain24h !== null && st.rain24h !== undefined) ? `${Number(st.rain24h).toFixed(1)} มม.` : '-';
+    const histDays = Number(st.historyDaysCount || (Array.isArray(st.dailySeries) ? st.dailySeries.length : 0));
+    const has3d = histDays >= 1 || Number(st.rain3Days || 0) > 0;
+    const has7d = histDays >= 1 || Number(st.rain7Days || 0) > 0;
+    const hasMonth = histDays >= 1 || Number(st.rainMonth || 0) > 0;
+    const val3d = has3d ? `${Number(st.rain3Days || 0).toFixed(1)} มม.` : '-';
+    const val7d = has7d ? `${Number(st.rain7Days || 0).toFixed(1)} มม.` : '-';
+    const valMonth = hasMonth ? `${Number(st.rainMonth || 0).toFixed(1)} มม.` : '-';
+    const note3d = (histDays > 0 && histDays < 3) ? ` (${histDays} วัน)` : '';
+    const note7d = (histDays > 0 && histDays < 7) ? ` (${histDays} วัน)` : '';
+    el.innerHTML = `
+      <div class="flex items-center justify-between gap-2 mb-2">
+        <span class="text-xs font-extrabold text-slate-800">${st.stationName || '-'}</span>
+        ${isRecommended
+          ? '<span class="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-bold shrink-0">สถานีอ้างอิงหลัก</span>'
+          : '<span class="px-2 py-0.5 rounded-full bg-sky-100 text-sky-800 text-[10px] font-bold shrink-0">สถานีเทศบาล</span>'}
+      </div>
+      <div class="flex items-baseline gap-2 mb-2.5">
+        <span class="text-3xl font-black ${isRecommended ? 'text-emerald-700' : 'text-sky-700'}">${latestVal}</span>
+        <span class="text-xs text-slate-500 font-bold">มม. (ฝนสะสม 24 ชม. • ${st.latestDateLabel || '-'})</span>
+      </div>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-[11px]">
+        <div class="bg-white/80 rounded-xl p-1.5 border border-slate-200/70">
+          <div class="text-slate-400">24 ชม.</div>
+          <div class="font-extrabold text-slate-700">${val24}</div>
+        </div>
+        <div class="bg-white/80 rounded-xl p-1.5 border border-slate-200/70">
+          <div class="text-slate-400">สะสม 3 วัน${note3d}</div>
+          <div class="font-extrabold text-slate-700">${val3d}</div>
+        </div>
+        <div class="bg-white/80 rounded-xl p-1.5 border border-slate-200/70">
+          <div class="text-slate-400">สะสม 7 วัน${note7d}</div>
+          <div class="font-extrabold text-slate-700">${val7d}</div>
+        </div>
+        <div class="bg-white/80 rounded-xl p-1.5 border border-slate-200/70">
+          <div class="text-slate-400">เดือนนี้</div>
+          <div class="font-extrabold text-slate-700">${valMonth}</div>
+        </div>
+      </div>
+    `;
+  };
+
+  renderBox('stn9006-summary-box', s9006, true);
+  renderBox('stn23069-summary-box', s23069, false);
+
+  const dualGrid = document.getElementById('dual-station-grid');
+  if (dualGrid) {
+    dualGrid.className = currentRainfallStationMode === 'compare'
+      ? 'grid grid-cols-1 md:grid-cols-2 gap-4'
+      : 'grid grid-cols-1 gap-4';
+  }
+
+  const box9006 = document.getElementById('stn9006-summary-box');
+  const box23069 = document.getElementById('stn23069-summary-box');
+  if (box9006) box9006.classList.toggle('hidden', currentRainfallStationMode === '23069');
+  if (box23069) box23069.classList.toggle('hidden', currentRainfallStationMode === '9006');
+
+  destroyChart('dualCompare');
 }
 
 // ฟังก์ชันคำนวณและแกะข้อมูลรายวัน (ใช้ซ้ำได้ทั้ง 2 เดือน)

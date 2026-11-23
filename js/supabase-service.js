@@ -146,7 +146,60 @@ function unwrapSettledQuery(settled, label) {
     return { data: val.data || [], error: null };
 }
 
-async function sbFetchInitialData(targetPeriod = '2569') {
+const SB_REF_CACHE_KEYS = {
+    waterPoints: 'sb_ref_cache_water_points_v1',
+    addressEvac: 'sb_ref_cache_address_evac_v1',
+    addressList: 'sb_ref_cache_address_list_v1'
+};
+
+function getStaticSbCache(key) {
+    try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || !Array.isArray(parsed.data) || !parsed.expiresAt) return null;
+        if (Date.now() > parsed.expiresAt) {
+            localStorage.removeItem(key);
+            return null;
+        }
+        return parsed.data;
+    } catch (_) {
+        return null;
+    }
+}
+
+function setStaticSbCache(key, data, ttlHours) {
+    try {
+        if (!Array.isArray(data)) return;
+        const payload = {
+            data,
+            expiresAt: Date.now() + (ttlHours * 60 * 60 * 1000)
+        };
+        localStorage.setItem(key, JSON.stringify(payload));
+    } catch (_) { /* ignore storage quota errors */ }
+}
+
+function invalidateStaticAddressCache() {
+    try {
+        localStorage.removeItem(SB_REF_CACHE_KEYS.addressEvac);
+        localStorage.removeItem(SB_REF_CACHE_KEYS.addressList);
+    } catch (_) { }
+}
+window.invalidateStaticAddressCache = invalidateStaticAddressCache;
+
+async function fetchCachedStaticTable(tableName, cacheKey, ttlHours, forceRefresh = false) {
+    if (!forceRefresh) {
+        const cached = getStaticSbCache(cacheKey);
+        if (cached) return { data: cached, error: null };
+    }
+    const res = await sbClient.from(tableName).select('*');
+    if (res && !res.error && Array.isArray(res.data)) {
+        setStaticSbCache(cacheKey, res.data, ttlHours);
+    }
+    return res;
+}
+
+async function sbFetchInitialData(targetPeriod = '2569', forceRefresh = false) {
     if (!isSupabaseReady()) {
         console.error("❌ [Supabase] Client ไม่พร้อมใช้งาน");
         return null;
@@ -162,16 +215,17 @@ async function sbFetchInitialData(targetPeriod = '2569') {
             const startTime = performance.now();
 
             // กลุ่มที่ 1 (ข้อมูลหลัก): ไม่ดึง file_url (Base64) ของ water_levels ตอนโหลดหน้าแรก และจำกัด 500 แถวล่าสุด
+            // ตารางข้อมูลอ้างอิง (water_points, address_evacuation, Address) ใช้ Cache ใน localStorage เพื่อลด Egress
             const batch1 = await Promise.allSettled([
-                sbClient.from('water_points').select('*'),
+                fetchCachedStaticTable('water_points', SB_REF_CACHE_KEYS.waterPoints, 12, forceRefresh),
                 sbClient.from('water_levels')
                     .select('id, recorded_at, location, level, reporter, trend, coords, note, period')
                     .eq('period', period)
                     .order('recorded_at', { ascending: false })
                     .limit(500),
                 sbClient.from('evacuees').select('*').eq('period', period).order('registered_at', { ascending: false }),
-                sbClient.from('address_evacuation').select('*'),
-                sbClient.from('Address').select('*')
+                fetchCachedStaticTable('address_evacuation', SB_REF_CACHE_KEYS.addressEvac, 24, forceRefresh),
+                fetchCachedStaticTable('Address', SB_REF_CACHE_KEYS.addressList, 24, forceRefresh)
             ]);
 
             const wpRes = unwrapSettledQuery(batch1[0], 'water_points');
@@ -460,6 +514,53 @@ window.sbFetchWaterLevelPhoto = async function (rowId) {
         console.warn("⚠️ [Supabase] sbFetchWaterLevelPhoto exception:", e);
         return '';
     }
+};
+
+window.sbFetchWaterLevelPhotosBatch = async function (rowIds) {
+    const resultMap = {};
+    if (!Array.isArray(rowIds) || rowIds.length === 0 || !isSupabaseReady()) return resultMap;
+
+    const uniqueIds = [...new Set(rowIds.map(id => String(id || '').trim()).filter(Boolean))];
+    const missingIds = [];
+    uniqueIds.forEach(id => {
+        if (_waterPhotoCache[id] !== undefined) {
+            resultMap[id] = _waterPhotoCache[id];
+        } else {
+            missingIds.push(id);
+        }
+    });
+
+    if (missingIds.length === 0) return resultMap;
+
+    try {
+        const { data, error } = await sbClient
+            .from('water_levels')
+            .select('id, file_url')
+            .in('id', missingIds);
+
+        if (error) {
+            console.warn("⚠️ [Supabase] sbFetchWaterLevelPhotosBatch error:", error.message);
+            return resultMap;
+        }
+
+        const fetchedSet = new Set();
+        (data || []).forEach(row => {
+            const idStr = String(row.id);
+            const url = row.file_url ? String(row.file_url).trim() : '';
+            _waterPhotoCache[idStr] = url;
+            resultMap[idStr] = url;
+            fetchedSet.add(idStr);
+        });
+        missingIds.forEach(id => {
+            if (!fetchedSet.has(id)) {
+                _waterPhotoCache[id] = '';
+                resultMap[id] = '';
+            }
+        });
+    } catch (e) {
+        console.warn("⚠️ [Supabase] sbFetchWaterLevelPhotosBatch exception:", e);
+    }
+    return resultMap;
 };
 
 // ==========================================
@@ -812,6 +913,7 @@ async function sbSaveEvacuation(payload) {
                     Latitude: lat,
                     Longtitude: lng
                 }], { onConflict: 'Address' });
+                invalidateStaticAddressCache();
             }
         } catch (e) { /* ignore */ }
     }

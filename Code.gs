@@ -27,6 +27,9 @@ const TMD_UKEY = getScriptProperty('TMD_UKEY', ''); // กรมอุตุน�
 const LINE_CHANNEL_ACCESS_TOKEN = getScriptProperty('LINE_CHANNEL_ACCESS_TOKEN', '');
 
 function doGet(e) {
+  if (e && e.parameter && e.parameter.action === 'getDualRainfall') {
+    return createResponse(fetchThaiWaterRainfallDualStation());
+  }
   return HtmlService.createHtmlOutputFromFile('index')
     .setTitle('ระบบเทศบาลตำบลตันหยงมัส')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1.0, user-scalable=no')
@@ -421,6 +424,9 @@ function doPost(e) {
 
     if (params.action === 'getWeatherData') {
         return createResponse(getWeatherData());
+    }
+    if (params.action === 'getDualRainfall') {
+        return createResponse(fetchThaiWaterRainfallDualStation());
     }
     // ==========================================
     // getAddressList สำหรับหน้า "ลงทะเบียนผู้ประสบภัย"
@@ -4534,96 +4540,487 @@ function setupScriptProperties(customProps) {
 }
 
 // ==========================================
-// 🌧️ ข้อมูลและ Flex Message ปริมาณน้ำฝน สถานี ทต.ตันหยงมัส (สำหรับ LINE OA Reply)
+// 🌧️ ข้อมูลและ Flex Message ปริมาณน้ำฝน 2 สถานี (บ้านตันหยงมัส G09006-STN2153 + ทต.ตันหยงมัส G23069-STH005)
 // ==========================================
-function getRainfallSummaryForLine() {
+function getRainfallSupabaseConfig_() {
+  return {
+    url: getScriptProperty('SUPABASE_URL', 'https://wixjaufsizqurdiovjdf.supabase.co'),
+    key: getScriptProperty('SUPABASE_KEY', 'sb_publishable_cGgfJgxM5zQ1tqmvH9i2qQ_RgI9pING')
+  };
+}
+
+function upsertRainfallDailyToSupabase_(rows) {
+  if (!rows || rows.length === 0) return false;
+  try {
+    const cfg = getRainfallSupabaseConfig_();
+    if (!cfg.url || !cfg.key) return false;
+    const endpoint = cfg.url.replace(/\/+$/, '') + '/rest/v1/rainfall_daily_logs?on_conflict=station_id,record_date';
+    const res = UrlFetchApp.fetch(endpoint, {
+      method: 'post',
+      contentType: 'application/json',
+      headers: {
+        apikey: cfg.key,
+        Authorization: 'Bearer ' + cfg.key,
+        Prefer: 'resolution=merge-duplicates,return=minimal'
+      },
+      payload: JSON.stringify(rows),
+      muteHttpExceptions: true
+    });
+    const code = res.getResponseCode();
+    if (code >= 200 && code < 300) return true;
+    console.warn('Supabase rainfall upsert status:', code, res.getContentText());
+  } catch (e) {
+    console.warn('Supabase rainfall upsert error:', e);
+  }
+  return false;
+}
+
+function upsertRainfallDailyToSheet_(rows) {
+  if (!rows || rows.length === 0) return;
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss) return;
+    let sheet = ss.getSheetByName('RainfallDailyLogs');
+    if (!sheet) {
+      sheet = ss.insertSheet('RainfallDailyLogs');
+      sheet.appendRow(['station_id', 'station_code', 'station_name', 'record_date', 'rain_mm', 'measured_at', 'source', 'updated_at']);
+    }
+    const lastRow = sheet.getLastRow();
+    const existingMap = {};
+    if (lastRow > 1) {
+      const vals = sheet.getRange(2, 1, lastRow - 1, 4).getValues();
+      for (let i = 0; i < vals.length; i++) {
+        const sid = String(vals[i][0] || '').trim();
+        let dStr = vals[i][3];
+        if (dStr instanceof Date) {
+          dStr = Utilities.formatDate(dStr, 'GMT+7', 'yyyy-MM-dd');
+        } else {
+          dStr = String(dStr || '').split(/[T ]/)[0];
+        }
+        if (sid && dStr) existingMap[sid + '|' + dStr] = i + 2;
+      }
+    }
+    const nowIso = new Date().toISOString();
+    rows.forEach(function (r) {
+      const key = String(r.station_id) + '|' + String(r.record_date);
+      const rowValues = [
+        String(r.station_id),
+        String(r.station_code || ''),
+        String(r.station_name || ''),
+        String(r.record_date),
+        Number(r.rain_mm || 0),
+        String(r.measured_at || ''),
+        String(r.source || 'thaiwater_v3'),
+        nowIso
+      ];
+      if (existingMap[key]) {
+        sheet.getRange(existingMap[key], 1, 1, rowValues.length).setValues([rowValues]);
+      } else {
+        sheet.appendRow(rowValues);
+      }
+    });
+  } catch (e) {
+    console.warn('Sheet RainfallDailyLogs upsert warning:', e);
+  }
+}
+
+function fetchRainfallHistoryFromStorage_(stationId, limitDays) {
+  const maxRows = limitDays || 31;
+  // 1. ลองดึงจาก Supabase ก่อน
+  try {
+    const cfg = getRainfallSupabaseConfig_();
+    if (cfg.url && cfg.key) {
+      const endpoint = cfg.url.replace(/\/+$/, '') +
+        '/rest/v1/rainfall_daily_logs?station_id=eq.' + encodeURIComponent(String(stationId)) +
+        '&select=record_date,rain_mm&order=record_date.desc&limit=' + maxRows;
+      const res = UrlFetchApp.fetch(endpoint, {
+        headers: {
+          apikey: cfg.key,
+          Authorization: 'Bearer ' + cfg.key
+        },
+        muteHttpExceptions: true
+      });
+      if (res.getResponseCode() === 200) {
+        const list = JSON.parse(res.getContentText());
+        if (Array.isArray(list) && list.length > 0) {
+          return list.map(function (it) {
+            return {
+              date: String(it.record_date || '').split(/[T ]/)[0],
+              value: Number(Number(it.rain_mm || 0).toFixed(1))
+            };
+          }).filter(function (x) { return x.date; }).sort(function (a, b) {
+            return a.date.localeCompare(b.date);
+          });
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Supabase rainfall history read warning:', e);
+  }
+
+  // 2. สำรอง: ดึงจาก Google Sheet RainfallDailyLogs
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const sheet = ss ? ss.getSheetByName('RainfallDailyLogs') : null;
+    if (sheet && sheet.getLastRow() > 1) {
+      const vals = sheet.getRange(2, 1, sheet.getLastRow() - 1, 5).getValues();
+      const filtered = [];
+      for (let i = 0; i < vals.length; i++) {
+        if (String(vals[i][0] || '').trim() !== String(stationId)) continue;
+        let dStr = vals[i][3];
+        if (dStr instanceof Date) {
+          dStr = Utilities.formatDate(dStr, 'GMT+7', 'yyyy-MM-dd');
+        } else {
+          dStr = String(dStr || '').split(/[T ]/)[0];
+        }
+        const v = Number(vals[i][4]);
+        if (dStr && !isNaN(v)) filtered.push({ date: dStr, value: Number(v.toFixed(1)) });
+      }
+      return filtered.sort(function (a, b) { return a.date.localeCompare(b.date); }).slice(-maxRows);
+    }
+  } catch (eSheet) {
+    console.warn('Sheet RainfallDailyLogs read warning:', eSheet);
+  }
+  return [];
+}
+
+/**
+ * 🕒 ฟังก์ชันบันทึกยอดฝนรายวันของทั้ง 2 สถานี (1123990 & 920) ลง Supabase และ Sheet
+ * สามารถตั้ง Time-driven Trigger รันวันละ 1-2 ครั้ง (เช่น 07:05 น. และ 23:55 น.)
+ */
+function syncDailyRainfallToStorage() {
+  const stations = [
+    { id: '1123990', code: 'STN2153', name: 'บ้านตันหยงมัส (G09006-STN2153)' },
+    { id: '920', code: 'STH005', name: 'ทต.ตันหยงมัส (G23069-STH005)' }
+  ];
+  const now = new Date();
+  const todayStr = Utilities.formatDate(now, 'GMT+7', 'yyyy-MM-dd');
+  const rowsToSave = [];
+
+  // ดึงข้อมูล 24 ชม. ล่าสุดเฉพาะจังหวัดนราธิวาส (province_code=96 ~59KB เร็วกว่าดึงทั้งประเทศ ~3.8MB)
+  const latestMap = {};
+  try {
+    const r24Res = UrlFetchApp.fetch('https://api-v3.thaiwater.net/api/v1/thaiwater30/public/rain_24h?province_code=96', { muteHttpExceptions: true });
+    if (r24Res.getResponseCode() === 200) {
+      const r24Json = JSON.parse(r24Res.getContentText());
+      const list = (r24Json && Array.isArray(r24Json.data)) ? r24Json.data : [];
+      stations.forEach(function (stCfg) {
+        const match = list.find(function (item) {
+          const st = item.station || {};
+          const sid = String(st.id || item.station_id || '');
+          const scode = String(st.tele_station_oldcode || st.station_code || '');
+          return sid === stCfg.id || scode.indexOf(stCfg.code) >= 0;
+        });
+        if (match) {
+          latestMap[stCfg.id] = match;
+        }
+      });
+    }
+  } catch (e24) {
+    console.warn('syncDailyRainfallToStorage rain_24h error:', e24);
+  }
+
+  stations.forEach(function (stCfg) {
+    const byDate = {};
+    try {
+      const gUrl = 'https://api-v3.thaiwater.net/api/v1/thaiwater30/public/rain_24h_graph?station_id=' + encodeURIComponent(stCfg.id);
+      const gRes = UrlFetchApp.fetch(gUrl, { muteHttpExceptions: true });
+      if (gRes.getResponseCode() === 200) {
+        const gJson = JSON.parse(gRes.getContentText());
+        const rows = (gJson && Array.isArray(gJson.data)) ? gJson.data : [];
+        rows.forEach(function (r) {
+          const dt = String(r.rainfall_datetime || '').split(/[T ]/)[0];
+          const v = (r.rainfall_value !== null && r.rainfall_value !== undefined) ? Number(r.rainfall_value) : null;
+          if (dt && v !== null && !isNaN(v)) {
+            byDate[dt] = Number(((byDate[dt] || 0) + v).toFixed(2));
+          }
+        });
+      }
+    } catch (eg) {
+      console.warn('syncDailyRainfallToStorage graph error (' + stCfg.id + '):', eg);
+    }
+
+    const match = latestMap[stCfg.id];
+    const measuredAt = match && match.rainfall_datetime ? String(match.rainfall_datetime).replace(' ', 'T') + '+07:00' : now.toISOString();
+    const dates = Object.keys(byDate).sort();
+
+    if (dates.length > 0) {
+      dates.forEach(function (dStr) {
+        rowsToSave.push({
+          station_id: stCfg.id,
+          station_code: stCfg.code,
+          station_name: stCfg.name,
+          record_date: dStr,
+          rain_mm: byDate[dStr],
+          measured_at: measuredAt,
+          source: 'thaiwater_v3_hourly_sum'
+        });
+      });
+    } else if (match && match.rain_24h !== null && match.rain_24h !== undefined && !isNaN(Number(match.rain_24h))) {
+      const dStr = match.rainfall_datetime ? String(match.rainfall_datetime).split(/[T ]/)[0] : todayStr;
+      rowsToSave.push({
+        station_id: stCfg.id,
+        station_code: stCfg.code,
+        station_name: stCfg.name,
+        record_date: dStr,
+        rain_mm: Number(Number(match.rain_24h).toFixed(2)),
+        measured_at: measuredAt,
+        source: 'thaiwater_v3_rain24h'
+      });
+    }
+  });
+
+  const sbOk = upsertRainfallDailyToSupabase_(rowsToSave);
+  upsertRainfallDailyToSheet_(rowsToSave);
+  try {
+    CacheService.getScriptCache().remove('THAIWATER_DUAL_RAIN_V3');
+    CacheService.getScriptCache().remove('LINE_RAINFALL_SUMMARY_V4');
+  } catch (_) { }
+
+  return { success: true, savedCount: rowsToSave.length, supabaseSynced: sbOk };
+}
+
+/**
+ * ⚙️ รันฟังก์ชันนี้ 1 ครั้งใน Apps Script Editor เพื่อตั้งเวลาเก็บข้อมูลน้ำฝนอัตโนมัติ (07:05 น. และ 23:55 น.)
+ */
+function setupRainfallDailyTrigger() {
+  const existing = ScriptApp.getProjectTriggers();
+  existing.forEach(function (tr) {
+    if (tr.getHandlerFunction() === 'syncDailyRainfallToStorage') {
+      ScriptApp.deleteTrigger(tr);
+    }
+  });
+  ScriptApp.newTrigger('syncDailyRainfallToStorage').timeBased().everyDays(1).atHour(7).nearMinute(5).create();
+  ScriptApp.newTrigger('syncDailyRainfallToStorage').timeBased().everyDays(1).atHour(23).nearMinute(55).create();
+  return { success: true, message: 'ตั้งเวลา syncDailyRainfallToStorage วันละ 2 รอบ (07:05 น. และ 23:55 น.) เรียบร้อยแล้ว' };
+}
+
+function fetchThaiWaterRainfallDualStation() {
   const cache = CacheService.getScriptCache();
-  const cacheKey = 'LINE_RAINFALL_SUMMARY_V2';
+  const cacheKey = 'THAIWATER_DUAL_RAIN_V3';
   try {
     const cachedStr = cache.get(cacheKey);
     if (cachedStr) return JSON.parse(cachedStr);
   } catch (_) { }
 
-  const gasRainUrl = getScriptProperty('GAS_RAINFALL_API_URL', 'https://script.google.com/macros/s/AKfycbzLh2A9w0TyOJfUc1IVsTKrV661Yt2KmHtyBp0LyHbL8Q8LdS3lIHHt6-O0-hVRAI6W/exec');
-  const openMeteoUrl = "https://api.open-meteo.com/v1/forecast?latitude=6.29445&longitude=101.72362&daily=precipitation_sum,precipitation_probability_max&past_days=7&forecast_days=2&timezone=Asia%2FBangkok";
+  const now = new Date();
+  const endDateStr = Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
+  const monthPrefix = Utilities.formatDate(now, "GMT+7", "yyyy-MM");
 
-  let gasJson = null;
-  let meteoJson = null;
+  const makeStationResult = function (stationId, stationCode, stationName) {
+    return {
+      stationId: String(stationId),
+      stationCode: stationCode,
+      stationName: stationName,
+      rain24h: null,
+      rainLatest: null,
+      latestDateLabel: '-',
+      rain3Days: 0,
+      rain7Days: 0,
+      rainMonth: 0,
+      historyDaysCount: 0,
+      dailySeries: [],
+      ok: false
+    };
+  };
+
+  // หมายเหตุ: ThaiWater API v3 ใช้ station.id = 1123990 (STN2153) และ 920 (STH005)
+  // ส่วน 9006 / 23069 เป็นรหัสหน่วยงานใน URL แผนที่ ไม่ใช่ station_id ใน API
+  const stn9006 = makeStationResult(1123990, 'STN2153', 'บ้านตันหยงมัส (G09006-STN2153)');
+  const stn23069 = makeStationResult(920, 'STH005', 'ทต.ตันหยงมัส (G23069-STH005)');
+
+  // 1. ดึงจาก public/rain_24h?province_code=96 ครั้งเดียวสำหรับทั้ง 2 สถานี (ขนาด ~59KB เร็วและไม่ติดลิมิต GAS)
   try {
-    const gasRes = UrlFetchApp.fetch(gasRainUrl, { muteHttpExceptions: true });
-    if (gasRes.getResponseCode() === 200) gasJson = JSON.parse(gasRes.getContentText());
-  } catch (e1) { console.warn("GAS Rainfall fetch warning:", e1); }
+    const r24Res = UrlFetchApp.fetch("https://api-v3.thaiwater.net/api/v1/thaiwater30/public/rain_24h?province_code=96", { muteHttpExceptions: true });
+    if (r24Res.getResponseCode() === 200) {
+      const r24Json = JSON.parse(r24Res.getContentText());
+      const list = (r24Json && Array.isArray(r24Json.data)) ? r24Json.data : [];
 
+      const applyMatch = function (target, targetId, targetCode) {
+        const match = list.find(function (item) {
+          const st = item.station || {};
+          const sid = String(st.id || item.station_id || '');
+          const scode = String(st.tele_station_oldcode || st.station_code || '');
+          return sid === String(targetId) || scode.indexOf(targetCode) >= 0;
+        });
+        if (match) {
+          const v24 = (match.rain_24h !== undefined && match.rain_24h !== null) ? Number(match.rain_24h) : null;
+          if (v24 !== null && !isNaN(v24)) {
+            target.rain24h = Number(v24.toFixed(1));
+            target.rainLatest = target.rain24h;
+            const dtStr = String(match.rainfall_datetime || '').split(/[T ]/)[0];
+            target.latestDateLabel = dtStr || endDateStr;
+            target.ok = true;
+          }
+        }
+      };
+
+      applyMatch(stn9006, 1123990, 'STN2153');
+      applyMatch(stn23069, 920, 'STH005');
+    }
+  } catch (e24) {
+    console.warn("ThaiWater rain_24h error:", e24);
+  }
+
+  // 2. ดึงประวัติรายวันจาก Supabase / Sheet แล้วผสานกับข้อมูลรายชั่วโมงล่าสุดจาก public/rain_24h_graph
+  const enrichWithHistoryAndHourly = function (target, stationId) {
+    const mergedMap = {};
+    const stored = fetchRainfallHistoryFromStorage_(stationId, 31);
+    stored.forEach(function (it) {
+      if (it && it.date) mergedMap[it.date] = Number(it.value);
+    });
+
+    try {
+      const gUrl = "https://api-v3.thaiwater.net/api/v1/thaiwater30/public/rain_24h_graph?station_id=" + encodeURIComponent(stationId);
+      const gRes = UrlFetchApp.fetch(gUrl, { muteHttpExceptions: true });
+      if (gRes.getResponseCode() === 200) {
+        const gJson = JSON.parse(gRes.getContentText());
+        const rows = (gJson && Array.isArray(gJson.data)) ? gJson.data : [];
+        const byDate = {};
+        rows.forEach(function (r) {
+          const dt = String(r.rainfall_datetime || '').split(/[T ]/)[0];
+          const v = (r.rainfall_value !== null && r.rainfall_value !== undefined) ? Number(r.rainfall_value) : null;
+          if (dt && v !== null && !isNaN(v)) {
+            byDate[dt] = Number(((byDate[dt] || 0) + v).toFixed(1));
+          }
+        });
+        Object.keys(byDate).forEach(function (d) {
+          mergedMap[d] = byDate[d];
+        });
+      }
+    } catch (eg) {
+      console.warn("ThaiWater rain_24h_graph error (" + stationId + "):", eg);
+    }
+
+    const series = Object.keys(mergedMap).sort().slice(-31).map(function (d) {
+      return { date: d, value: Number(Number(mergedMap[d]).toFixed(1)) };
+    });
+
+    if (series.length > 0) {
+      target.dailySeries = series;
+      target.historyDaysCount = series.length;
+      const sumLast = function (n) {
+        let s = 0;
+        for (let i = Math.max(0, series.length - n); i < series.length; i++) s += series[i].value;
+        return Number(s.toFixed(1));
+      };
+      target.rain3Days = sumLast(3);
+      target.rain7Days = sumLast(7);
+      let mSum = 0;
+      series.forEach(function (x) {
+        if (x.date.indexOf(monthPrefix) === 0) mSum += x.value;
+      });
+      target.rainMonth = Number(mSum.toFixed(1));
+
+      if (target.rainLatest === null) {
+        const latest = series[series.length - 1];
+        target.rainLatest = latest.value;
+        target.latestDateLabel = latest.date;
+        target.ok = true;
+      }
+    }
+  };
+  enrichWithHistoryAndHourly(stn9006, 1123990);
+  enrichWithHistoryAndHourly(stn23069, 920);
+
+  // Fallback เสริมสำหรับ STH005 จาก GAS_RAINFALL_API_URL เดิมหากประวัติใน Storage ยังไม่ครบ 7 วัน
+  if (!stn23069.ok || stn23069.historyDaysCount < 7) {
+    try {
+      const gasRainUrl = getScriptProperty('GAS_RAINFALL_API_URL', 'https://script.google.com/macros/s/AKfycbzLh2A9w0TyOJfUc1IVsTKrV661Yt2KmHtyBp0LyHbL8Q8LdS3lIHHt6-O0-hVRAI6W/exec');
+      const gasRes = UrlFetchApp.fetch(gasRainUrl, { muteHttpExceptions: true });
+      if (gasRes.getResponseCode() === 200) {
+        const gasJson = JSON.parse(gasRes.getContentText());
+        if (gasJson && gasJson.dailyDataCurrent && Array.isArray(gasJson.dailyDataCurrent.data)) {
+          const prevArr = (gasJson.dailyDataPrev && Array.isArray(gasJson.dailyDataPrev.data)) ? gasJson.dailyDataPrev.data : [];
+          const currArr = gasJson.dailyDataCurrent.data;
+          const allValid = prevArr.concat(currArr).filter(function (it) {
+            return it && it.rainfall_datetime && it.rainfall_value !== null && it.rainfall_value !== undefined && !isNaN(Number(it.rainfall_value));
+          }).map(function (it) {
+            return { date: String(it.rainfall_datetime).split(/[T ]/)[0], value: Number(Number(it.rainfall_value).toFixed(1)) };
+          }).sort(function (a, b) { return a.date.localeCompare(b.date); });
+
+          if (allValid.length > 0) {
+            stn23069.dailySeries = allValid.slice(-15);
+            stn23069.historyDaysCount = stn23069.dailySeries.length;
+            if (stn23069.rainLatest === null) {
+              const latest = allValid[allValid.length - 1];
+              stn23069.rainLatest = latest.value;
+              stn23069.latestDateLabel = latest.date;
+            }
+            const sumLast = function (n) {
+              let s = 0;
+              for (let i = Math.max(0, allValid.length - n); i < allValid.length; i++) s += allValid[i].value;
+              return Number(s.toFixed(1));
+            };
+            stn23069.rain3Days = sumLast(3);
+            stn23069.rain7Days = sumLast(7);
+            let mSum = 0;
+            currArr.forEach(function (it) {
+              if (it && it.rainfall_value !== null && it.rainfall_value !== undefined && !isNaN(Number(it.rainfall_value))) mSum += Number(it.rainfall_value);
+            });
+            stn23069.rainMonth = Number(mSum.toFixed(1));
+            stn23069.ok = true;
+          }
+        }
+      }
+    } catch (eGas) {
+      console.warn("GAS STH005 fallback warning:", eGas);
+    }
+  }
+
+  // ตรวจสอบความผิดปกติระหว่าง 2 สถานี (Anomaly Cross-Check)
+  let isAnomaly = false;
+  let anomalyReason = '';
+  const v9006 = (stn9006.rain24h !== null) ? stn9006.rain24h : stn9006.rainLatest;
+  const v23069 = (stn23069.rain24h !== null) ? stn23069.rain24h : stn23069.rainLatest;
+  if (v9006 !== null && v23069 !== null) {
+    const diff = Math.abs(v9006 - v23069);
+    const maxV = Math.max(v9006, v23069);
+    const minV = Math.min(v9006, v23069);
+    if ((minV === 0 && maxV >= 10) || (diff > 25 && minV > 0 && (maxV / minV) >= 3)) {
+      isAnomaly = true;
+      anomalyReason = 'ค่าสถานี ทต.ตันหยงมัส (' + v23069.toFixed(1) + ' มม.) ต่างจาก บ้านตันหยงมัส (' + v9006.toFixed(1) + ' มม.) มากผิดปกติ แนะนำอ้างอิงสถานีบ้านตันหยงมัส';
+    }
+  }
+
+  const primaryKey = stn9006.ok ? '9006' : '23069';
+  const payload = {
+    success: stn9006.ok || stn23069.ok,
+    primaryKey: primaryKey,
+    primary: primaryKey === '9006' ? stn9006 : stn23069,
+    stations: {
+      '9006': stn9006,
+      '23069': stn23069
+    },
+    isAnomaly: isAnomaly,
+    anomalyReason: anomalyReason,
+    updatedAtStr: Utilities.formatDate(now, "GMT+7", "dd/MM/yyyy เวลา HH:mm น.")
+  };
+
+  if (payload.success) {
+    try { cache.put(cacheKey, JSON.stringify(payload), 600); } catch (_) { }
+  }
+  return payload;
+}
+
+function getRainfallSummaryForLine() {
+  const cache = CacheService.getScriptCache();
+  const cacheKey = 'LINE_RAINFALL_SUMMARY_V4';
+  try {
+    const cachedStr = cache.get(cacheKey);
+    if (cachedStr) return JSON.parse(cachedStr);
+  } catch (_) { }
+
+  const dual = fetchThaiWaterRainfallDualStation();
+  const openMeteoUrl = "https://api.open-meteo.com/v1/forecast?latitude=6.29445&longitude=101.72362&daily=precipitation_sum,precipitation_probability_max&past_days=2&forecast_days=2&timezone=Asia%2FBangkok";
+  let meteoJson = null;
   try {
     const meteoRes = UrlFetchApp.fetch(openMeteoUrl, { muteHttpExceptions: true });
     if (meteoRes.getResponseCode() === 200) meteoJson = JSON.parse(meteoRes.getContentText());
-  } catch (e2) { console.warn("Open-Meteo Rainfall fetch warning:", e2); }
+  } catch (e2) { }
 
   const now = new Date();
   const todayIso = Utilities.formatDate(now, "GMT+7", "yyyy-MM-dd");
-  let rainLatest = 0;
-  let latestDateLabel = "ล่าสุด";
-  let rain3Days = 0;
-  let rain7Days = 0;
-  let rainMonth = 0;
-  let dataSource = "ThaiWater (สถานีวัดจริง)";
-
-  if (gasJson && gasJson.dailyDataCurrent && Array.isArray(gasJson.dailyDataCurrent.data)) {
-    const prevArr = (gasJson.dailyDataPrev && Array.isArray(gasJson.dailyDataPrev.data)) ? gasJson.dailyDataPrev.data : [];
-    const currArr = gasJson.dailyDataCurrent.data;
-    const parseDateNum = function (str) {
-      return String(str || '').split(/[T ]/)[0];
-    };
-    const allValid = prevArr.concat(currArr).filter(function (it) {
-      return it && it.rainfall_datetime && it.rainfall_value !== null && it.rainfall_value !== undefined && !isNaN(Number(it.rainfall_value));
-    }).sort(function (a, b) {
-      return parseDateNum(a.rainfall_datetime).localeCompare(parseDateNum(b.rainfall_datetime));
-    });
-
-    currArr.forEach(function (it) {
-      if (it && it.rainfall_value !== null && it.rainfall_value !== undefined && !isNaN(Number(it.rainfall_value))) {
-        rainMonth += Number(it.rainfall_value);
-      }
-    });
-    rainMonth = Number(rainMonth.toFixed(1));
-
-    if (allValid.length > 0) {
-      const latestItem = allValid[allValid.length - 1];
-      rainLatest = Number(Number(latestItem.rainfall_value).toFixed(1));
-      latestDateLabel = parseDateNum(latestItem.rainfall_datetime);
-
-      const sumLastN = function (n) {
-        let s = 0;
-        for (let i = Math.max(0, allValid.length - n); i < allValid.length; i++) {
-          s += Number(allValid[i].rainfall_value) || 0;
-        }
-        return Number(s.toFixed(1));
-      };
-      rain3Days = sumLastN(3);
-      rain7Days = sumLastN(7);
-    }
-  } else if (meteoJson && meteoJson.daily) {
-    dataSource = "Open-Meteo (สำรอง)";
-    const dailyTimes = meteoJson.daily.time || [];
-    const dailySums = meteoJson.daily.precipitation_sum || [];
-    let todayIdx = dailyTimes.indexOf(todayIso);
-    if (todayIdx < 0) todayIdx = Math.max(0, dailyTimes.length - 2);
-    const sumSlice = function (start, end) {
-      let total = 0;
-      for (let i = Math.max(0, start); i <= Math.min(dailySums.length - 1, end); i++) {
-        total += Number(dailySums[i]) || 0;
-      }
-      return Number(total.toFixed(1));
-    };
-    rainLatest = Number((Number(dailySums[todayIdx]) || 0).toFixed(1));
-    latestDateLabel = todayIso;
-    rain3Days = sumSlice(todayIdx - 2, todayIdx);
-    rain7Days = sumSlice(todayIdx - 6, todayIdx);
-    rainMonth = rain7Days;
-  } else {
-    throw new Error("ไม่สามารถดึงข้อมูลปริมาณน้ำฝนได้");
-  }
-
   let tomorrowProb = 0;
   let tomorrowMm = 0;
   if (meteoJson && meteoJson.daily) {
@@ -4636,15 +5033,22 @@ function getRainfallSummaryForLine() {
     if (todayIdx + 1 < dailySums.length) tomorrowMm = Number((Number(dailySums[todayIdx + 1]) || 0).toFixed(1));
   }
 
+  const primary = dual && dual.primary ? dual.primary : null;
+  const stn23069 = dual && dual.stations ? dual.stations['23069'] : null;
+  const rainLatest = (primary && primary.rainLatest !== null) ? primary.rainLatest : 0;
+
   const summary = {
+    stationName: primary ? primary.stationName : 'บ้านตันหยงมัส (G09006-STN2153)',
     rainLatest: rainLatest,
-    latestDateLabel: latestDateLabel,
-    rain3Days: rain3Days,
-    rain7Days: rain7Days,
-    rainMonth: rainMonth,
+    latestDateLabel: primary ? primary.latestDateLabel : todayIso,
+    rain3Days: primary ? primary.rain3Days : 0,
+    rain7Days: primary ? primary.rain7Days : 0,
+    rainMonth: primary ? primary.rainMonth : 0,
+    compareSTH005: (stn23069 && stn23069.rainLatest !== null) ? stn23069.rainLatest : null,
+    isAnomaly: !!(dual && dual.isAnomaly),
     tomorrowProb: tomorrowProb,
     tomorrowMm: tomorrowMm,
-    dataSource: dataSource,
+    dataSource: "ThaiWater (คลังข้อมูลน้ำแห่งชาติ)",
     updatedAtStr: Utilities.formatDate(now, "GMT+7", "dd/MM/yyyy เวลา HH:mm น.")
   };
 
@@ -4680,7 +5084,7 @@ function getRainfallFlexMessage() {
 
   return {
     "type": "flex",
-    "altText": "🌧️ ปริมาณน้ำฝน สถานี ทต.ตันหยงมัส (" + d.rainLatest.toFixed(1) + " มม.)",
+    "altText": "🌧️ ปริมาณน้ำฝน " + d.stationName + " (" + d.rainLatest.toFixed(1) + " มม.)",
     "contents": {
       "type": "bubble",
       "size": "mega",
@@ -4692,10 +5096,11 @@ function getRainfallFlexMessage() {
         "contents": [
           {
             "type": "text",
-            "text": "🌧️ ปริมาณน้ำฝน สถานี ทต.ตันหยงมัส",
+            "text": "🌧️ " + d.stationName,
             "color": "#ffffff",
             "weight": "bold",
-            "size": "md"
+            "size": "sm",
+            "wrap": true
           },
           {
             "type": "text",
@@ -4765,6 +5170,14 @@ function getRainfallFlexMessage() {
                   { "type": "text", "text": d.rainMonth.toFixed(1) + " มม.", "size": "sm", "weight": "bold", "color": "#0f172a", "align": "center", "margin": "xs" }
                 ]
               }
+            ]
+          },
+          {
+            "type": "box",
+            "layout": "horizontal",
+            "contents": [
+              { "type": "text", "text": "เทียบ ทต.ตันหยงมัส (STH005):", "size": "xxs", "color": "#64748b", "flex": 6 },
+              { "type": "text", "text": d.compareSTH005 !== null ? (d.compareSTH005.toFixed(1) + " มม." + (d.isAnomaly ? " ⚠️" : "")) : "-", "size": "xxs", "weight": "bold", "color": d.isAnomaly ? "#e11d48" : "#475569", "flex": 4, "align": "end" }
             ]
           },
           {

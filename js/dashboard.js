@@ -1229,13 +1229,21 @@ let dashLayerStates = {
                 displayData = store.waterLevels.filter(r => r[1] === filter).sort((a, b) => new Date(b[0]) - new Date(a[0]));
             }
 
+            const visibleCards = displayData.slice(0, 12);
+            const cleanRole = String(typeof userRole !== 'undefined' ? userRole : '').toLowerCase().trim();
+            const canAutoLoadWaterThumbnails = ['superadmin', 'admin', 'community'].includes(cleanRole);
+            const missingPhotoRowIds = [];
+
             // 2. แสดงผล Card พร้อมฟังก์ชัน Pan to Marker
-            document.getElementById('waterList').innerHTML = displayData.slice(0, 12).map(r => {
+            document.getElementById('waterList').innerHTML = visibleCards.map(r => {
                 const locationName = r[1]; // ชื่อพื้นที่/จุดวัด
                 const trend = r[4] || 'คงตัว';
                 const photoUrl = r[6] || '';
                 const rowId = r[8] || '';
                 let displayLink = photoUrl.includes("id=") ? `https://drive.google.com/thumbnail?id=${photoUrl.split("id=")[1]}&sz=w600` : photoUrl;
+                if (!displayLink && rowId && canAutoLoadWaterThumbnails) {
+                    missingPhotoRowIds.push(String(rowId));
+                }
 
                 let cardStyle = "bg-white text-slate-700", badgeStyle = "bg-blue-100 text-blue-600";
                 if (trend === 'เพิ่มขึ้น') { cardStyle = "bg-red-600 text-white animate-pulse-fast"; badgeStyle = "bg-red-800 text-white"; }
@@ -1247,16 +1255,21 @@ let dashLayerStates = {
                  class="rounded-[2rem] border shadow-md overflow-hidden transition-all active:scale-[0.98] cursor-pointer hover:shadow-xl ${cardStyle} flex flex-col h-full group">
                 
                 <div class="water-card-img-container relative overflow-hidden">
-                    ${displayLink ? `<img src="${displayLink}" 
+                    ${displayLink ? `<img src="${displayLink}" loading="lazy" decoding="async"
                         onclick="event.stopPropagation(); openLightbox('${displayLink}')" 
                         class="w-full h-full object-cover cursor-zoom-in group-hover:scale-110 transition-transform duration-500" 
                         alt="สถานการณ์น้ำ"
                         onerror="this.src='https://placehold.co/600x400?text=No+Photo'">` :
-                        (rowId ? `<button type="button" onclick="event.stopPropagation(); openWaterLevelPhotoById('${rowId}', this)"
-                            class="w-full h-full flex flex-col items-center justify-center bg-slate-900/10 hover:bg-slate-900/20 text-current opacity-80 hover:opacity-100 transition text-xs font-bold p-3">
-                            <i class="fas fa-camera text-2xl mb-1.5"></i>
-                            <span>คลิกดูรูปภาพจุดนี้</span>
-                        </button>` :
+                        (rowId ? (canAutoLoadWaterThumbnails
+                            ? `<div data-water-photo-slot="${rowId}" class="w-full h-full flex flex-col items-center justify-center bg-slate-900/10 text-current opacity-80 text-xs font-bold p-3">
+                                <i class="fas fa-spinner fa-spin text-xl mb-1.5"></i>
+                                <span>กำลังโหลดภาพ...</span>
+                               </div>`
+                            : `<button type="button" onclick="event.stopPropagation(); openWaterLevelPhotoById('${rowId}', this)"
+                                class="w-full h-full flex flex-col items-center justify-center bg-slate-900/10 hover:bg-slate-900/20 text-current opacity-80 hover:opacity-100 transition text-xs font-bold p-3">
+                                <i class="fas fa-camera text-2xl mb-1.5"></i>
+                                <span>คลิกดูรูปภาพจุดนี้</span>
+                               </button>`) :
                         `<div class="w-full h-full flex flex-col items-center justify-center text-slate-300 italic text-xs">
                             <i class="fas fa-image text-3xl mb-2"></i>รอการอัปโหลดภาพ
                         </div>`)}
@@ -1287,6 +1300,39 @@ let dashLayerStates = {
                 </div>
             </div>`;
             }).join('');
+
+            if (canAutoLoadWaterThumbnails && missingPhotoRowIds.length > 0 && typeof sbFetchWaterLevelPhotosBatch === 'function') {
+                sbFetchWaterLevelPhotosBatch(missingPhotoRowIds).then(photoMap => {
+                    if (!photoMap) return;
+                    missingPhotoRowIds.forEach(rowId => {
+                        const rawUrl = photoMap[rowId] || '';
+                        const match = store.waterLevels.find(r => String(r[8] || '') === String(rowId));
+                        if (match && rawUrl) match[6] = rawUrl;
+
+                        const slot = document.querySelector(`[data-water-photo-slot="${rowId}"]`);
+                        if (!slot) return;
+
+                        if (!rawUrl) {
+                            slot.outerHTML = `
+                                <div class="w-full h-full flex flex-col items-center justify-center bg-slate-900/10 text-current opacity-60 text-xs font-bold p-3">
+                                    <i class="fas fa-image text-2xl mb-1.5"></i>
+                                    <span>ไม่มีรูปภาพ</span>
+                                </div>`;
+                            return;
+                        }
+
+                        const displayLink = rawUrl.includes('id=')
+                            ? `https://drive.google.com/thumbnail?id=${rawUrl.split('id=')[1]}&sz=w600`
+                            : rawUrl;
+                        const safeLink = displayLink.replace(/'/g, "\\'");
+                        slot.outerHTML = `<img src="${displayLink}" loading="lazy" decoding="async"
+                            onclick="event.stopPropagation(); openLightbox('${safeLink}')"
+                            class="w-full h-full object-cover cursor-zoom-in group-hover:scale-110 transition-transform duration-500"
+                            alt="สถานการณ์น้ำ"
+                            onerror="this.src='https://placehold.co/600x400?text=No+Photo'">`;
+                    });
+                }).catch(err => console.warn('Auto load water thumbnails error:', err));
+            }
         }
 
         window.openWaterLevelPhotoById = async function (rowId, btnEl) {

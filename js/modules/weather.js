@@ -537,7 +537,7 @@ function renderLineReplyStatusBadges(statusData) {
     const escapeTxt = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const levelLabelMap = { normal: 'ปกติ', warning: 'เฝ้าระวัง', danger: 'วิกฤต' };
 
-    const renderSlotCard = (slotLabel, keyword, draft, iconCls, accentCls) => {
+    const renderSlotCard = (slotKey, slotLabel, keyword, draft, iconCls, accentCls) => {
         if (!draft) {
             return `
                 <div class="px-2.5 py-2 rounded-xl bg-slate-50 border border-slate-200/80 text-[10px] text-slate-400 flex items-center justify-between gap-2">
@@ -552,26 +552,109 @@ function renderLineReplyStatusBadges(statusData) {
         const statusPill = isPending
             ? `<span class="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 font-black shrink-0"><i class="fas fa-clock mr-0.5"></i>รอพิมพ์ "${keyword}"</span>`
             : `<span class="px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200 font-black shrink-0"><i class="fas fa-check-circle mr-0.5"></i>ส่งแล้ว ${sentCount} ครั้ง</span>`;
+        const hasImgBadge = draft.imageUrl
+            ? `<span class="px-1.5 py-0.5 rounded bg-sky-50 text-sky-700 border border-sky-200 font-bold shrink-0"><i class="fas fa-image mr-0.5"></i>มีรูป</span>`
+            : '';
+        const previewMsg = draft.message ? `<div class="text-[10px] text-slate-500 line-clamp-1">${escapeTxt(draft.message)}</div>` : '';
 
         return `
-            <div class="px-2.5 py-2 rounded-xl bg-white border ${isPending ? 'border-amber-300/80' : 'border-emerald-200/80'} text-[10px] space-y-1 shadow-xs">
+            <div onclick="viewSavedLineReplyDraft('${slotKey}')" role="button" tabindex="0"
+                class="px-2.5 py-2 rounded-xl bg-white border ${isPending ? 'border-amber-300/80 hover:border-amber-400' : 'border-emerald-200/80 hover:border-emerald-400'} text-[10px] space-y-1 shadow-xs cursor-pointer hover:shadow-sm transition group"
+                title="คลิกเพื่อดูข้อความที่บันทึกไว้ทั้งหมด">
                 <div class="flex items-center justify-between gap-1.5">
                     <span class="font-black ${accentCls} truncate"><i class="${iconCls} mr-1"></i>${slotLabel} ${levelTag}</span>
-                    ${statusPill}
+                    <div class="flex items-center gap-1 shrink-0">
+                        ${hasImgBadge}
+                        ${statusPill}
+                    </div>
                 </div>
-                <div class="text-slate-600 font-bold truncate" title="${escapeTxt(draft.title)}">"${escapeTxt(draft.title)}"</div>
-                <div class="text-[9px] text-slate-400 flex items-center justify-between gap-2">
-                    <span>บันทึก: ${escapeTxt(draft.savedAtStr || '-')}</span>
-                    ${draft.lastRepliedAtStr ? `<span class="text-emerald-600 font-bold">ตอบกลุ่ม: ${escapeTxt(draft.lastRepliedAtStr)}</span>` : ''}
+                <div class="text-slate-700 font-bold truncate">"${escapeTxt(draft.title)}"</div>
+                ${previewMsg}
+                <div class="text-[9px] text-slate-400 flex items-center justify-between gap-2 pt-0.5">
+                    <span class="truncate">บันทึก: ${escapeTxt(draft.savedAtStr || '-')}</span>
+                    <span class="inline-flex items-center gap-1 text-blue-600 font-black group-hover:underline shrink-0">
+                        <i class="fas fa-eye text-[9px]"></i>ดูข้อความ
+                    </span>
                 </div>
             </div>
         `;
     };
 
     summaryEl.innerHTML =
-        renderSlotCard('แจ้งเตือน', 'แจ้งเตือน', alertDraft, 'fas fa-bell', 'text-amber-600') +
-        renderSlotCard('ประกาศข่าวสาร', 'ประกาศข่าวสาร', newsDraft, 'fas fa-bullhorn', 'text-sky-600');
+        renderSlotCard('alert', 'แจ้งเตือน', 'แจ้งเตือน', alertDraft, 'fas fa-bell', 'text-amber-600') +
+        renderSlotCard('news', 'ประกาศข่าวสาร', 'ประกาศข่าวสาร', newsDraft, 'fas fa-bullhorn', 'text-sky-600');
 }
+
+window.viewSavedLineReplyDraft = async function (slotKey) {
+    if (!window._lineReplyStatusCache && typeof window.fetchLineReplyStatus === 'function') {
+        await window.fetchLineReplyStatus(false);
+    }
+    const cache = window._lineReplyStatusCache || {};
+    const draft = cache[slotKey];
+    if (!draft) {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({ icon: 'info', title: 'ยังไม่มีข้อความที่บันทึกไว้', text: 'กรุณากดบันทึกข้อความจากปุ่มด้านบนก่อน' });
+        }
+        return;
+    }
+
+    const escapeTxt = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const isNews = slotKey === 'news';
+    const keyword = isNews ? 'ประกาศข่าวสาร' : 'แจ้งเตือน';
+    const levelMap = {
+        normal: { text: 'แจ้งเตือนระดับปกติ', cls: 'bg-emerald-100 text-emerald-800 border-emerald-200' },
+        warning: { text: 'แจ้งเตือนเฝ้าระวัง', cls: 'bg-amber-100 text-amber-800 border-amber-200' },
+        danger: { text: 'แจ้งเตือนวิกฤต', cls: 'bg-rose-100 text-rose-800 border-rose-200' },
+        news: { text: 'ประกาศข่าวสาร', cls: 'bg-sky-100 text-sky-800 border-sky-200' }
+    };
+    const meta = levelMap[draft.type] || (isNews ? levelMap.news : levelMap.normal);
+    const sentCount = Number(draft.sentCount) || 0;
+    const imgHtml = draft.imageUrl
+        ? `<div class="mt-3 rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
+             <img src="${escapeTxt(draft.imageUrl)}" alt="ภาพประกอบประกาศ" class="w-full max-h-56 object-contain mx-auto" onerror="this.parentElement.style.display='none'">
+           </div>`
+        : '';
+
+    const html = `
+        <div class="text-left space-y-3 text-sm">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <span class="px-2.5 py-1 rounded-full text-xs font-black border ${meta.cls}">${meta.text}</span>
+                <span class="px-2.5 py-1 rounded-full text-xs font-bold ${sentCount === 0 ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'}">
+                    ${sentCount === 0 ? `รอพิมพ์ "${keyword}" ในกลุ่ม LINE` : `ตอบในกลุ่มแล้ว ${sentCount} ครั้ง`}
+                </span>
+            </div>
+            <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                <div class="text-xs font-bold text-slate-400">หัวข้อประกาศ</div>
+                <div class="font-black text-slate-800 text-base">${escapeTxt(draft.title || '-')}</div>
+                <div class="text-xs font-bold text-slate-400 pt-1">เนื้อหาข้อความที่บันทึกไว้</div>
+                <div class="text-slate-700 text-sm whitespace-pre-wrap leading-relaxed bg-white p-3 rounded-xl border border-slate-200/80">${escapeTxt(draft.message || '-')}</div>
+                ${imgHtml}
+            </div>
+            <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 px-1">
+                <span><i class="far fa-clock mr-1"></i>บันทึกเมื่อ: <b>${escapeTxt(draft.savedAtStr || '-')}</b></span>
+                ${draft.lastRepliedAtStr ? `<span class="text-emerald-600 font-bold"><i class="fas fa-check mr-1"></i>ตอบกลุ่มล่าสุด: ${escapeTxt(draft.lastRepliedAtStr)}</span>` : ''}
+            </div>
+        </div>
+    `;
+
+    if (typeof Swal !== 'undefined') {
+        Swal.fire({
+            title: isNews ? '📢 ข้อความประกาศข่าวสารที่บันทึกไว้' : '🔔 ข้อความแจ้งเตือนที่บันทึกไว้',
+            html: html,
+            width: 560,
+            showCancelButton: true,
+            confirmButtonText: `<i class="fas fa-copy mr-1"></i> คัดลอกคำสั่ง "${keyword}"`,
+            cancelButtonText: 'ปิด',
+            confirmButtonColor: '#0284c7'
+        }).then((res) => {
+            if (res.isConfirmed && navigator.clipboard) {
+                navigator.clipboard.writeText(keyword).then(() => {
+                    Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: `คัดลอกคำสั่ง "${keyword}" แล้ว`, showConfirmButton: false, timer: 1500 });
+                }).catch(() => {});
+            }
+        });
+    }
+};
 
 window.fetchLineReplyStatus = async function (showToast = false) {
     if (typeof API_URL === 'undefined' || !API_URL) return;

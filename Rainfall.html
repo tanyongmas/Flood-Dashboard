@@ -78,6 +78,49 @@
     <!-- MAIN CONTENT -->
     <!-- ============================================== -->
     <div id="data-container" class="hidden">
+
+      <!-- ============================================== -->
+      <!-- SECTION 0: เปรียบเทียบ 2 สถานี ThaiWater (G09006-STN2153 vs G23069-STH005) -->
+      <!-- ============================================== -->
+      <section id="dual-station-comparison-card" class="bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-slate-200 mb-6 md:mb-8 animate-fade-up">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-5">
+          <div class="min-w-0">
+            <h2 class="text-base md:text-lg font-extrabold text-slate-800 flex items-center gap-2">
+              <span class="w-2.5 h-6 bg-emerald-500 rounded-full inline-block shrink-0"></span>
+              <span>เทียบเคียง 2 สถานีวัดน้ำฝนในพื้นที่ (ThaiWater)</span>
+            </h2>
+            <p class="text-xs text-slate-500 mt-1">เปรียบเทียบข้อมูลตัวเลขจริงระหว่าง <b>บ้านตันหยงมัส (G09006-STN2153)</b> และ <b>ทต.ตันหยงมัส (G23069-STH005)</b> เพื่อป้องกันความคลาดเคลื่อนจากเซนเซอร์</p>
+          </div>
+          <div class="inline-flex flex-wrap sm:flex-nowrap items-center gap-1 bg-slate-100 p-1 rounded-2xl border border-slate-200 shrink-0 self-start lg:self-auto">
+            <button type="button" data-rain-mode="compare" onclick="switchRainfallStationMode('compare')"
+              class="rain-mode-btn whitespace-nowrap px-3.5 py-2 rounded-xl text-xs font-bold bg-blue-600 text-white shadow-sm transition">
+              เปรียบเทียบ 2 สถานี
+            </button>
+            <button type="button" data-rain-mode="9006" onclick="switchRainfallStationMode('9006')"
+              class="rain-mode-btn whitespace-nowrap px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-white transition">
+              บ้านตันหยงมัส (STN2153)
+            </button>
+            <button type="button" data-rain-mode="23069" onclick="switchRainfallStationMode('23069')"
+              class="rain-mode-btn whitespace-nowrap px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-white transition">
+              ทต.ตันหยงมัส (STH005)
+            </button>
+          </div>
+        </div>
+
+        <div id="dual-anomaly-alert" class="hidden mb-4 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold flex items-start gap-2">
+          <span class="text-base leading-none">⚠️</span>
+          <span id="dual-anomaly-text">พบความแตกต่างผิดปกติระหว่าง 2 สถานี</span>
+        </div>
+
+        <div id="dual-station-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div id="stn9006-summary-box" class="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-200">
+            <div class="text-xs text-slate-400">กำลังโหลดข้อมูลสถานี บ้านตันหยงมัส (G09006-STN2153)...</div>
+          </div>
+          <div id="stn23069-summary-box" class="p-4 rounded-2xl bg-sky-50/60 border border-sky-200">
+            <div class="text-xs text-slate-400">กำลังโหลดข้อมูลสถานี ทต.ตันหยงมัส (G23069-STH005)...</div>
+          </div>
+        </div>
+      </section>
       
       <!-- ============================================== -->
       <!-- SECTION: กรองข้อมูลปริมาณฝน (Rainfall Filter) -->
