@@ -348,8 +348,9 @@ window.getFloodRiskCategory = function (riskStr, detailsStr = '') {
         };
     }
 
-    // 3. กลุ่มเปราะบาง
-    if (r.includes('กลุ่มเปราะบาง') || r.includes('เปราะบาง') || d.includes('กลุ่มเปราะบาง') || d.includes('เปราะบาง')) {
+    // 3. กลุ่มเปราะบาง / ผู้พิการ-ผู้สูงอายุ (ให้ค่าชัดเจนจากคอลัมน์ความเสี่ยงมาก่อนรายละเอียด)
+    const isExplicitElderly = (r === 'กลุ่มผู้พิการ/ผู้สูงอายุ');
+    if (r === 'กลุ่มเปราะบาง' || (!isExplicitElderly && (r.includes('กลุ่มเปราะบาง') || r.includes('เปราะบาง') || d.includes('กลุ่มเปราะบาง') || d.includes('เปราะบาง')))) {
         return {
             key: 'vulnerable',
             label: 'กลุ่มเปราะบาง',
@@ -365,7 +366,7 @@ window.getFloodRiskCategory = function (riskStr, detailsStr = '') {
     }
 
     // 4. ผู้พิการ / ผู้สูงอายุ / ติดเตียง
-    if (r.includes('ผู้พิการ') || r.includes('ผู้สูงอายุ') || r.includes('สูงอายุ') || r.includes('พิการ') || r.includes('ติดเตียง') || d.includes('ติดเตียง')) {
+    if (isExplicitElderly || r.includes('ผู้พิการ') || r.includes('ผู้สูงอายุ') || r.includes('สูงอายุ') || r.includes('พิการ') || r.includes('ติดเตียง') || d.includes('ติดเตียง')) {
         return {
             key: 'elderly_disabled',
             label: 'กลุ่มผู้พิการ/ผู้สูงอายุ',

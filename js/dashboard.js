@@ -1965,6 +1965,10 @@ let dashLayerStates = {
                         ? window.formatCompactThaiAddress(meta.address)
                         : (meta.address || '-');
 
+                    const gb = (typeof window.getTMCareGroupBadgeMeta === 'function')
+                        ? window.getTMCareGroupBadgeMeta(meta.triageLevel, meta.riskGroup)
+                        : { label: meta.riskGroup, badgeClass: 'bg-slate-100 text-slate-700 border border-slate-200' };
+
                     const tmPopup = `
                         <div class="font-sans p-2.5 min-w-[235px]">
                             <div class="flex items-center justify-between gap-2 border-b border-slate-100 pb-1.5 mb-1.5">
@@ -1973,7 +1977,10 @@ let dashLayerStates = {
                             </div>
                             <p class="text-xs font-black text-slate-800">${meta.fullName}</p>
                             <p class="text-[11px] text-slate-600 mt-0.5"><i class="fas fa-map-marker-alt text-rose-500 mr-1"></i>${compactAddr}</p>
-                            <p class="text-[10px] text-slate-500 mt-0.5">${meta.riskGroup}${meta.needsDetail ? ` • ${meta.needsDetail}` : ''}</p>
+                            <div class="flex items-center gap-1.5 flex-wrap mt-1">
+                                <span class="px-2 py-0.5 rounded-full text-[9px] font-black ${gb.badgeClass}">${gb.label}</span>
+                                ${meta.needsDetail ? `<span class="text-[10px] text-slate-500">${meta.needsDetail}</span>` : ''}
+                            </div>
                             <div class="flex gap-1.5 mt-2.5 pt-2 border-t border-slate-100">
                                 <button onclick="openTMCareEmsCardModal('${meta.beneficiaryId}', false)" class="flex-1 py-1.5 px-2 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 text-[10px] font-bold">
                                     <i class="fas fa-kit-medical mr-1"></i>EMS (PDPA)

@@ -126,29 +126,49 @@
     }
     window.getTMCareEvacStatusMeta = getTMCareEvacStatusMeta;
 
-    function classifyTMCareRiskGroup(b) {
-        const vuln = String(b.vulnerabilityType || b.vulnerability_type || '').toLowerCase();
-        const disTypes = Array.isArray(b.disabilityTypes)
-            ? b.disabilityTypes.join(' ').toLowerCase()
-            : String(b.disabilityTypes || b.disability_types || '').toLowerCase();
-        const combined = `${vuln} ${disTypes}`;
-
-        if (
-            combined.includes('พิการ') ||
-            combined.includes('ผู้สูงอายุ') ||
-            combined.includes('ชรา') ||
-            combined.includes('ติดเตียง') ||
-            combined.includes('การเคลื่อนไหว') ||
-            combined.includes('การมองเห็น') ||
-            combined.includes('การได้ยิน')
-        ) {
-            return 'กลุ่มผู้พิการ/ผู้สูงอายุ';
-        }
-        return 'กลุ่มเปราะบาง';
+    function normalizeTMCareTriageLevel(rawLevel) {
+        const t = String(rawLevel || 'green').toLowerCase().trim();
+        if (t === 'red' || t.includes('แดง')) return 'red';
+        if (t === 'yellow' || t.includes('เหลือง')) return 'yellow';
+        return 'green';
     }
 
+    function classifyTMCareRiskGroup(b) {
+        const triage = normalizeTMCareTriageLevel(b && (b.triageLevel || b.triage_level));
+        if (triage === 'red') {
+            return 'กลุ่มเปราะบาง';
+        }
+        return 'กลุ่มผู้พิการ/ผู้สูงอายุ';
+    }
+
+    window.getTMCareGroupBadgeMeta = function (triageLevel, riskGroup) {
+        const t = normalizeTMCareTriageLevel(triageLevel);
+        if (t === 'red' || String(riskGroup || '').trim() === 'กลุ่มเปราะบาง') {
+            return {
+                triage: 'red',
+                dotEmoji: '🔴',
+                label: '🔴 กลุ่มเปราะบาง',
+                badgeClass: 'bg-rose-100 text-rose-700 border border-rose-200'
+            };
+        }
+        if (t === 'yellow') {
+            return {
+                triage: 'yellow',
+                dotEmoji: '🟡',
+                label: '🟡 กลุ่มผู้พิการ/ผู้สูงอายุ',
+                badgeClass: 'bg-amber-100 text-amber-800 border border-amber-200'
+            };
+        }
+        return {
+            triage: 'green',
+            dotEmoji: '🟢',
+            label: '🟢 กลุ่มผู้พิการ/ผู้สูงอายุ',
+            badgeClass: 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+        };
+    };
+
     function getTriageLabel(triageLevel) {
-        const t = String(triageLevel || 'green').toLowerCase().trim();
+        const t = normalizeTMCareTriageLevel(triageLevel);
         if (t === 'red') return '🔴 สีแดง (ติดเตียง/พึ่งพิงสูง)';
         if (t === 'yellow') return '🟡 สีเหลือง (พึ่งพิงปานกลาง)';
         return '🟢 สีเขียว (ช่วยเหลือตนเองได้)';
@@ -896,7 +916,10 @@
         if (sel) {
             const prevVal = sel.value;
             sel.innerHTML = `<option value="">-- เลือกรายชื่อผู้พิการ / กลุ่มเปราะบาง (${filtered.length} รายการ) --</option>` +
-                filtered.map(m => `<option value="${esc(m.beneficiaryId)}">${esc(m.fullName)} • ${esc(window.formatCompactThaiAddress(m.address))} [${esc(m.statusMeta.shortLabel)}]</option>`).join('');
+                filtered.map(m => {
+                    const gb = window.getTMCareGroupBadgeMeta(m.triageLevel, m.riskGroup);
+                    return `<option value="${esc(m.beneficiaryId)}">${gb.dotEmoji} ${esc(m.fullName)} (${esc(m.riskGroup)}) • ${esc(window.formatCompactThaiAddress(m.address))} [${esc(m.statusMeta.shortLabel)}]</option>`;
+                }).join('');
             if (prevVal && filtered.some(m => m.beneficiaryId === prevVal)) {
                 sel.value = prevVal;
                 window.onSelectEvacTMCareBeneficiary(prevVal);
@@ -918,13 +941,14 @@
         listEl.innerHTML = filtered.map(m => {
             const compactAddr = window.formatCompactThaiAddress(m.address);
             const hasCoords = !isNaN(m.lat) && !isNaN(m.lng) && (m.lat !== 0 || m.lng !== 0);
+            const gb = window.getTMCareGroupBadgeMeta(m.triageLevel, m.riskGroup);
             return `
                 <div class="p-3 rounded-2xl bg-slate-50/80 hover:bg-white border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 transition">
                     <div class="min-w-0">
-                        <div class="flex items-center gap-2 flex-wrap">
+                        <div class="flex items-center gap-1.5 flex-wrap">
                             <span class="text-xs font-black text-slate-800">${esc(m.fullName)}</span>
+                            <span class="px-2 py-0.5 rounded-full text-[9px] font-black ${gb.badgeClass}">${esc(gb.label)}</span>
                             <span class="px-2 py-0.5 rounded-full text-[9px] font-black ${m.statusMeta.badgeClass}">${esc(m.statusMeta.label)}</span>
-                            <span class="text-[10px] font-bold text-slate-400">${esc(m.riskGroup)}</span>
                         </div>
                         <div class="text-[11px] text-slate-600 truncate mt-0.5" title="${esc(m.address)}">
                             <i class="fas fa-map-marker-alt text-rose-500 mr-1"></i>${esc(compactAddr)}
