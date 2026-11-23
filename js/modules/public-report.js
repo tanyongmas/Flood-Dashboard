@@ -3168,7 +3168,10 @@ async function fetchPublicRainfallSummary() {
     const cacheKey = 'public_rainfall_summary_v4';
     if (typeof window.getAppCache === 'function') {
         const cached = window.getAppCache(cacheKey);
-        if (cached && typeof cached.rainLatest === 'number') return cached;
+        if (cached && typeof cached.rainLatest === 'number') {
+            window._latestRain24hStn2153 = cached.rainLatest;
+            return cached;
+        }
     }
 
     const nowBkk = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
@@ -3357,6 +3360,9 @@ async function fetchPublicRainfallSummary() {
         updatedAt
     };
 
+    if (typeof rainLatest === 'number' && !isNaN(rainLatest)) {
+        window._latestRain24hStn2153 = rainLatest;
+    }
     if (typeof window.setAppCache === 'function') {
         window.setAppCache(cacheKey, summary, 15);
     }

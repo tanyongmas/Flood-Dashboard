@@ -6615,12 +6615,12 @@ let dashLayerStates = {
                 let targetWarn = cam.warningThreshold;
                 let targetCrit = cam.criticalThreshold;
 
-                // 1. กล้อง CAM-00_คลองบองอ -> สถานี X.73A บ้านบองอ (ระดับเตือนภัย 25.80, วิกฤต 26.80)
+                // 1. กล้อง CAM-00_คลองบองอ -> สถานี X.73A บ้านบองอ (ปรับจูนเกณฑ์เตือนภัย ทต.ตันหยงมัส 23.00, วิกฤต 24.00)
                 if (cam.id === 'CAM-01' || name.includes('บองอ') || wp.includes('บองอ') || wp.includes('x.73a') || wp.includes('x73a')) {
                     targetLevel = levelX73A;
                     targetWp = 'สถานี X.73A (บ้านบองอ)';
-                    targetWarn = 25.80;
-                    targetCrit = 26.80;
+                    targetWarn = 23.00;
+                    targetCrit = 24.00;
                 }
                 // 2. กล้อง CAM-01_ถนนประชาสามัคคี -> สถานี X.73 สะพานตันหยงมัส (ระดับเตือนภัย 13.50, วิกฤต 14.90)
                 else if (cam.id === 'CAM-02' || name.includes('ประชาสามัคคี') || name.includes('ตันหยงมัส') || wp.includes('ประชาสามัคคี') || wp.includes('x.73') || wp.includes('x73')) {
@@ -6881,7 +6881,7 @@ let dashLayerStates = {
             let crit = cam.criticalThreshold || 2.0;
 
             if (cam.id === 'CAM-01' || name.includes('บองอ') || wp.includes('บองอ') || wp.includes('x.73a') || wp.includes('x73a')) {
-                minGauge = 20.0; maxGauge = 28.0; warn = 25.80; crit = 26.80;
+                minGauge = 19.0; maxGauge = 27.0; warn = 23.00; crit = 24.00;
             } else if (cam.id === 'CAM-02' || name.includes('ประชาสามัคคี') || name.includes('ตันหยงมัส') || wp.includes('ประชาสามัคคี') || wp.includes('x.73') || wp.includes('x73') || level > 5.0) {
                 minGauge = 8.0; maxGauge = 16.0; warn = 13.50; crit = 14.90;
             }

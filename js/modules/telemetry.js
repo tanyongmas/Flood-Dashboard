@@ -176,10 +176,10 @@ async function loadRIDWaterLevel(forceRefresh = false) {
         }
 
         // ==========================================
-        // 📊 2. ประมวลผลและแสดงผล สถานี X.73A (บ้านบองอ อ.ระแงะ)
-        // 🟢 ระดับปกติ (สีเขียว): < 25.79 ม.รทก.
-        // 🟡 ระดับเตือนภัย / เตรียมพร้อม (สีเหลือง): 25.80 - 26.79 ม.รทก.
-        // 🔴 ระดับวิกฤต / น้ำล้นตลิ่ง (สีแดง): >= 26.80 ม.รทก.
+        // 📊 2. ประมวลผลและแสดงผล สถานี X.73A (บ้านบองอ อ.ระแงะ) — ปรับจูนตามสถิติผลกระทบต่อ ทต.ตันหยงมัส (X.73)
+        // 🟢 ระดับปกติ (สีเขียว): < 23.00 ม.รทก.
+        // 🟡 ระดับเฝ้าระวัง ทต.ตันหยงมัส (สีเหลือง): 23.00 - 23.99 ม.รทก.
+        // 🔴 ระดับวิกฤต ทต.ตันหยงมัส / เสี่ยงล้นตลิ่ง X.73 (สีแดง): >= 24.00 ม.รทก. (ตลิ่งกายภาพบองอ 26.80 ม.)
         // ==========================================
         if (levelX73aEl) {
             let levelX73a = 0;
@@ -198,15 +198,15 @@ async function loadRIDWaterLevel(forceRefresh = false) {
             if (levelX73aEl) levelX73aEl.innerText = levelX73a.toFixed(2);
             if (timeX73aEl) timeX73aEl.innerText = timeX73a + (result.isStaleFallback ? ' (แคช)' : '');
 
-            if (levelX73a >= 26.80) {
-                if (statusX73aEl) { statusX73aEl.innerText = 'วิกฤต / น้ำล้นตลิ่ง'; statusX73aEl.className = 'text-[10px] md:text-xs font-bold text-red-600'; }
+            if (levelX73a >= 24.00) {
+                if (statusX73aEl) { statusX73aEl.innerText = 'วิกฤต (เสี่ยงล้นตลิ่ง X.73)'; statusX73aEl.className = 'text-[10px] md:text-xs font-bold text-red-600'; }
                 if (dotX73aEl) dotX73aEl.className = 'w-1.5 h-1.5 rounded-full bg-red-500 animate-ping';
                 if (levelX73aEl) levelX73aEl.className = 'text-2xl md:text-3xl font-black text-red-600 tracking-tight';
                 if (cardX73aEl) cardX73aEl.className = 'h-[120px] w-full flex items-center justify-between bg-red-50/80 rounded-2xl p-4 md:p-5 shadow-sm border border-red-200 relative overflow-hidden transition-all hover:shadow-md hover:ring-2 hover:ring-blue-400/40 cursor-pointer active:scale-[0.99]';
                 if (sidebarX73a) sidebarX73a.className = 'absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-red-400 to-red-600';
                 if (iconX73aBg) iconX73aBg.className = 'w-12 h-12 md:w-14 md:h-14 bg-gradient-to-br from-red-500 to-red-600 text-white rounded-[1rem] flex items-center justify-center text-2xl md:text-3xl shrink-0 shadow-lg shadow-red-500/40 animate-pulse';
-            } else if (levelX73a >= 25.80) {
-                if (statusX73aEl) { statusX73aEl.innerText = 'เตือนภัย / เตรียมพร้อม'; statusX73aEl.className = 'text-[10px] md:text-xs font-bold text-amber-600'; }
+            } else if (levelX73a >= 23.00) {
+                if (statusX73aEl) { statusX73aEl.innerText = 'เฝ้าระวัง (ส่งผลถึง X.73)'; statusX73aEl.className = 'text-[10px] md:text-xs font-bold text-amber-600'; }
                 if (dotX73aEl) dotX73aEl.className = 'w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse';
                 if (levelX73aEl) levelX73aEl.className = 'text-2xl md:text-3xl font-black text-amber-600 tracking-tight';
                 if (cardX73aEl) cardX73aEl.className = 'h-[120px] w-full flex items-center justify-between bg-amber-50/50 rounded-2xl p-4 md:p-5 shadow-sm border border-amber-200 relative overflow-hidden transition-all hover:shadow-md hover:ring-2 hover:ring-blue-400/40 cursor-pointer active:scale-[0.99]';
@@ -221,9 +221,22 @@ async function loadRIDWaterLevel(forceRefresh = false) {
                 if (iconX73aBg) iconX73aBg.className = 'w-12 h-12 md:w-14 md:h-14 bg-gradient-to-br from-emerald-400 to-green-500 text-white rounded-[1rem] flex items-center justify-center text-2xl md:text-3xl shrink-0 shadow-md';
             }
 
-            // 🤖 เรียกใช้ระบบ AI Hydrograph Analytics สำหรับแนะนำการส่งประกาศ LINE Broadcast
+            // 🤖 เรียกใช้ระบบ AI Hydrograph Analytics (Multi-Factor: X.73 + X.73A + Trend + Local Rain)
+            const x73Prev = (result.data && result.data.previousLevel !== undefined) ? parseFloat(result.data.previousLevel) : NaN;
+            const x73Diff = (!isNaN(levelNum) && !isNaN(x73Prev)) ? Number((levelNum - x73Prev).toFixed(2)) : 0;
+            const x73aPrev = (result.data && result.data.dataX73A && result.data.dataX73A.previousLevel !== undefined)
+                ? parseFloat(result.data.dataX73A.previousLevel)
+                : NaN;
+            const x73aDiff = (!isNaN(levelX73a) && !isNaN(x73aPrev)) ? Number((levelX73a - x73aPrev).toFixed(2)) : 0;
+
             if (typeof window.updateAILineRecommendation === 'function') {
-                window.updateAILineRecommendation(levelX73a, levelNum);
+                const rain24hVal = (typeof window._latestRain24hStn2153 === 'number' && !isNaN(window._latestRain24hStn2153))
+                    ? window._latestRain24hStn2153
+                    : null;
+                window.updateAILineRecommendation(levelX73a, levelNum, { x73Diff, x73aDiff, rain24h: rain24hVal });
+                if (rain24hVal === null && typeof window.ensureRain24hForAI === 'function') {
+                    window.ensureRain24hForAI(levelX73a, levelNum, { x73Diff, x73aDiff });
+                }
             }
         }
 
@@ -235,8 +248,94 @@ async function loadRIDWaterLevel(forceRefresh = false) {
     }
 }
 
-// 🤖 ฟังก์ชัน AI Hydrograph Analytics วิเคราะห์เวลาเดินทางมวลน้ำ (Lag Time 4–6 ชม.) และแนะนำปุ่มเตือนภัย LINE Broadcast
-window.updateAILineRecommendation = function (levelX73aNum, levelX73Num) {
+// ดึงฝนสะสม 24 ชม. ของสถานีบ้านตันหยงมัส (1123990 / STN2153) แบบ non-blocking เพื่อเสริมการวิเคราะห์ AI Hydrograph
+window.ensureRain24hForAI = function (levelX73aNum, levelX73Num, ctx = {}) {
+    if (window._fetchingRain24hForAI) return;
+    window._fetchingRain24hForAI = true;
+    fetch('https://api-v3.thaiwater.net/api/v1/thaiwater30/public/rain_24h?province_code=96')
+        .then(r => r.ok ? r.json() : null)
+        .then(json => {
+            const list = (json && Array.isArray(json.data)) ? json.data : [];
+            const match = list.find(item => {
+                const st = item.station || {};
+                const sid = String(st.id || item.station_id || '');
+                const scode = String(st.tele_station_oldcode || st.station_code || '');
+                return sid === '1123990' || scode.indexOf('STN2153') >= 0;
+            });
+            if (match && match.rain_24h !== null && match.rain_24h !== undefined && !isNaN(Number(match.rain_24h))) {
+                window._latestRain24hStn2153 = Number(Number(match.rain_24h).toFixed(1));
+                if (typeof window.updateAILineRecommendation === 'function') {
+                    window.updateAILineRecommendation(levelX73aNum, levelX73Num, {
+                        ...ctx,
+                        rain24h: window._latestRain24hStn2153
+                    });
+                }
+            }
+        })
+        .catch(() => {})
+        .finally(() => { window._fetchingRain24hForAI = false; });
+};
+
+// 🤖 ฟังก์ชัน AI Hydrograph Analytics (Multi-Factor: X.73 + X.73A Calibrated 2568 + แนวโน้ม + ฝน 24 ชม.)
+window.evaluateHydrographRisk = function (levelX73aNum, levelX73Num, context = {}) {
+    const x73a = Number(levelX73aNum);
+    const x73 = Number(levelX73Num);
+    const x73Diff = Number(context.x73Diff || 0);
+    const x73aDiff = Number(context.x73aDiff || 0);
+    const rain24h = (context.rain24h !== null && context.rain24h !== undefined && !isNaN(Number(context.rain24h)))
+        ? Number(context.rain24h)
+        : null;
+    const isHeavyRain = (rain24h !== null && rain24h >= 35);
+    const isVeryHeavyRain = (rain24h !== null && rain24h >= 90);
+    const isRising = (x73Diff > 0 || x73aDiff > 0);
+
+    // 1. 🔴 วิกฤต: ปลายน้ำ X.73 แตะ/เกินตลิ่ง (>= 14.90) หรือ ต้นน้ำ X.73A >= 26.80 หรือ (X.73A >= 24.70 ร่วมกับ X.73 >= 14.00 และน้ำขึ้น/ฝนหนัก)
+    if (
+        (!isNaN(x73) && x73 >= 14.90) ||
+        (!isNaN(x73a) && x73a >= 26.80) ||
+        (!isNaN(x73a) && !isNaN(x73) && x73a >= 24.70 && x73 >= 14.00 && (isRising || isHeavyRain))
+    ) {
+        const reasons = [];
+        if (!isNaN(x73) && x73 >= 14.90) reasons.push(`ปลายน้ำ X.73 แตะ/เกินเกณฑ์ล้นตลิ่ง (<b>${x73.toFixed(2)}</b> ม.รทก.)`);
+        if (!isNaN(x73a) && x73a >= 26.80) reasons.push(`ต้นน้ำ X.73A เกินระดับวิกฤต (<b>${x73a.toFixed(2)}</b> ม.รทก.)`);
+        else if (!isNaN(x73a) && x73a >= 24.70) reasons.push(`ต้นน้ำ X.73A สูงถึงเกณฑ์สถิติน้ำท่วมปี 68 (<b>${x73a.toFixed(2)}</b> ม.รทก.)`);
+        if (isHeavyRain) reasons.push(`ฝนสะสม 24 ชม. <b>${rain24h.toFixed(1)} มม.</b>`);
+        return { level: 'critical', reasons, rain24h, x73Diff, x73aDiff };
+    }
+
+    // 2. 🟡 เฝ้าระวัง: ปลายน้ำ X.73 > 13.50 หรือ X.73A >= 24.50 (สถิติปี 68) หรือ (X.73A >= 23.00 ร่วมกับฝนหนัก/น้ำขึ้น) หรือฝนตกหนักมาก >= 90 มม.
+    if (
+        (!isNaN(x73) && x73 > 13.50) ||
+        (!isNaN(x73a) && x73a >= 24.50) ||
+        (!isNaN(x73a) && x73a >= 23.00 && (isHeavyRain || isRising)) ||
+        isVeryHeavyRain
+    ) {
+        const reasons = [];
+        if (!isNaN(x73) && x73 > 13.50) reasons.push(`ปลายน้ำ X.73 เกินเกณฑ์เฝ้าระวัง (<b>${x73.toFixed(2)}</b> ม.รทก.)`);
+        if (!isNaN(x73a) && x73a >= 24.50) reasons.push(`ต้นน้ำ X.73A อยู่ที่ <b>${x73a.toFixed(2)}</b> ม.รทก. (ใกล้เกณฑ์ล้นตลิ่งที่ X.73 จากสถิติปี 68)`);
+        else if (!isNaN(x73a) && x73a >= 23.00) reasons.push(`ต้นน้ำ X.73A อยู่ที่ <b>${x73a.toFixed(2)}</b> ม.รทก.`);
+        if (isHeavyRain) reasons.push(`ฝนสะสม 24 ชม. <b>${rain24h.toFixed(1)} มม.</b>`);
+        if (isRising) reasons.push(`ระดับน้ำมีแนวโน้มเพิ่มสูงขึ้น`);
+        return { level: 'warning', reasons, rain24h, x73Diff, x73aDiff };
+    }
+
+    // 3. 🔵 จับตาใกล้ชิด (Pre-Watch): X.73A >= 22.80 (สถิติปี 68 ก่อน X.73 แตะเฝ้าระวัง) หรือ X.73 >= 13.00 หรือ ฝน >= 35 มม.
+    if (
+        (!isNaN(x73a) && x73a >= 22.80) ||
+        (!isNaN(x73) && x73 >= 13.00) ||
+        isHeavyRain
+    ) {
+        const reasons = [];
+        if (!isNaN(x73a) && x73a >= 22.80) reasons.push(`ต้นน้ำ X.73A อยู่ที่ <b>${x73a.toFixed(2)}</b> ม.รทก. (สถิติปี 68 พบว่าปลายน้ำมักขยับใกล้เกณฑ์เฝ้าระวังใน 6–24 ชม.)`);
+        if (!isNaN(x73) && x73 >= 13.00) reasons.push(`ปลายน้ำ X.73 อยู่ที่ <b>${x73.toFixed(2)}</b> ม.รทก. (ใกล้เกณฑ์เฝ้าระวัง 13.50)`);
+        if (isHeavyRain) reasons.push(`ฝนตกหนักในพื้นที่ <b>${rain24h.toFixed(1)} มม./24 ชม.</b>`);
+        return { level: 'prewatch', reasons, rain24h, x73Diff, x73aDiff };
+    }
+
+    return { level: 'normal', reasons: [], rain24h, x73Diff, x73aDiff };
+};
+
+window.updateAILineRecommendation = function (levelX73aNum, levelX73Num, context = {}) {
     const boxEl = document.getElementById('ai_line_recommendation_box');
     const msgEl = document.getElementById('ai_rec_message');
     const actionBadge = document.getElementById('ai_rec_action_badge');
@@ -245,20 +344,34 @@ window.updateAILineRecommendation = function (levelX73aNum, levelX73Num) {
 
     if (!boxEl || !msgEl) return;
 
-    // ค้นหาปุ่ม LINE Broadcast 3 ปุ่ม
     const btnNormal = document.querySelector("button[onclick*='sendMessagingAPI(\\'normal\\')']");
     const btnWarning = document.querySelector("button[onclick*='sendMessagingAPI(\\'warning\\')']");
     const btnDanger = document.querySelector("button[onclick*='sendMessagingAPI(\\'danger\\')']");
 
-    // ล้างการเน้นปุ่มเดิม
     [btnNormal, btnWarning, btnDanger].forEach(btn => {
         if (btn) {
-            btn.classList.remove('ring-4', 'ring-red-400', 'ring-amber-400', 'ring-emerald-400', 'scale-105');
+            btn.classList.remove('ring-4', 'ring-red-400', 'ring-amber-400', 'ring-sky-400', 'ring-emerald-400', 'scale-105');
         }
     });
 
-    if (levelX73aNum >= 26.80) {
-        // 🔴 ระดับวิกฤต / น้ำล้นตลิ่ง (>= 26.80 ม.รทก.)
+    const evalRes = window.evaluateHydrographRisk(levelX73aNum, levelX73Num, context);
+    const x73Str = !isNaN(Number(levelX73Num)) ? Number(levelX73Num).toFixed(2) : '-';
+    const x73aStr = !isNaN(Number(levelX73aNum)) ? Number(levelX73aNum).toFixed(2) : '-';
+    const rainChip = (evalRes.rain24h !== null)
+        ? `<span class="px-2 py-0.5 rounded bg-white/10 border border-white/15">ฝน 24 ชม.: <b>${evalRes.rain24h.toFixed(1)}</b> มม.</span>`
+        : '';
+    const trendChip = evalRes.x73Diff !== 0
+        ? `<span class="px-2 py-0.5 rounded bg-white/10 border border-white/15">แนวโน้ม X.73: <b>${evalRes.x73Diff > 0 ? '+' : ''}${evalRes.x73Diff.toFixed(2)}</b> ม.</span>`
+        : '';
+    const chipsHtml = `
+        <div class="mt-2 flex flex-wrap gap-1.5 text-[10px] text-white/90">
+            <span class="px-2 py-0.5 rounded bg-white/10 border border-white/15">X.73: <b>${x73Str}</b> ม.รทก.</span>
+            <span class="px-2 py-0.5 rounded bg-white/10 border border-white/15">X.73A: <b>${x73aStr}</b> ม.รทก.</span>
+            ${trendChip}
+            ${rainChip}
+        </div>`;
+
+    if (evalRes.level === 'critical') {
         boxEl.className = 'mb-5 p-4 rounded-2xl bg-gradient-to-r from-red-950 via-rose-900 to-slate-900 text-white shadow-xl border-2 border-red-500/60 relative overflow-hidden transition-all duration-500 animate-pulse';
         if (iconBg) iconBg.className = 'w-10 h-10 rounded-xl bg-red-500/40 border border-red-300 flex items-center justify-center text-white text-lg shrink-0 shadow-lg';
         if (actionBadge) {
@@ -266,16 +379,13 @@ window.updateAILineRecommendation = function (levelX73aNum, levelX73Num) {
             actionBadge.className = 'text-[10px] font-black px-2.5 py-0.5 rounded-full bg-red-500 text-white border border-red-300 animate-bounce';
         }
         if (lagBadge) {
-            lagBadge.innerHTML = '<i class="fas fa-exclamation-circle mr-1"></i>มวลน้ำสูงสุดจะถึงใน 4–6 ชม.';
+            lagBadge.innerHTML = '<i class="fas fa-exclamation-circle mr-1"></i>วิกฤต / เฝ้าระวังมวลน้ำสมทบ';
             lagBadge.className = 'text-[10px] font-extrabold text-red-200 bg-red-900/60 px-2 py-0.5 rounded-md border border-red-400/40';
         }
-        msgEl.innerHTML = `<b>คำแนะนำจากระบบ AI Hydrograph:</b> สถานีต้นน้ำ X.73A (บ้านบองอ) อยู่ในระดับวิกฤต (<b>${levelX73aNum.toFixed(2)}</b> ม.รทก.) ยอดมวลน้ำสูงสุด (Peak Discharge) ไหลด้วยความเร็ว 1.2–1.8 ม./วินาที จะเดินทางมาถึงเขตเทศบาลในอีก <b>4 – 6 ชั่วโมง</b> แนะนำให้ผู้บริหารอนุมัติส่งประกาศ <b>[วิกฤต]</b> ไปยัง LINE Broadcast ทันทีเพื่อเตรียมอพยพ`;
-        if (btnDanger) {
-            btnDanger.classList.add('ring-4', 'ring-red-400', 'scale-105');
-        }
+        msgEl.innerHTML = `<b>คำแนะนำจาก AI Hydrograph:</b> ${evalRes.reasons.join(' • ')} แนะนำให้ผู้บริหารอนุมัติส่งประกาศ <b>[วิกฤต]</b> ไปยัง LINE ทันทีเพื่อเตรียมอพยพและรับมือมวลน้ำจากพื้นที่รับน้ำตอนล่าง${chipsHtml}`;
+        if (btnDanger) btnDanger.classList.add('ring-4', 'ring-red-400', 'scale-105');
 
-    } else if (levelX73aNum >= 25.80) {
-        // 🟡 ระดับเตือนภัย / เตรียมพร้อม (25.80 - 26.79 ม.รทก.)
+    } else if (evalRes.level === 'warning') {
         boxEl.className = 'mb-5 p-4 rounded-2xl bg-gradient-to-r from-amber-950 via-orange-900 to-slate-900 text-white shadow-lg border-2 border-amber-500/60 relative overflow-hidden transition-all duration-500';
         if (iconBg) iconBg.className = 'w-10 h-10 rounded-xl bg-amber-500/40 border border-amber-300 flex items-center justify-center text-white text-lg shrink-0 shadow-md';
         if (actionBadge) {
@@ -283,16 +393,27 @@ window.updateAILineRecommendation = function (levelX73aNum, levelX73Num) {
             actionBadge.className = 'text-[10px] font-black px-2.5 py-0.5 rounded-full bg-amber-500 text-slate-950 border border-amber-200 font-extrabold';
         }
         if (lagBadge) {
-            lagBadge.innerHTML = '<i class="fas fa-clock mr-1"></i>มีเวลาเตรียมพร้อม 4–6 ชม.';
+            lagBadge.innerHTML = '<i class="fas fa-clock mr-1"></i>Lag Time 4–24 ชม.';
             lagBadge.className = 'text-[10px] font-extrabold text-amber-200 bg-amber-900/60 px-2 py-0.5 rounded-md border border-amber-400/40';
         }
-        msgEl.innerHTML = `<b>คำแนะนำจากระบบ AI Hydrograph:</b> สถานีต้นน้ำ X.73A (บ้านบองอ) เริ่มแตะเกณฑ์เตือนภัย (<b>${levelX73aNum.toFixed(2)}</b> ม.รทก.) พื้นที่ตอนล่างเทศบาลตำบลตันหยงมัสจะมีเวลาเตรียมรับมือล่วงหน้า <b>4 – 6 ชั่วโมง</b> ก่อนที่ยอดมวลน้ำจะมาถึง แนะนำกดอนุมัติส่งประกาศ <b>[เฝ้าระวัง]</b> เพื่อเปิดทางระบายน้ำและเตือนประชาชน`;
-        if (btnWarning) {
-            btnWarning.classList.add('ring-4', 'ring-amber-400', 'scale-105');
+        msgEl.innerHTML = `<b>คำแนะนำจาก AI Hydrograph:</b> ${evalRes.reasons.join(' • ')} แนะนำกดอนุมัติส่งประกาศ <b>[เฝ้าระวัง]</b> เพื่อเปิดทางระบายน้ำและแจ้งเตือนประชาชนล่วงหน้า${chipsHtml}`;
+        if (btnWarning) btnWarning.classList.add('ring-4', 'ring-amber-400', 'scale-105');
+
+    } else if (evalRes.level === 'prewatch') {
+        boxEl.className = 'mb-5 p-4 rounded-2xl bg-gradient-to-r from-sky-950 via-blue-900 to-slate-900 text-white shadow-lg border-2 border-sky-400/50 relative overflow-hidden transition-all duration-500';
+        if (iconBg) iconBg.className = 'w-10 h-10 rounded-xl bg-sky-500/40 border border-sky-300 flex items-center justify-center text-white text-lg shrink-0 shadow-md';
+        if (actionBadge) {
+            actionBadge.innerHTML = '🔎 จับตาใกล้ชิด (เตรียมพร้อม)';
+            actionBadge.className = 'text-[10px] font-black px-2.5 py-0.5 rounded-full bg-sky-400 text-slate-950 border border-sky-200';
         }
+        if (lagBadge) {
+            lagBadge.innerHTML = '<i class="fas fa-clock mr-1"></i>เฝ้าติดตาม 6–24 ชม.';
+            lagBadge.className = 'text-[10px] font-extrabold text-sky-200 bg-sky-900/60 px-2 py-0.5 rounded-md border border-sky-400/40';
+        }
+        msgEl.innerHTML = `<b>วิเคราะห์จาก AI Hydrograph:</b> ${evalRes.reasons.join(' • ')} ควรติดตามระดับน้ำคลองตันหยงมัสและปริมาณฝนตกแช่อย่างใกล้ชิด${chipsHtml}`;
+        if (btnWarning) btnWarning.classList.add('ring-4', 'ring-sky-400');
 
     } else {
-        // 🟢 ระดับปกติ (< 25.79 ม.รทก.)
         boxEl.className = 'mb-5 p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 text-white shadow-md border border-blue-400/30 relative overflow-hidden transition-all duration-500';
         if (iconBg) iconBg.className = 'w-10 h-10 rounded-xl bg-indigo-500/30 border border-indigo-300/30 flex items-center justify-center text-indigo-300 text-lg shrink-0 shadow-inner';
         if (actionBadge) {
@@ -300,13 +421,11 @@ window.updateAILineRecommendation = function (levelX73aNum, levelX73Num) {
             actionBadge.className = 'text-[10px] font-black px-2.5 py-0.5 rounded-full bg-emerald-500/30 text-emerald-200 border border-emerald-400/30';
         }
         if (lagBadge) {
-            lagBadge.innerHTML = '<i class="fas fa-clock mr-1"></i>Lag Time 4–6 ชม.';
+            lagBadge.innerHTML = '<i class="fas fa-clock mr-1"></i>Lag Time 4–24 ชม.';
             lagBadge.className = 'text-[10px] font-bold text-slate-300 bg-slate-800/60 px-2 py-0.5 rounded-md border border-slate-700';
         }
-        msgEl.innerHTML = `<b>วิเคราะห์จาก AI Hydrograph:</b> สถานีต้นน้ำ X.73A (บ้านบองอ) อยู่ในระดับปกติ (<b>${levelX73aNum.toFixed(2)}</b> ม.รทก.) ความเร็วการไหลเฉลี่ย 1.2–1.8 ม./วินาที สถานการณ์น้ำในเขตเทศบาลอยู่ในเกณฑ์ปลอดภัย`;
-        if (btnNormal) {
-            btnNormal.classList.add('ring-4', 'ring-emerald-400');
-        }
+        msgEl.innerHTML = `<b>วิเคราะห์จาก AI Hydrograph:</b> สถานีปลายน้ำ X.73 (${x73Str} ม.รทก.) และต้นน้ำ X.73A (${x73aStr} ม.รทก.) อยู่ในเกณฑ์ปกติ สถานการณ์น้ำในเขตเทศบาลอยู่ในเกณฑ์ปลอดภัย${chipsHtml}`;
+        if (btnNormal) btnNormal.classList.add('ring-4', 'ring-emerald-400');
     }
 };
 
@@ -968,7 +1087,7 @@ function openRidHistoryModal(stationCode = 'X.73') {
     }
     if (subtitleEl) {
         subtitleEl.innerText = isX73A
-            ? 'คลังข้อมูลน้ำแห่งชาติ (ThaiWater) • เฝ้าระวัง 25.80 ม. | ตลิ่ง 26.80 ม.'
+            ? 'คลังข้อมูลน้ำแห่งชาติ (ThaiWater) • เฝ้าระวัง ทต. 23.00 ม. | วิกฤต ทต. 24.00 ม. (ตลิ่งบองอ 26.80 ม.)'
             : 'คลังข้อมูลน้ำแห่งชาติ (ThaiWater) • เฝ้าระวัง 13.50 ม. | ตลิ่ง 14.90 ม.';
     }
 
@@ -1062,8 +1181,8 @@ async function fetchRidHistoryDirectFallback(station, days) {
     }
 
     const stationId = found.station.id;
-    const bankLevel = parseFloat(found.station.min_bank) || (isX73A ? 26.80 : 14.90);
-    const warnLevel = isX73A ? 25.80 : 13.50;
+    const bankLevel = isX73A ? 24.00 : (parseFloat(found.station.min_bank) || 14.90);
+    const warnLevel = isX73A ? 23.00 : 13.50;
 
     const now = new Date();
     const startDt = new Date(now.getTime() - ((days - 1) * 24 * 60 * 60 * 1000));
@@ -1169,8 +1288,8 @@ async function loadRidHistoryChart(rangeKey = 'today') {
             throw new Error((dataPayload && dataPayload.error) ? dataPayload.error : 'ไม่พบข้อมูลระดับน้ำย้อนหลังในช่วงเวลาที่เลือก');
         }
 
-        const bankLevel = parseFloat(dataPayload.bankLevel) || (station === 'X.73A' ? 26.80 : 14.90);
-        const warnLevel = parseFloat(dataPayload.warnLevel) || (station === 'X.73A' ? 25.80 : 13.50);
+        const bankLevel = (station === 'X.73A') ? 24.00 : (parseFloat(dataPayload.bankLevel) || 14.90);
+        const warnLevel = (station === 'X.73A') ? 23.00 : (parseFloat(dataPayload.warnLevel) || 13.50);
 
         let displayPoints = dataPayload.records;
         if (rangeKey === 'today') {
@@ -1237,7 +1356,7 @@ async function loadRidHistoryChart(rangeKey = 'today') {
                             tension: 0.3
                         },
                         {
-                            label: `เฝ้าระวัง (${warnLevel.toFixed(2)} ม.)`,
+                            label: station === 'X.73A' ? `เฝ้าระวัง ทต. (${warnLevel.toFixed(2)} ม.)` : `เฝ้าระวัง (${warnLevel.toFixed(2)} ม.)`,
                             data: warnLine,
                             borderColor: '#f59e0b',
                             borderWidth: 1.5,
@@ -1246,7 +1365,7 @@ async function loadRidHistoryChart(rangeKey = 'today') {
                             fill: false
                         },
                         {
-                            label: `ระดับตลิ่ง (${bankLevel.toFixed(2)} ม.)`,
+                            label: station === 'X.73A' ? `วิกฤต ทต. (${bankLevel.toFixed(2)} ม.)` : `ระดับตลิ่ง (${bankLevel.toFixed(2)} ม.)`,
                             data: bankLine,
                             borderColor: '#ef4444',
                             borderWidth: 1.5,
