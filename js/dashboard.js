@@ -93,6 +93,7 @@ let dashLayerStates = {
                             const lvl = parseFloat(window.latestRIDData.data.level);
                             if (!isNaN(lvl)) window.updateHeroWaterGauge(lvl, window.latestRIDData);
                         }
+                        if (typeof window.renderPublicCctvSection === 'function') window.renderPublicCctvSection();
                     }).catch(() => {});
                 }
                 if (typeof loadWeatherForecast === 'function') {

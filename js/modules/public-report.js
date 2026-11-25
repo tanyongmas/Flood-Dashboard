@@ -1621,12 +1621,12 @@ window.renderPublicPortal = async function () {
                         <span>รีเฟรชภาพ</span>
                     </button>
                     ${(window.cctvCameras && window.cctvCameras.length > 0) ? `
-                        <span class="px-3 py-1 rounded-full text-[11px] font-bold bg-sky-50 text-sky-700 border border-sky-200">
+                        <span id="publicCctvCountBadge" class="px-3 py-1 rounded-full text-[11px] font-bold bg-sky-50 text-sky-700 border border-sky-200">
                             ออนไลน์ ${window.cctvCameras.filter(c => c.status === 'online').length}/${window.cctvCameras.length} จุด
                         </span>
                     ` : `
-                        <span class="px-3 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
-                            ระบบพร้อมเชื่อมต่อ
+                        <span id="publicCctvCountBadge" class="px-3 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
+                            กำลังโหลดข้อมูลกล้อง...
                         </span>
                     `}
                 </div>
@@ -1768,6 +1768,9 @@ window.renderPublicPortal = async function () {
     }
     if (typeof renderPublicRainfallCard === 'function') {
         renderPublicRainfallCard();
+    }
+    if (typeof window.renderPublicCctvSection === 'function') {
+        window.renderPublicCctvSection();
     }
 
     // 3. เริ่มต้นแผนที่ Mini Map หลังสร้าง DOM เสร็จ
@@ -2798,6 +2801,25 @@ function getPublicStaffGaugeHtml(cam) {
         </div>
     `;
 }
+
+window.renderPublicCctvSection = function () {
+    const container = document.getElementById('publicCctvContainer');
+    if (container && typeof renderPublicCctvCardsHtml === 'function') {
+        container.innerHTML = renderPublicCctvCardsHtml();
+    }
+    const badge = document.getElementById('publicCctvCountBadge');
+    if (badge) {
+        const cams = Array.isArray(window.cctvCameras) ? window.cctvCameras : [];
+        if (cams.length > 0) {
+            const onlineCnt = cams.filter(c => c.status === 'online').length;
+            badge.className = 'px-3 py-1 rounded-full text-[11px] font-bold bg-sky-50 text-sky-700 border border-sky-200';
+            badge.textContent = `ออนไลน์ ${onlineCnt}/${cams.length} จุด`;
+        } else {
+            badge.className = 'px-3 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-500 border border-slate-200';
+            badge.textContent = 'ระบบพร้อมเชื่อมต่อ';
+        }
+    }
+};
 
 function renderPublicCctvCardsHtml() {
     const cameras = window.cctvCameras || [];
