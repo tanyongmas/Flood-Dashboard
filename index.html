@@ -27,9 +27,29 @@
                     var mt = document.querySelector('meta[name="theme-color"]');
                     if (mt) mt.setAttribute('content', '#0f172a');
                 }
+                var search = window.location.search || '';
+                var href = window.location.href || '';
+                var params = new URLSearchParams(search);
+                if (
+                    href.indexOf('mode=public') !== -1 ||
+                    href.indexOf('mode=report') !== -1 ||
+                    href.indexOf('mode=1') !== -1 ||
+                    params.has('public')
+                ) {
+                    document.documentElement.classList.add('is-public-boot');
+                }
             } catch (e) { }
         })();
     </script>
+    <style>
+        html.is-public-boot #loginPage,
+        html.is-public-boot #mainApp {
+            display: none !important;
+        }
+        html.is-public-boot body {
+            background-color: #f8fafc !important;
+        }
+    </style>
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">

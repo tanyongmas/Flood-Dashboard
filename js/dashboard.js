@@ -43,13 +43,28 @@ let dashLayerStates = {
         /// เช็คสถานะเมื่อโหลดหน้าเว็บ และ ตรวจสอบโหมดประชาชน
         window.isPublicMode = false;
 
+        function detectPublicPortalMode() {
+            try {
+                const href = window.location.href || '';
+                const params = new URLSearchParams(window.location.search || '');
+                return (
+                    href.includes('mode=public') ||
+                    href.includes('mode=report') ||
+                    href.includes('mode=1') ||
+                    params.has('public')
+                );
+            } catch (_) {
+                return false;
+            }
+        }
+
         window.addEventListener('DOMContentLoaded', async () => {
-            // 1. เช็คว่ามีคำว่า mode=public หรือ mode=report ใน URL ไหม
-            window.isPublicMode = window.location.href.includes('mode=public') || window.location.href.includes('mode=report');
+            // 1. รองรับทั้ง ?mode=public, ?mode=report, ?mode=1 และ ?public
+            window.isPublicMode = detectPublicPortalMode();
 
             if (window.isPublicMode) {
                 // ==========================================
-                // 🟢 โหมดประชาชน (Clean Minimal Citizen Portal) 🟢
+                // 🟢 โหมดประชาชน (Clean Minimal Citizen Portal - Instant Render) 🟢
                 // ==========================================
                 currentUser = "ประชาชน (สแกน QR)";
                 userRole = "public";
@@ -63,24 +78,41 @@ let dashLayerStates = {
                 if (mainApp) mainApp.remove();
 
                 // ปรับสไตล์พื้นหลังเป็น Clean Minimal สว่าง สะอาดตา นุ่มนวล
+                document.documentElement.classList.remove('is-public-boot');
                 document.body.className = "bg-slate-50 text-slate-700 min-h-screen font-prompt antialiased selection:bg-blue-100 selection:text-blue-700";
 
-                // โหลดข้อมูลแบบขนาน (Parallel Fetching) เพื่อนำมารายงานระดับน้ำ แผนที่ และสภาพอากาศ
-                try {
-                    await Promise.allSettled([
-                        loadData(),
-                        typeof loadRIDWaterLevel === 'function' ? loadRIDWaterLevel() : Promise.resolve(),
-                        typeof loadWeatherForecast === 'function' ? loadWeatherForecast() : Promise.resolve(),
-                        typeof loadCctvCamerasData === 'function' ? loadCctvCamerasData() : Promise.resolve()
-                    ]);
-                } catch (e) {
-                    console.warn("Public mode data fetch warning:", e);
-                }
-
-                // เรียกฟังก์ชันเรนเดอร์ Clean Minimal Citizen Portal
+                // วาดหน้า Portal ทันทีก่อนรอ API เพื่อไม่ให้เกิดหน้าจอขาวค้าง
                 if (typeof renderPublicPortal === 'function') {
                     renderPublicPortal();
                 }
+
+                // โหลดข้อมูลแบบ Non-blocking แล้วอัปเดตส่วนที่เกี่ยวข้องทันทีที่ข้อมูลมาถึง
+                if (typeof loadRIDWaterLevel === 'function') {
+                    loadRIDWaterLevel().then(() => {
+                        if (window.latestRIDData && window.latestRIDData.data && typeof window.updateHeroWaterGauge === 'function') {
+                            const lvl = parseFloat(window.latestRIDData.data.level);
+                            if (!isNaN(lvl)) window.updateHeroWaterGauge(lvl, window.latestRIDData);
+                        }
+                    }).catch(() => {});
+                }
+                if (typeof loadWeatherForecast === 'function') {
+                    loadWeatherForecast().then(() => {
+                        if (typeof window.checkAndApplyHeroRainEffect === 'function') window.checkAndApplyHeroRainEffect();
+                    }).catch(() => {});
+                }
+                if (typeof loadCctvCamerasData === 'function') {
+                    loadCctvCamerasData().then(() => {
+                        if (typeof window.renderPublicCctvSection === 'function') window.renderPublicCctvSection();
+                    }).catch(() => {});
+                }
+                loadData().then(() => {
+                    if (typeof initPublicMiniMap === 'function') {
+                        const lvl = (window.latestRIDData && window.latestRIDData.data) ? parseFloat(window.latestRIDData.data.level) : undefined;
+                        initPublicMiniMap(!isNaN(lvl) ? lvl : 14.20);
+                    }
+                }).catch(e => {
+                    console.warn("Public mode data fetch warning:", e);
+                });
 
                 return; // 🌟 จบการทำงานโหมดประชาชน
             }
@@ -1444,6 +1476,21 @@ let dashLayerStates = {
             return { label: 'มิดหัว', colorHex: '#9333ea', shadowColor: 'rgba(147, 51, 234, 0.55)', badgeClass: 'bg-purple-100 text-purple-800 border-purple-200', extraClass: 'critical-pulse' };
         }
         window.getStaffWaterLevelMeta = getStaffWaterLevelMeta;
+
+        function getCitizenWaterLevelMeta(levelCategory, levelCmRange) {
+            const cat = String(levelCategory || '').trim();
+            if (cat.includes('มิดหัว')) return getStaffWaterLevelMeta(190);
+            if (cat.includes('อกขึ้นไป')) return getStaffWaterLevelMeta(150);
+            if (cat.includes('เอว') && cat.includes('อก')) return getStaffWaterLevelMeta(110);
+            if (cat.includes('เข่า') && cat.includes('เอว')) return getStaffWaterLevelMeta(70);
+            if (cat.includes('ข้อเท้า') || cat.includes('เข่า')) return getStaffWaterLevelMeta(25);
+            if (cat.includes('แห้ง')) return getStaffWaterLevelMeta(0);
+
+            const numMatch = String(levelCmRange || '').match(/\d+/);
+            if (numMatch) return getStaffWaterLevelMeta(parseInt(numMatch[0], 10));
+            return getStaffWaterLevelMeta(25);
+        }
+        window.getCitizenWaterLevelMeta = getCitizenWaterLevelMeta;
 
         function syncStaffWaterLevelCard(rawVal) {
             const badgeEl = document.getElementById('staff_water_level_badge');
@@ -3034,10 +3081,7 @@ let dashLayerStates = {
                         coordsStr = window.waterPointsMap[name];
                     }
 
-                    let statusText = 'ปกติ', statusBg = 'bg-emerald-500';
-                    if (level >= 81) { statusText = 'วิกฤต'; statusBg = 'bg-red-600'; }
-                    else if (level >= 31) { statusText = 'เตือนภัย'; statusBg = 'bg-orange-500'; }
-                    else if (level >= 1) { statusText = 'เฝ้าระวัง'; statusBg = 'bg-yellow-500'; }
+                    const meta = getStaffWaterLevelMeta(level);
 
                     if (coordsStr.includes(',')) {
                         const [lat, lng] = coordsStr.split(',').map(v => parseFloat(v.trim()));
@@ -3046,24 +3090,28 @@ let dashLayerStates = {
                                 className: 'custom-one-water-marker bg-transparent border-0',
                                 html: `
                                     <div class="relative flex flex-col items-center">
-                                        <div class="bg-sky-500 text-white w-8 h-8 rounded-full border-2 border-white shadow-lg flex items-center justify-center text-xs font-black">
+                                        <div class="${meta.extraClass} text-white w-8 h-8 rounded-full border-2 border-white flex items-center justify-center text-xs font-black"
+                                             style="background-color: ${meta.colorHex}; box-shadow: 0 0 0 3px ${meta.shadowColor}, 0 4px 10px rgba(0,0,0,0.22);">
                                             <i class="fas fa-droplet"></i>
                                         </div>
-                                        <span class="bg-sky-900 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-md mt-0.5 whitespace-nowrap border border-sky-400/30">${level} ซม.</span>
+                                        <span class="bg-slate-900/90 text-white text-[9px] font-black px-2 py-0.5 rounded-full shadow-md mt-0.5 whitespace-nowrap border border-white/25">${level} ซม.</span>
                                     </div>
                                 `,
-                                iconSize: [36, 48],
-                                iconAnchor: [18, 48],
-                                popupAnchor: [0, -48]
+                                iconSize: [44, 50],
+                                iconAnchor: [22, 46],
+                                popupAnchor: [0, -46]
                             });
 
                             const popup = `
-                                <div class="font-sans p-2">
-                                    <div class="flex items-center justify-between border-b pb-1.5 mb-2">
-                                        <span class="font-black text-slate-800 text-xs"><i class="fas fa-droplet text-sky-500 mr-1"></i>${name}</span>
-                                        <span class="text-[9px] font-bold text-white ${statusBg} px-2 py-0.5 rounded-full">${statusText}</span>
+                                <div class="font-sans p-2 min-w-[195px]">
+                                    <div class="flex items-center justify-between gap-2 border-b pb-1.5 mb-2">
+                                        <span class="font-black text-slate-800 text-xs"><i class="fas fa-droplet mr-1" style="color:${meta.colorHex}"></i>${name}</span>
+                                        <span class="text-[9px] font-bold px-2 py-0.5 rounded-full border ${meta.badgeClass} shrink-0">${meta.label}</span>
                                     </div>
-                                    <p class="text-xs text-slate-600 mb-1">ระดับน้ำ: <b class="text-sky-600 font-bold">${level} ซม.</b> (แนวโน้ม: ${trend})</p>
+                                    <div class="flex items-center justify-between text-xs text-slate-600 mb-1">
+                                        <span>ระดับน้ำ: <b class="font-black text-slate-800">${level} ซม.</b> (${trend})</span>
+                                        <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">เจ้าหน้าที่</span>
+                                    </div>
                                     <p class="text-[10px] text-slate-400"><i class="far fa-clock mr-1"></i>${new Date(r[0]).toLocaleString('th-TH')}</p>
                                 </div>
                             `;
@@ -3074,35 +3122,43 @@ let dashLayerStates = {
                     }
                 });
 
-                // เพิ่มหมุดรายงานระดับน้ำจากประชาชน (Citizen Crowdsourced)
+                // เพิ่มหมุดรายงานระดับน้ำจากประชาชน (Citizen Crowdsourced - รูปทรงสี่เหลี่ยมมุมมน + ไอคอนบุคคล แยกจากหมุดเจ้าหน้าที่)
                 if (store.citizenWaterReports && store.citizenWaterReports.length > 0) {
                     store.citizenWaterReports.forEach(cw => {
                         const cLat = parseFloat(cw.lat);
                         const cLng = parseFloat(cw.lng);
                         if (isNaN(cLat) || isNaN(cLng) || (cLat === 0 && cLng === 0)) return;
 
+                        const cMeta = getCitizenWaterLevelMeta(cw.levelCategory, cw.levelCmRange);
+                        const rangeLabel = cw.levelCmRange || cMeta.label;
+
                         const cIcon = L.divIcon({
                             className: 'custom-one-cwater-marker bg-transparent border-0',
                             html: `
                                 <div class="relative flex flex-col items-center">
-                                    <div class="bg-blue-600 text-white w-7 h-7 rounded-full border-2 border-white shadow-md flex items-center justify-center text-[10px] animate-pulse">
-                                        <i class="fas fa-droplet"></i>
+                                    <div class="${cMeta.extraClass} text-white w-7 h-7 rounded-xl border-2 border-white flex items-center justify-center text-[11px] font-black"
+                                         style="background-color: ${cMeta.colorHex}; box-shadow: 0 0 0 3px ${cMeta.shadowColor}, 0 3px 8px rgba(0,0,0,0.22);">
+                                        <i class="fas fa-user"></i>
                                     </div>
-                                    <span class="bg-blue-950 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full shadow-md mt-0.5 whitespace-nowrap border border-blue-400/30">${cw.levelCmRange || ''}</span>
+                                    <span class="bg-white/95 text-slate-800 text-[8px] font-black px-1.5 py-0.5 rounded-md shadow-md mt-0.5 whitespace-nowrap border border-slate-300">👤 ${rangeLabel}</span>
                                 </div>
                             `,
-                            iconSize: [32, 42],
-                            iconAnchor: [16, 42],
+                            iconSize: [44, 44],
+                            iconAnchor: [22, 42],
                             popupAnchor: [0, -42]
                         });
 
                         const cPopup = `
-                            <div class="font-sans p-2 min-w-[190px]">
-                                <div class="flex items-center justify-between border-b pb-1 mb-1.5">
-                                    <span class="font-black text-slate-800 text-xs"><i class="fas fa-droplet text-blue-500 mr-1"></i>${cw.locationName || 'รายงานระดับน้ำ'}</span>
-                                    <span class="text-[9px] font-bold text-white bg-blue-600 px-2 py-0.5 rounded-full">ประชาชน</span>
+                            <div class="font-sans p-2 min-w-[200px]">
+                                <div class="flex items-center justify-between gap-1.5 border-b pb-1.5 mb-1.5">
+                                    <span class="font-black text-slate-800 text-xs"><i class="fas fa-user mr-1" style="color:${cMeta.colorHex}"></i>${cw.locationName || 'รายงานระดับน้ำ'}</span>
+                                    <span class="text-[9px] font-bold text-white bg-indigo-600 px-2 py-0.5 rounded-full shrink-0">ประชาชนแจ้ง</span>
                                 </div>
-                                <p class="text-xs text-slate-600 mb-1">ระดับน้ำ: <b class="text-blue-600 font-bold">${cw.levelCategory}</b> (แนวโน้ม: ${cw.trend || 'ทรงตัว'})</p>
+                                <div class="flex items-center justify-between gap-2 mb-1">
+                                    <span class="text-xs text-slate-600">ระดับน้ำ: <b class="font-bold text-slate-800">${cw.levelCategory || cMeta.label}</b></span>
+                                    <span class="text-[9px] font-bold px-2 py-0.5 rounded-full border ${cMeta.badgeClass} shrink-0">${cMeta.label}</span>
+                                </div>
+                                <p class="text-[11px] text-slate-500 mb-1">แนวโน้ม: ${cw.trend || 'ทรงตัว'}${cw.levelCmRange ? ` (${cw.levelCmRange})` : ''}</p>
                                 ${cw.note ? `<p class="text-[11px] text-slate-500 bg-slate-50 p-1.5 rounded border border-slate-100 my-1">${cw.note}</p>` : ''}
                                 <p class="text-[10px] text-slate-400"><i class="far fa-user mr-1"></i>${cw.reporterName || 'ประชาชน'} ${cw.reporterPhone ? `(${cw.reporterPhone})` : ''} | ${cw.createdAt ? new Date(cw.createdAt).toLocaleDateString('th-TH') : '-'}</p>
                             </div>

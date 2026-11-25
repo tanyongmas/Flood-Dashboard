@@ -83,8 +83,13 @@ async function loadRIDWaterLevel(forceRefresh = false) {
     }
 
     // ==========================================
-    // 📊 1. ประมวลผลและแสดงผล สถานี X.73 (คลองตันหยงมัส)
+    // 📊 ประมวลผลและแสดงผล สถานี X.73 และ X.73A
     // ==========================================
+    window.applyRIDResultToDOM = function (resObj) {
+        renderRIDResultToDOM(resObj);
+    };
+
+    function renderRIDResultToDOM(result) {
     if (result && result.success && result.data) {
         if (levelEl) levelEl.innerText = result.data.level;
         if (timeEl) timeEl.innerText = result.data.time + (result.isStaleFallback ? ' (ข้อมูลล่าสุด)' : '');
@@ -245,6 +250,111 @@ async function loadRIDWaterLevel(forceRefresh = false) {
         if (statusEl) statusEl.innerText = "ไม่พบข้อมูล";
         if (statusMiniEl) statusMiniEl.innerText = "ไม่พบข้อมูล";
         if (statusX73aEl) statusX73aEl.innerText = "ไม่พบข้อมูล";
+    }
+    }
+
+    renderRIDResultToDOM(result);
+    if (result && result.success && result.data && typeof syncRIDLatestFromGraph === 'function') {
+        syncRIDLatestFromGraph(result);
+    }
+}
+
+function parseRidAnyDatetimeMs(str) {
+    if (!str) return 0;
+    const s = String(str).trim();
+    const thaiMatch = s.match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}:\d{2})/);
+    if (thaiMatch) {
+        let yr = parseInt(thaiMatch[3], 10);
+        if (yr > 2400) yr -= 543;
+        const ms = Date.parse(`${yr}-${thaiMatch[2]}-${thaiMatch[1]}T${thaiMatch[4]}:00+07:00`);
+        return isNaN(ms) ? 0 : ms;
+    }
+    const isoMatch = s.match(/(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})/);
+    if (isoMatch) {
+        const ms = Date.parse(`${isoMatch[1]}T${isoMatch[2]}:00+07:00`);
+        return isNaN(ms) ? 0 : ms;
+    }
+    return 0;
+}
+
+function formatRidGraphDatetimeThai(dtStr) {
+    const m = String(dtStr || '').trim().match(/(\d{4})-(\d{2})-(\d{2})[T ](\d{2}:\d{2})/);
+    if (!m) return String(dtStr || '');
+    return `${m[3]}/${m[2]}/${m[1]} ${m[4]}`;
+}
+
+async function fetchLatestPointFromRidGraph(stationId) {
+    if (!stationId) return null;
+    const nowBkk = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
+    const todayStr = `${nowBkk.getFullYear()}-${String(nowBkk.getMonth() + 1).padStart(2, '0')}-${String(nowBkk.getDate()).padStart(2, '0')}`;
+    const url = `https://api-v3.thaiwater.net/api/v1/thaiwater30/public/waterlevel_graph?station_type=tele_waterlevel&station_id=${encodeURIComponent(stationId)}&start_date=${todayStr}&end_date=${todayStr}`;
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const json = await res.json();
+    let pts = [];
+    if (json && json.data && Array.isArray(json.data.graph_data)) pts = json.data.graph_data;
+    else if (json && Array.isArray(json.data)) pts = json.data;
+    const valid = pts.map(it => {
+        const dt = String(it.datetime || it.waterlevel_datetime || it.date || '').trim();
+        const rawV = (it.value !== undefined && it.value !== null) ? it.value : (it.waterlevel_msl !== undefined ? it.waterlevel_msl : it.waterlevel_m);
+        const val = parseFloat(rawV);
+        return (dt && !isNaN(val)) ? { datetime: dt, value: val, discharge: it.discharge ?? null } : null;
+    }).filter(Boolean).sort((a, b) => parseRidAnyDatetimeMs(a.datetime) - parseRidAnyDatetimeMs(b.datetime));
+    if (valid.length === 0) return null;
+    const latest = valid[valid.length - 1];
+    const prev = valid.length >= 2 ? valid[valid.length - 2] : null;
+    return {
+        datetime: latest.datetime,
+        value: latest.value,
+        previousValue: prev ? prev.value : null,
+        discharge: latest.discharge
+    };
+}
+
+async function syncRIDLatestFromGraph(result) {
+    if (!result || !result.success || !result.data || window._syncingRidGraph) return;
+    window._syncingRidGraph = true;
+    try {
+        const stIdX73 = result.data.stationId || 2582;
+        const stIdX73A = (result.data.dataX73A && result.data.dataX73A.stationId) ? result.data.dataX73A.stationId : 1124040;
+        const [g73, g73a] = await Promise.all([
+            fetchLatestPointFromRidGraph(stIdX73).catch(() => null),
+            fetchLatestPointFromRidGraph(stIdX73A).catch(() => null)
+        ]);
+
+        let updated = false;
+        if (g73 && parseRidAnyDatetimeMs(g73.datetime) > parseRidAnyDatetimeMs(result.data.time)) {
+            const bank = parseFloat(result.data.bankLevel) || 14.90;
+            result.data.level = g73.value.toFixed(2);
+            result.data.time = `${formatRidGraphDatetimeThai(g73.datetime)} น. (API เรียลไทม์)`;
+            result.data.diffBank = (bank - g73.value).toFixed(2);
+            if (g73.previousValue !== null) result.data.previousLevel = g73.previousValue.toFixed(2);
+            if (g73.discharge !== null) result.data.discharge = g73.discharge;
+            result.isStaleFallback = false;
+            updated = true;
+        }
+        if (g73a && result.data.dataX73A && parseRidAnyDatetimeMs(g73a.datetime) > parseRidAnyDatetimeMs(result.data.dataX73A.time)) {
+            const bankA = parseFloat(result.data.dataX73A.bankLevel) || 26.80;
+            result.data.dataX73A.level = g73a.value.toFixed(2);
+            result.data.dataX73A.time = `${formatRidGraphDatetimeThai(g73a.datetime)} น.`;
+            result.data.dataX73A.diffBank = (bankA - g73a.value).toFixed(2);
+            if (g73a.previousValue !== null) result.data.dataX73A.previousLevel = g73a.previousValue.toFixed(2);
+            result.data.levelX73A = result.data.dataX73A.level;
+            updated = true;
+        }
+
+        if (updated) {
+            window.latestRIDData = result;
+            if (typeof window.setAppCache === 'function') {
+                window.setAppCache('rid_data', result, 5);
+                window.setAppCache('rid_data_backup', result, 1440);
+            }
+            if (typeof window.applyRIDResultToDOM === 'function') window.applyRIDResultToDOM(result);
+            if (typeof syncCctvTelemetry === 'function') syncCctvTelemetry();
+        }
+    } catch (_) {
+    } finally {
+        window._syncingRidGraph = false;
     }
 }
 
@@ -1306,6 +1416,29 @@ async function loadRidHistoryChart(rangeKey = 'today') {
         const latestVal = values[values.length - 1];
         const maxVal = Math.max(...values);
         const minVal = Math.min(...values);
+
+        // ซิงค์เวลาล่าสุดจากหน้าประวัติไปยังการ์ดใหญ่/การ์ดเล็กทันที หากหน้าประวัติมีเวลาใหม่กว่า
+        const allLatestPt = dataPayload.records[dataPayload.records.length - 1];
+        const allPrevPt = dataPayload.records.length >= 2 ? dataPayload.records[dataPayload.records.length - 2] : null;
+        if (allLatestPt && window.latestRIDData && window.latestRIDData.success && window.latestRIDData.data) {
+            const rid = window.latestRIDData;
+            if (station === 'X.73' && parseRidAnyDatetimeMs(allLatestPt.datetime) > parseRidAnyDatetimeMs(rid.data.time)) {
+                const bank = parseFloat(rid.data.bankLevel) || 14.90;
+                rid.data.level = allLatestPt.value.toFixed(2);
+                rid.data.time = `${formatRidGraphDatetimeThai(allLatestPt.datetime)} น. (API เรียลไทม์)`;
+                rid.data.diffBank = (bank - allLatestPt.value).toFixed(2);
+                if (allPrevPt) rid.data.previousLevel = allPrevPt.value.toFixed(2);
+                if (typeof window.applyRIDResultToDOM === 'function') window.applyRIDResultToDOM(rid);
+            } else if (station === 'X.73A' && rid.data.dataX73A && parseRidAnyDatetimeMs(allLatestPt.datetime) > parseRidAnyDatetimeMs(rid.data.dataX73A.time)) {
+                const bankA = parseFloat(rid.data.dataX73A.bankLevel) || 26.80;
+                rid.data.dataX73A.level = allLatestPt.value.toFixed(2);
+                rid.data.dataX73A.time = `${formatRidGraphDatetimeThai(allLatestPt.datetime)} น.`;
+                rid.data.dataX73A.diffBank = (bankA - allLatestPt.value).toFixed(2);
+                if (allPrevPt) rid.data.dataX73A.previousLevel = allPrevPt.value.toFixed(2);
+                rid.data.levelX73A = rid.data.dataX73A.level;
+                if (typeof window.applyRIDResultToDOM === 'function') window.applyRIDResultToDOM(rid);
+            }
+        }
 
         const latestEl = document.getElementById('ridHistLatest');
         const maxEl = document.getElementById('ridHistMax');

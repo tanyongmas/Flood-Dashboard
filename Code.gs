@@ -1207,42 +1207,94 @@ function getRIDWaterLevelFromAPI() {
           );
           
           if (stationData) {
-            const rawDatetime = stationData.waterlevel_datetime || "";
-            let updateTime = rawDatetime;
-            try {
-              const parts = rawDatetime.split(" ");
-              const dateParts = parts[0].split("-");
-              updateTime = dateParts[2] + "/" + dateParts[1] + "/" + dateParts[0] + " " + parts[1];
-            } catch(e) { /* ใช้ rawDatetime เดิม */ }
-            
-            const waterLevel = stationData.waterlevel_msl || stationData.waterlevel_m || "0.00";
+            const parseIsoBkkMs_ = function (dtStr) {
+              if (!dtStr) return 0;
+              const s = String(dtStr).trim().replace(' ', 'T');
+              const ms = Date.parse(s.indexOf('+') >= 0 || s.indexOf('Z') >= 0 ? s : (s + '+07:00'));
+              return isNaN(ms) ? 0 : ms;
+            };
+            const formatRidThaiTime_ = function (dtStr) {
+              const parts = String(dtStr || '').trim().split(' ');
+              const dp = (parts[0] || '').split('-');
+              if (dp.length === 3) return dp[2] + '/' + dp[1] + '/' + dp[0] + ' ' + (parts[1] || '00:00');
+              return String(dtStr || '');
+            };
+            const fetchLatestGraphPoint_ = function (stId, todayIso) {
+              if (!stId) return null;
+              try {
+                const gUrl = 'https://api-v3.thaiwater.net/api/v1/thaiwater30/public/waterlevel_graph?station_type=tele_waterlevel&station_id=' + encodeURIComponent(stId) + '&start_date=' + todayIso + '&end_date=' + todayIso;
+                const gRes = UrlFetchApp.fetch(gUrl, fetchOptions);
+                if (gRes.getResponseCode() !== 200) return null;
+                const gJson = JSON.parse(gRes.getContentText());
+                let pts = [];
+                if (gJson && gJson.data && Array.isArray(gJson.data.graph_data)) pts = gJson.data.graph_data;
+                else if (gJson && Array.isArray(gJson.data)) pts = gJson.data;
+                const valid = pts.map(function (it) {
+                  const dt = String(it.datetime || it.waterlevel_datetime || it.date || '').trim();
+                  const rawV = (it.value !== undefined && it.value !== null) ? it.value : (it.waterlevel_msl !== undefined ? it.waterlevel_msl : it.waterlevel_m);
+                  const val = parseFloat(rawV);
+                  return (dt && !isNaN(val)) ? { datetime: dt, value: val, discharge: it.discharge || null } : null;
+                }).filter(Boolean).sort(function (a, b) {
+                  return parseIsoBkkMs_(a.datetime) - parseIsoBkkMs_(b.datetime);
+                });
+                if (valid.length === 0) return null;
+                const latest = valid[valid.length - 1];
+                const prev = valid.length >= 2 ? valid[valid.length - 2] : null;
+                return { datetime: latest.datetime, value: latest.value, previousValue: prev ? prev.value : null, discharge: latest.discharge };
+              } catch (eG) {
+                return null;
+              }
+            };
+
+            const todayIsoBkk = Utilities.formatDate(new Date(), "GMT+7", "yyyy-MM-dd");
+            let rawDatetime = stationData.waterlevel_datetime || "";
+            let waterLevel = stationData.waterlevel_msl || stationData.waterlevel_m || "0.00";
             const bankLevel = stationData.station.min_bank || 14.90;
-            const diffBank = stationData.diff_wl_bank || "0";
+            let diffBank = stationData.diff_wl_bank || "0";
+            let prevLevel = stationData.waterlevel_msl_previous || null;
+            let dischargeVal = stationData.discharge || null;
+
+            const stIdX73 = (stationData.station && stationData.station.id) ? stationData.station.id : 2582;
+            const gLatestX73 = fetchLatestGraphPoint_(stIdX73, todayIsoBkk);
+            if (gLatestX73 && parseIsoBkkMs_(gLatestX73.datetime) > parseIsoBkkMs_(rawDatetime)) {
+              rawDatetime = gLatestX73.datetime;
+              waterLevel = gLatestX73.value.toFixed(2);
+              diffBank = (parseFloat(bankLevel) - gLatestX73.value).toFixed(2);
+              if (gLatestX73.previousValue !== null) prevLevel = gLatestX73.previousValue.toFixed(2);
+              if (gLatestX73.discharge !== null) dischargeVal = gLatestX73.discharge;
+            }
+            const updateTime = formatRidThaiTime_(rawDatetime);
 
             // ประมวลผลข้อมูลสถานี X.73A (ถ้าพบ)
             let dataX73AObj = null;
             if (stationDataX73A) {
-              const rawDatetimeA = stationDataX73A.waterlevel_datetime || "";
-              let updateTimeA = rawDatetimeA;
-              try {
-                const partsA = rawDatetimeA.split(" ");
-                const datePartsA = partsA[0].split("-");
-                updateTimeA = datePartsA[2] + "/" + datePartsA[1] + "/" + datePartsA[0] + " " + partsA[1];
-              } catch(e) {}
-
-              const waterLevelA = stationDataX73A.waterlevel_msl || stationDataX73A.waterlevel_m || "22.34";
+              let rawDatetimeA = stationDataX73A.waterlevel_datetime || "";
+              let waterLevelA = stationDataX73A.waterlevel_msl || stationDataX73A.waterlevel_m || "22.34";
               const bankLevelA = stationDataX73A.station && stationDataX73A.station.min_bank ? stationDataX73A.station.min_bank : 26.80;
-              const diffBankA = stationDataX73A.diff_wl_bank || "4.46";
+              let diffBankA = stationDataX73A.diff_wl_bank || "4.46";
+              let prevLevelA = stationDataX73A.waterlevel_msl_previous || null;
+              let dischargeA = stationDataX73A.discharge || null;
+
+              const stIdX73A = (stationDataX73A.station && stationDataX73A.station.id) ? stationDataX73A.station.id : 1124040;
+              const gLatestX73A = fetchLatestGraphPoint_(stIdX73A, todayIsoBkk);
+              if (gLatestX73A && parseIsoBkkMs_(gLatestX73A.datetime) > parseIsoBkkMs_(rawDatetimeA)) {
+                rawDatetimeA = gLatestX73A.datetime;
+                waterLevelA = gLatestX73A.value.toFixed(2);
+                diffBankA = (parseFloat(bankLevelA) - gLatestX73A.value).toFixed(2);
+                if (gLatestX73A.previousValue !== null) prevLevelA = gLatestX73A.previousValue.toFixed(2);
+                if (gLatestX73A.discharge !== null) dischargeA = gLatestX73A.discharge;
+              }
+              const updateTimeA = formatRidThaiTime_(rawDatetimeA);
 
               dataX73AObj = {
-                stationId: (stationDataX73A.station && stationDataX73A.station.id) ? stationDataX73A.station.id : null,
+                stationId: stIdX73A,
                 level: parseFloat(waterLevelA).toFixed(2),
                 time: updateTimeA + " น.",
                 bankLevel: bankLevelA,
                 diffBank: parseFloat(diffBankA).toFixed(2),
                 stationName: "สถานี X.73A บ้านบองอ",
-                previousLevel: stationDataX73A.waterlevel_msl_previous || null,
-                discharge: stationDataX73A.discharge || null,
+                previousLevel: prevLevelA,
+                discharge: dischargeA,
                 situationLevel: stationDataX73A.situation_level || 0
               };
             }
@@ -1251,14 +1303,14 @@ function getRIDWaterLevelFromAPI() {
               success: true,
               source: "API",
               data: {
-                stationId: (stationData.station && stationData.station.id) ? stationData.station.id : null,
+                stationId: stIdX73,
                 level: parseFloat(waterLevel).toFixed(2),
                 time: updateTime + " น. (API เรียลไทม์)",
                 bankLevel: bankLevel,
                 diffBank: parseFloat(diffBank).toFixed(2),
                 stationName: "สถานี X.73 คลองตันหยงมัส",
-                previousLevel: stationData.waterlevel_msl_previous || null,
-                discharge: stationData.discharge || null,
+                previousLevel: prevLevel,
+                discharge: dischargeVal,
                 situationLevel: stationData.situation_level || 0,
                 dataX73A: dataX73AObj,
                 levelX73A: dataX73AObj ? dataX73AObj.level : "22.34"
@@ -3507,18 +3559,18 @@ function getRoadClosuresFlexMessage() {
 }
 
 /**
- * 📊 สร้าง Flex Carousel รวมระดับน้ำทั้ง 2 สถานี (X.73A ต้นน้ำ และ X.73 ตัวเมืองตันหยงมัส)
+ * 📊 สร้าง Flex Carousel รวมระดับน้ำทั้ง 2 สถานี (X.73 ตัวเมืองตันหยงมัส ขึ้นก่อน ตามด้วย X.73A ต้นน้ำ)
  */
 function getWaterLevelCarouselFlexMessage(waterRes) {
-  const cardX73A = getWaterLevelFlexMessage(waterRes, 'X.73A').contents;
   const cardX73 = getWaterLevelFlexMessage(waterRes, 'X.73').contents;
+  const cardX73A = getWaterLevelFlexMessage(waterRes, 'X.73A').contents;
 
   return {
     "type": "flex",
     "altText": "📊 สรุประดับน้ำคลองตันหยงมัส ทุกสถานี (Carousel)",
     "contents": {
       "type": "carousel",
-      "contents": [cardX73A, cardX73]
+      "contents": [cardX73, cardX73A]
     }
   };
 }
