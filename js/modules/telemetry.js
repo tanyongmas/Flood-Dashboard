@@ -152,7 +152,7 @@ async function loadRIDWaterLevel(forceRefresh = false) {
                 if (sidebar) sidebar.className = 'absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-red-400 to-red-600';
             }
             if (iconMiniBg) iconMiniBg.className = 'w-12 h-12 md:w-14 md:h-14 bg-gradient-to-br from-red-500 to-red-600 text-white rounded-[1rem] flex items-center justify-center text-2xl md:text-3xl shrink-0 shadow-lg shadow-red-500/40 animate-pulse';
-        } else if (levelNum > 13.50) {
+        } else if (levelNum >= 13.90) {
             if (statusEl) { statusEl.innerText = 'เฝ้าระวังระดับน้ำ'; statusEl.className = 'text-xs md:text-sm font-bold text-yellow-100'; }
             if (dotEl) dotEl.className = 'w-2 h-2 rounded-full bg-yellow-400 animate-pulse';
             if (cardEl) cardEl.className = 'bg-gradient-to-br from-orange-400 to-amber-600 rounded-[2rem] p-6 shadow-lg shadow-orange-500/30 mb-8 text-white relative overflow-hidden flex flex-col md:flex-row items-center justify-between transition-all duration-700';
@@ -399,29 +399,29 @@ window.evaluateHydrographRisk = function (levelX73aNum, levelX73Num, context = {
     const isVeryHeavyRain = (rain24h !== null && rain24h >= 90);
     const isRising = (x73Diff > 0 || x73aDiff > 0);
 
-    // 1. 🔴 วิกฤต: ปลายน้ำ X.73 แตะ/เกินตลิ่ง (>= 14.90) หรือ ต้นน้ำ X.73A >= 26.80 หรือ (X.73A >= 24.70 ร่วมกับ X.73 >= 14.00 และน้ำขึ้น/ฝนหนัก)
+    // 1. 🔴 วิกฤต: ปลายน้ำ X.73 เกินตลิ่ง (> 14.90) หรือ ต้นน้ำ X.73A >= 26.80 หรือ (X.73A >= 24.70 ร่วมกับ X.73 >= 14.00 และน้ำขึ้น/ฝนหนัก)
     if (
-        (!isNaN(x73) && x73 >= 14.90) ||
+        (!isNaN(x73) && x73 > 14.90) ||
         (!isNaN(x73a) && x73a >= 26.80) ||
         (!isNaN(x73a) && !isNaN(x73) && x73a >= 24.70 && x73 >= 14.00 && (isRising || isHeavyRain))
     ) {
         const reasons = [];
-        if (!isNaN(x73) && x73 >= 14.90) reasons.push(`ปลายน้ำ X.73 แตะ/เกินเกณฑ์ล้นตลิ่ง (<b>${x73.toFixed(2)}</b> ม.รทก.)`);
+        if (!isNaN(x73) && x73 > 14.90) reasons.push(`ปลายน้ำ X.73 เกินเกณฑ์ล้นตลิ่ง (<b>${x73.toFixed(2)}</b> ม.รทก.)`);
         if (!isNaN(x73a) && x73a >= 26.80) reasons.push(`ต้นน้ำ X.73A เกินระดับวิกฤต (<b>${x73a.toFixed(2)}</b> ม.รทก.)`);
         else if (!isNaN(x73a) && x73a >= 24.70) reasons.push(`ต้นน้ำ X.73A สูงถึงเกณฑ์สถิติน้ำท่วมปี 68 (<b>${x73a.toFixed(2)}</b> ม.รทก.)`);
         if (isHeavyRain) reasons.push(`ฝนสะสม 24 ชม. <b>${rain24h.toFixed(1)} มม.</b>`);
         return { level: 'critical', reasons, rain24h, x73Diff, x73aDiff };
     }
 
-    // 2. 🟡 เฝ้าระวัง: ปลายน้ำ X.73 > 13.50 หรือ X.73A >= 24.50 (สถิติปี 68) หรือ (X.73A >= 23.00 ร่วมกับฝนหนัก/น้ำขึ้น) หรือฝนตกหนักมาก >= 90 มม.
+    // 2. 🟡 เฝ้าระวัง: ปลายน้ำ X.73 >= 13.90 หรือ X.73A >= 24.50 (สถิติปี 68) หรือ (X.73A >= 23.00 ร่วมกับฝนหนัก/น้ำขึ้น) หรือฝนตกหนักมาก >= 90 มม.
     if (
-        (!isNaN(x73) && x73 > 13.50) ||
+        (!isNaN(x73) && x73 >= 13.90) ||
         (!isNaN(x73a) && x73a >= 24.50) ||
         (!isNaN(x73a) && x73a >= 23.00 && (isHeavyRain || isRising)) ||
         isVeryHeavyRain
     ) {
         const reasons = [];
-        if (!isNaN(x73) && x73 > 13.50) reasons.push(`ปลายน้ำ X.73 เกินเกณฑ์เฝ้าระวัง (<b>${x73.toFixed(2)}</b> ม.รทก.)`);
+        if (!isNaN(x73) && x73 >= 13.90) reasons.push(`ปลายน้ำ X.73 อยู่ในเกณฑ์เฝ้าระวัง (<b>${x73.toFixed(2)}</b> ม.รทก.)`);
         if (!isNaN(x73a) && x73a >= 24.50) reasons.push(`ต้นน้ำ X.73A อยู่ที่ <b>${x73a.toFixed(2)}</b> ม.รทก. (ใกล้เกณฑ์ล้นตลิ่งที่ X.73 จากสถิติปี 68)`);
         else if (!isNaN(x73a) && x73a >= 23.00) reasons.push(`ต้นน้ำ X.73A อยู่ที่ <b>${x73a.toFixed(2)}</b> ม.รทก.`);
         if (isHeavyRain) reasons.push(`ฝนสะสม 24 ชม. <b>${rain24h.toFixed(1)} มม.</b>`);
@@ -429,15 +429,15 @@ window.evaluateHydrographRisk = function (levelX73aNum, levelX73Num, context = {
         return { level: 'warning', reasons, rain24h, x73Diff, x73aDiff };
     }
 
-    // 3. 🔵 จับตาใกล้ชิด (Pre-Watch): X.73A >= 22.80 (สถิติปี 68 ก่อน X.73 แตะเฝ้าระวัง) หรือ X.73 >= 13.00 หรือ ฝน >= 35 มม.
+    // 3. 🔵 จับตาใกล้ชิด (Pre-Watch): X.73A >= 22.80 (สถิติปี 68 ก่อน X.73 แตะเฝ้าระวัง) หรือ X.73 >= 13.40 หรือ ฝน >= 35 มม.
     if (
         (!isNaN(x73a) && x73a >= 22.80) ||
-        (!isNaN(x73) && x73 >= 13.00) ||
+        (!isNaN(x73) && x73 >= 13.40) ||
         isHeavyRain
     ) {
         const reasons = [];
         if (!isNaN(x73a) && x73a >= 22.80) reasons.push(`ต้นน้ำ X.73A อยู่ที่ <b>${x73a.toFixed(2)}</b> ม.รทก. (สถิติปี 68 พบว่าปลายน้ำมักขยับใกล้เกณฑ์เฝ้าระวังใน 6–24 ชม.)`);
-        if (!isNaN(x73) && x73 >= 13.00) reasons.push(`ปลายน้ำ X.73 อยู่ที่ <b>${x73.toFixed(2)}</b> ม.รทก. (ใกล้เกณฑ์เฝ้าระวัง 13.50)`);
+        if (!isNaN(x73) && x73 >= 13.40) reasons.push(`ปลายน้ำ X.73 อยู่ที่ <b>${x73.toFixed(2)}</b> ม.รทก. (ใกล้เกณฑ์เฝ้าระวัง 13.90)`);
         if (isHeavyRain) reasons.push(`ฝนตกหนักในพื้นที่ <b>${rain24h.toFixed(1)} มม./24 ชม.</b>`);
         return { level: 'prewatch', reasons, rain24h, x73Diff, x73aDiff };
     }
@@ -642,8 +642,8 @@ function updateHeroWaterGauge(levelNum, result) {
 
     // 5. ปรับเปลี่ยนสถานะตามเกณฑ์จริง (ระดับตลิ่ง = 14.90 ม.):
     // - ระดับวิกฤต (ล้นตลิ่ง): > 14.90 ม.รทก.
-    // - ระดับเฝ้าระวัง: 13.50 - 14.90 ม.รทก.
-    // - ระดับปกติ: < 13.50 ม.รทก.
+    // - ระดับเฝ้าระวัง: 13.90 - 14.90 ม.รทก.
+    // - ระดับปกติ: < 13.90 ม.รทก.
     if (levelNum > 14.90) {
         // 🔴 วิกฤต (ล้นตลิ่ง)
         if (gaugeBarFill) {
@@ -670,8 +670,8 @@ function updateHeroWaterGauge(levelNum, result) {
         if (waveMid) waveMid.setAttribute('fill', '#b91c1c');
         if (waveFront) waveFront.setAttribute('fill', '#450a0a');
 
-    } else if (levelNum >= 13.50) {
-        // 🟡 เฝ้าระวัง (13.50 - 14.90)
+    } else if (levelNum >= 13.90) {
+        // 🟡 เฝ้าระวัง (13.90 - 14.90)
         if (gaugeBarFill) {
             gaugeBarFill.style.backgroundColor = '#f59e0b';
             gaugeBarFill.style.background = '#f59e0b';
@@ -685,7 +685,7 @@ function updateHeroWaterGauge(levelNum, result) {
         if (heroStatusBadge) heroStatusBadge.className = 'w-full sm:w-auto inline-flex items-center justify-between sm:justify-start gap-3 px-3.5 sm:px-4 md:px-5 py-2.5 md:py-3 rounded-2xl bg-amber-500/30 border-2 border-amber-400 text-amber-200 font-black backdrop-blur-xl shadow-lg shadow-amber-950/50 transition-all duration-500';
         if (heroStatusDot) heroStatusDot.className = 'relative inline-flex rounded-full h-3.5 w-3.5 bg-amber-500';
         if (heroStatusPing) heroStatusPing.className = 'animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75';
-        if (heroStatusTitle) heroStatusTitle.innerText = 'ระดับเฝ้าระวัง (13.50 - 14.90)';
+        if (heroStatusTitle) heroStatusTitle.innerText = 'ระดับเฝ้าระวัง (13.90 - 14.90)';
         
         // ข้อความสรุป: อยู่ในเกณฑ์ไหน ระดับไหน ต่ำกว่าตลิ่งเท่าไร
         if (heroStatusDesc) {
@@ -697,7 +697,7 @@ function updateHeroWaterGauge(levelNum, result) {
         if (waveFront) waveFront.setAttribute('fill', '#7c2d12');
 
     } else {
-        // 🟢 ปกติ (< 13.50)
+        // 🟢 ปกติ (< 13.90)
         if (gaugeBarFill) {
             gaugeBarFill.style.backgroundColor = '#10b981';
             gaugeBarFill.style.background = '#10b981';
@@ -861,10 +861,10 @@ function getHeroWaterGaugeHtml() {
                         <span>14.90</span>
                         <span class="w-2.5 h-[1.5px] bg-rose-500 shadow-sm"></span>
                     </div>
-                    <!-- 13.50 เกณฑ์เฝ้าระวัง (58.33%) -->
-                    <div class="absolute right-0 bottom-[58.33%] translate-y-1/2 flex items-center gap-1 text-amber-300 font-black whitespace-nowrap">
+                    <!-- 13.90 เกณฑ์เฝ้าระวัง (65.00%) -->
+                    <div class="absolute right-0 bottom-[65.00%] translate-y-1/2 flex items-center gap-1 text-amber-300 font-black whitespace-nowrap">
                         <span class="text-[7px] sm:text-[8px] bg-amber-500 text-slate-950 px-1 sm:px-1.5 py-0.5 rounded font-black shadow-xs whitespace-nowrap">เฝ้าระวัง</span>
-                        <span>13.50</span>
+                        <span>13.90</span>
                         <span class="w-2.5 h-[1.5px] bg-amber-400 shadow-sm"></span>
                     </div>
                     <!-- 12.00 สเกลกึ่งกลาง (33.33%) -->
@@ -882,19 +882,19 @@ function getHeroWaterGaugeHtml() {
                 <!-- ตัวกระบอกเกจแท่ง 2 มิติ (2D Solid Column) -->
                 <!-- สเกลจริง: 10.00 ถึง 16.00 ม. (ช่วง 6.00 ม.) -->
                 <!-- 🔴 โซนล้นตลิ่ง (> 14.90): 14.90 ถึง 16.00 = 1.10 ม. = 18.33% -->
-                <!-- 🟡 โซนเฝ้าระวัง (13.50 - 14.90): 1.40 ม. = 23.34% -->
-                <!-- 🟢 โซนปกติ (10.00 - 13.50): 3.50 ม. = 58.33% -->
+                <!-- 🟡 โซนเฝ้าระวัง (13.90 - 14.90): 1.00 ม. = 16.67% -->
+                <!-- 🟢 โซนปกติ (10.00 - 13.90): 3.90 ม. = 65.00% -->
                 <div class="relative w-14 sm:w-16 md:w-20 h-[240px] sm:h-[260px] bg-slate-950 rounded-xl border-2 border-slate-400 overflow-hidden shadow-2xl flex flex-col justify-end shrink-0">
                     
                     <!-- โซนสี 2 มิติ คมชัดตามสัดส่วนจริง แบ่งระดับชัดเจน: -->
                     <!-- 🔴 โซนล้นตลิ่ง (> 14.90 ม.) -->
                     <div class="absolute inset-x-0 top-0 h-[18.33%] bg-red-950/70 border-b-2 border-red-500 pointer-events-none z-0"></div>
                     
-                    <!-- 🟡 โซนเฝ้าระวัง (13.50 - 14.90 ม.) -->
-                    <div class="absolute inset-x-0 top-[18.33%] h-[23.34%] bg-amber-950/70 border-b-2 border-amber-400 pointer-events-none z-0"></div>
+                    <!-- 🟡 โซนเฝ้าระวัง (13.90 - 14.90 ม.) -->
+                    <div class="absolute inset-x-0 top-[18.33%] h-[16.67%] bg-amber-950/70 border-b-2 border-amber-400 pointer-events-none z-0"></div>
 
-                    <!-- 🟢 โซนปกติ (10.00 - 13.50 ม.) -->
-                    <div class="absolute inset-x-0 bottom-0 h-[58.33%] bg-emerald-950/70 pointer-events-none z-0"></div>
+                    <!-- 🟢 โซนปกติ (10.00 - 13.90 ม.) -->
+                    <div class="absolute inset-x-0 bottom-0 h-[65.00%] bg-emerald-950/70 pointer-events-none z-0"></div>
 
                     <!-- ของเหลวน้ำในแท่งแบบ 2 มิติ สีสดชัดเจน (2D Solid Vibrant Liquid Bar) -->
                     <div id="x73_gauge_bar_fill"
@@ -912,16 +912,16 @@ function getHeroWaterGaugeHtml() {
                             ล้นตลิ่ง (&gt; 14.90)
                         </span>
                     </div>
-                    <!-- โซนเฝ้าระวัง (13.50 - 14.90): กึ่งกลางช่วง 18.33% ถึง 41.67% = top: 30% -->
-                    <div class="absolute left-2 sm:left-2.5 top-[30%] -translate-y-1/2">
+                    <!-- โซนเฝ้าระวัง (13.90 - 14.90): กึ่งกลางช่วง 18.33% ถึง 35.00% = top: 26.67% -->
+                    <div class="absolute left-2 sm:left-2.5 top-[26.67%] -translate-y-1/2">
                         <span class="text-[7.5px] sm:text-[8.5px] font-black text-slate-950 bg-amber-400 px-2 py-1 rounded-md shadow whitespace-nowrap block">
-                            เฝ้าระวัง (13.50-14.90)
+                            เฝ้าระวัง (13.90-14.90)
                         </span>
                     </div>
-                    <!-- โซนปกติ (< 13.50): กึ่งกลางช่วงปกติ 0% ถึง 58.33% = bottom: 29.16% -->
-                    <div class="absolute left-2 sm:left-2.5 bottom-[29.16%] translate-y-1/2">
+                    <!-- โซนปกติ (< 13.90): กึ่งกลางช่วงปกติ 0% ถึง 65.00% = bottom: 32.50% -->
+                    <div class="absolute left-2 sm:left-2.5 bottom-[32.50%] translate-y-1/2">
                         <span class="text-[7.5px] sm:text-[8.5px] font-black text-white bg-emerald-600 px-2 py-1 rounded-md shadow whitespace-nowrap block">
-                            ปกติ (&lt; 13.50)
+                            ปกติ (&lt; 13.90)
                         </span>
                     </div>
                 </div>
@@ -1198,7 +1198,7 @@ function openRidHistoryModal(stationCode = 'X.73') {
     if (subtitleEl) {
         subtitleEl.innerText = isX73A
             ? 'คลังข้อมูลน้ำแห่งชาติ (ThaiWater) • เฝ้าระวัง ทต. 23.00 ม. | วิกฤต ทต. 24.00 ม. (ตลิ่งบองอ 26.80 ม.)'
-            : 'คลังข้อมูลน้ำแห่งชาติ (ThaiWater) • เฝ้าระวัง 13.50 ม. | ตลิ่ง 14.90 ม.';
+            : 'คลังข้อมูลน้ำแห่งชาติ (ThaiWater) • เฝ้าระวัง 13.90 ม. | ตลิ่ง 14.90 ม.';
     }
 
     if (btnX73 && btnX73A) {
@@ -1292,7 +1292,7 @@ async function fetchRidHistoryDirectFallback(station, days) {
 
     const stationId = found.station.id;
     const bankLevel = isX73A ? 24.00 : (parseFloat(found.station.min_bank) || 14.90);
-    const warnLevel = isX73A ? 23.00 : 13.50;
+    const warnLevel = isX73A ? 23.00 : 13.90;
 
     const now = new Date();
     const startDt = new Date(now.getTime() - ((days - 1) * 24 * 60 * 60 * 1000));
@@ -1399,7 +1399,7 @@ async function loadRidHistoryChart(rangeKey = 'today') {
         }
 
         const bankLevel = (station === 'X.73A') ? 24.00 : (parseFloat(dataPayload.bankLevel) || 14.90);
-        const warnLevel = (station === 'X.73A') ? 23.00 : (parseFloat(dataPayload.warnLevel) || 13.50);
+        const warnLevel = (station === 'X.73A') ? 23.00 : (parseFloat(dataPayload.warnLevel) || 13.90);
 
         let displayPoints = dataPayload.records;
         if (rangeKey === 'today') {

@@ -2534,7 +2534,7 @@ let dashLayerStates = {
                 statusText = 'วิกฤต (ล้นตลิ่ง)';
                 statusCls = 'bg-rose-500/25 text-rose-300 border-rose-400/40 animate-pulse';
                 barColor = 'bg-rose-500';
-            } else if (levelNum >= 13.50) {
+            } else if (levelNum >= 13.90) {
                 statusText = 'เฝ้าระวังเตือนภัย';
                 statusCls = 'bg-amber-500/25 text-amber-300 border-amber-400/40';
                 barColor = 'bg-amber-400';
@@ -6568,7 +6568,7 @@ let dashLayerStates = {
                 waterPoint: "สะพานตันหยงมัส (คลองตันหยงมัส)",
                 water_point: "สะพานตันหยงมัส (คลองตันหยงมัส)",
                 level: 11.02,
-                warningThreshold: 13.50,
+                warningThreshold: 13.90,
                 criticalThreshold: 14.90,
                 lastUpdate: 'สดเรียลไทม์'
             }
@@ -6678,11 +6678,11 @@ let dashLayerStates = {
                     targetWarn = 23.00;
                     targetCrit = 24.00;
                 }
-                // 2. กล้อง CAM-01_ถนนประชาสามัคคี -> สถานี X.73 สะพานตันหยงมัส (ระดับเตือนภัย 13.50, วิกฤต 14.90)
+                // 2. กล้อง CAM-01_ถนนประชาสามัคคี -> สถานี X.73 สะพานตันหยงมัส (ระดับเตือนภัย 13.90, วิกฤต 14.90)
                 else if (cam.id === 'CAM-02' || name.includes('ประชาสามัคคี') || name.includes('ตันหยงมัส') || wp.includes('ประชาสามัคคี') || wp.includes('x.73') || wp.includes('x73')) {
                     targetLevel = levelX73;
                     targetWp = 'สถานี X.73 (คลองตันหยงมัส)';
-                    targetWarn = 13.50;
+                    targetWarn = 13.90;
                     targetCrit = 14.90;
                 }
                 // 3. จุดวัดน้ำทั่วไปจาก store.waterPoints
@@ -6939,7 +6939,7 @@ let dashLayerStates = {
             if (cam.id === 'CAM-01' || name.includes('บองอ') || wp.includes('บองอ') || wp.includes('x.73a') || wp.includes('x73a')) {
                 minGauge = 19.0; maxGauge = 27.0; warn = 23.00; crit = 24.00;
             } else if (cam.id === 'CAM-02' || name.includes('ประชาสามัคคี') || name.includes('ตันหยงมัส') || wp.includes('ประชาสามัคคี') || wp.includes('x.73') || wp.includes('x73') || level > 5.0) {
-                minGauge = 8.0; maxGauge = 16.0; warn = 13.50; crit = 14.90;
+                minGauge = 8.0; maxGauge = 16.0; warn = 13.90; crit = 14.90;
             }
 
             const range = Math.max(maxGauge - minGauge, 1);

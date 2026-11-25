@@ -1386,8 +1386,8 @@ function getRIDWaterHistory(stationCode, daysParam) {
   const days = Math.max(1, Math.min(14, parseInt(daysParam, 10) || 1));
   const isX73A = (station === 'X.73A');
   const stationName = isX73A ? "สถานี X.73A บ้านบองอ" : "สถานี X.73 คลองตันหยงมัส";
-  const defaultWarn = isX73A ? 25.80 : 13.50;
-  const defaultBank = isX73A ? 26.80 : 14.90;
+  const defaultWarn = isX73A ? 23.00 : 13.90;
+  const defaultBank = isX73A ? 24.00 : 14.90;
 
   const cacheKey = "RID_HIST_" + station + "_" + days;
   try {
@@ -2928,7 +2928,7 @@ function getCctvCarouselFlexMessage() {
   // 1. ระดับน้ำสถานี X.73 (คลองตันหยงมัส)
   const levelX73 = (ridData && ridData.level) ? parseFloat(ridData.level) : 11.02;
   const timeX73 = (ridData && ridData.time) ? ridData.time.replace(" (API เรียลไทม์)", "").trim() : "";
-  const warnX73 = 13.50;
+  const warnX73 = 13.90;
   const critX73 = (ridData && ridData.bankLevel) ? parseFloat(ridData.bankLevel) : 14.90;
 
   // 2. ระดับน้ำสถานี X.73A (บ้านบองอ)
@@ -3754,7 +3754,7 @@ function getWaterLevelFlexMessage(waterRes, targetStation = 'X.73') {
       };
     }
   } else {
-    // 🟢 เขียว (ปกติ <= 13.50) | 🟡 เหลือง (เฝ้าระวัง 13.51 - 14.90) | 🔴 แดง (วิกฤต > 14.90)
+    // 🟢 เขียว (ปกติ < 13.90) | 🟡 เหลือง (เฝ้าระวัง 13.90 - 14.90) | 🔴 แดง (วิกฤต > 14.90)
     if (levelNum > 14.90) {
       theme = {
         headerBg: "#dc2626", // 🔴 แดง
@@ -3763,7 +3763,7 @@ function getWaterLevelFlexMessage(waterRes, targetStation = 'X.73') {
         statusText: "ระดับวิกฤต 🔴",
         diffText: `น้ำล้นตลิ่ง ${(levelNum - bankLevelNum).toFixed(2)} ม.`
       };
-    } else if (levelNum > 13.50) {
+    } else if (levelNum >= 13.90) {
       theme = {
         headerBg: "#d97706", // 🟡 เหลือง/ส้ม
         boxBg: "#fffbeb",
@@ -4520,14 +4520,14 @@ function testWaterLevelCardThresholds() {
 
   const mockDataList = [
     {
-      name: "🟢 1. เกณฑ์ระดับปกติ (ระดับน้ำ 11.02 ม. <= 13.50 ม.)",
+      name: "🟢 1. เกณฑ์ระดับปกติ (ระดับน้ำ 11.02 ม. < 13.90 ม.)",
       mockRes: {
         success: true,
         data: { level: "11.02", bankLevel: 14.90, time: "8 ส.ค. 2026 เวลา 15:00 น.", stationName: "สถานี X.73 คลองตันหยงมัส" }
       }
     },
     {
-      name: "🟡 2. เกณฑ์เฝ้าระวัง (ระดับน้ำ 14.00 ม. [ช่วง 13.51 - 14.90 ม.])",
+      name: "🟡 2. เกณฑ์เฝ้าระวัง (ระดับน้ำ 14.00 ม. [ช่วง 13.90 - 14.90 ม.])",
       mockRes: {
         success: true,
         data: { level: "14.00", bankLevel: 14.90, time: "8 ส.ค. 2026 เวลา 15:00 น.", stationName: "สถานี X.73 คลองตันหยงมัส" }

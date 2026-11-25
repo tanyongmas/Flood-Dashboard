@@ -1004,7 +1004,7 @@ const PUBLIC_WATER_STATION = {
     lat: 6.297816981850148,
     lng: 101.73172224850232,
     bankLevel: 14.90,
-    warningLevel: 13.50,
+    warningLevel: 13.90,
     criticalLevel: 14.90
 };
 
@@ -1117,7 +1117,7 @@ window.renderPublicPortal = async function () {
 
     // เกณฑ์ระดับน้ำตรงตามหน้า Dashboard หลักและกรมชลประทาน
     const BANK_LEVEL = (ridResult && ridResult.data && parseFloat(ridResult.data.bankLevel)) || 14.90;      // ระดับตลิ่ง (14.90 ม.รทก.)
-    const WARNING_LEVEL = 13.50;   // ระดับเฝ้าระวัง (13.50 ม.รทก.)
+    const WARNING_LEVEL = 13.90;   // ระดับเฝ้าระวัง (13.90 ม.รทก.)
     const CRITICAL_LEVEL = 14.90;  // ระดับวิกฤต/ล้นตลิ่ง (>14.90 ม.รทก.)
 
     let latestLevel = 11.02;
@@ -1160,7 +1160,7 @@ window.renderPublicPortal = async function () {
         }
     }
 
-    // ประเมินสถานะระดับน้ำตามเกณฑ์ Dashboard หลัก (เขียว <= 13.50 / ส้ม 13.51 - 14.90 / แดง > 14.90)
+    // ประเมินสถานะระดับน้ำตามเกณฑ์ Dashboard หลัก (เขียว < 13.90 / ส้ม 13.90 - 14.90 / แดง > 14.90)
     let statusTheme = {
         title: 'ระดับน้ำปกติ',
         sub: diffBankText ? `${diffBankText} (การสัญจรและระดับน้ำในลำคลองปกติ)` : 'ระดับน้ำต่ำกว่าระดับตลิ่ง การสัญจรปกติ',
@@ -1887,9 +1887,9 @@ function initPublicMiniMap(currentWaterLevel = 14.20) {
         });
 
         const curLevelNum = parseFloat(currentWaterLevel) || 11.02;
-        const bridgeStatusColor = curLevelNum > 14.90 ? 'text-rose-600' : (curLevelNum > 13.50 ? 'text-amber-600' : 'text-blue-600');
-        const bridgeStatusText = curLevelNum > 14.90 ? 'ระดับวิกฤต (ล้นตลิ่ง)' : (curLevelNum > 13.50 ? 'เฝ้าระวังระดับน้ำ' : 'ระดับน้ำปกติ');
-        const bridgeBadgeBg = curLevelNum > 14.90 ? 'bg-rose-100 text-rose-700' : (curLevelNum > 13.50 ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700');
+        const bridgeStatusColor = curLevelNum > 14.90 ? 'text-rose-600' : (curLevelNum >= 13.90 ? 'text-amber-600' : 'text-blue-600');
+        const bridgeStatusText = curLevelNum > 14.90 ? 'ระดับวิกฤต (ล้นตลิ่ง)' : (curLevelNum >= 13.90 ? 'เฝ้าระวังระดับน้ำ' : 'ระดับน้ำปกติ');
+        const bridgeBadgeBg = curLevelNum > 14.90 ? 'bg-rose-100 text-rose-700' : (curLevelNum >= 13.90 ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700');
 
         const bridgePopupHtml = `
             <div class="font-prompt p-2 text-slate-700 min-w-[240px]">
@@ -2776,7 +2776,7 @@ function getPublicStaffGaugeHtml(cam) {
     if (cam.id === 'CAM-01' || name.includes('บองอ') || wp.includes('บองอ') || wp.includes('x.73a') || wp.includes('x73a')) {
         minGauge = 20.0; maxGauge = 28.0; warn = 25.80; crit = 26.80;
     } else if (cam.id === 'CAM-02' || name.includes('ประชาสามัคคี') || name.includes('ตันหยงมัส') || wp.includes('ประชาสามัคคี') || wp.includes('x.73') || wp.includes('x73') || level > 5.0) {
-        minGauge = 8.0; maxGauge = 16.0; warn = 13.50; crit = 14.90;
+        minGauge = 8.0; maxGauge = 16.0; warn = 13.90; crit = 14.90;
     }
 
     const range = Math.max(maxGauge - minGauge, 1);
